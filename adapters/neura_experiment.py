@@ -19,12 +19,14 @@ of that same kernel.  A random row split is retained only as a diagnostic.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import math
 import os
 import random
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -46,6 +48,7 @@ except ImportError:  # Running the file directly from its adapters directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 SUBMODULE_NEURA_ROOT = PROJECT_ROOT / "third_party" / "neura"
+DEFAULT_SEED = 20260829
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
@@ -142,6 +145,60 @@ COST_FEATURE_NAMES = (
     "rec_mii",
     "res_mii",
 )
+
+
+@dataclass(frozen=True)
+class InvocationResult:
+    """Result of one isolated compiler/mapper subprocess.
+
+    A worker returns this value to the coordinator instead of mutating the
+    process-wide failure list.  Keeping the command diagnostics in the value
+    makes candidate-level parallelism deterministic and leaves manifest writes
+    exclusively to the main thread.
+    """
+
+    ok: bool
+    status: str
+    stage: str
+    timeout_seconds: int
+    command: Tuple[str, ...]
+    returncode: Optional[int] = None
+    output: Optional[str] = None
+    stderr_head: str = ""
+    stderr_tail: str = ""
+
+    def failure_record(self) -> Dict[str, object]:
+        return {
+            "status": self.status,
+            "stage": self.stage,
+            "timeout_seconds": self.timeout_seconds,
+            "returncode": self.returncode,
+            "output": self.output,
+            "command": list(self.command),
+            "stderr_head": self.stderr_head,
+            "stderr_tail": self.stderr_tail,
+        }
+
+
+@dataclass
+class MotifCollectionResult:
+    """Structured result returned by one motif worker."""
+
+    candidate_id: str
+    status: str
+    stage: str
+    failure: Optional[str] = None
+    sample: Optional[Sample] = None
+    invocations: Tuple[InvocationResult, ...] = ()
+
+
+@dataclass
+class MotifCoordinatorResult:
+    """Harvested motif results in manifest/ordinal order."""
+
+    samples: List[Sample]
+    results: List[MotifCollectionResult]
+    interrupted: bool = False
 
 
 @dataclass
@@ -397,7 +454,8 @@ def bounded_stderr_excerpt(stream: Any) -> str:
     return payload.decode(errors="replace")
 
 
-def invoke(command: Sequence[str], timeout: int) -> bool:
+def run_invocation(command: Sequence[str], timeout: int) -> InvocationResult:
+    """Run one isolated command without mutating adapter-global state."""
     # A disk-backed temporary stream avoids buffering arbitrarily verbose
     # mapper diagnostics in memory.  Only a bounded excerpt enters the report.
     with tempfile.TemporaryFile() as stderr_stream:
@@ -410,19 +468,50 @@ def invoke(command: Sequence[str], timeout: int) -> bool:
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            record_invocation_failure(
-                command, "timeout", timeout,
-                stderr=bounded_stderr_excerpt(stderr_stream),
+            excerpt = bounded_stderr_excerpt(stderr_stream)
+            return InvocationResult(
+                ok=False,
+                status="timeout",
+                stage=invocation_stage(command),
+                timeout_seconds=timeout,
+                command=tuple(str(part) for part in command),
+                output=invocation_output(command),
+                stderr_head=excerpt[:1200],
+                stderr_tail=excerpt[-2800:],
             )
-            return False
         if completed.returncode != 0:
-            record_invocation_failure(
-                command, "nonzero-exit", timeout,
+            excerpt = bounded_stderr_excerpt(stderr_stream)
+            return InvocationResult(
+                ok=False,
+                status="nonzero-exit",
+                stage=invocation_stage(command),
+                timeout_seconds=timeout,
+                command=tuple(str(part) for part in command),
                 returncode=completed.returncode,
-                stderr=bounded_stderr_excerpt(stderr_stream),
+                output=invocation_output(command),
+                stderr_head=excerpt[:1200],
+                stderr_tail=excerpt[-2800:],
             )
-            return False
-    return True
+    return InvocationResult(
+        ok=True,
+        status="success",
+        stage=invocation_stage(command),
+        timeout_seconds=timeout,
+        command=tuple(str(part) for part in command),
+        output=invocation_output(command),
+    )
+
+
+def invoke(command: Sequence[str], timeout: int) -> bool:
+    """Compatibility wrapper for the legacy sequential collection paths."""
+    result = run_invocation(command, timeout)
+    if not result.ok:
+        record_invocation_failure(
+            command, result.status, timeout,
+            returncode=result.returncode,
+            stderr=(result.stderr_head + result.stderr_tail),
+        )
+    return result.ok
 
 
 def command_stdout_sha256(command: Sequence[str]) -> Optional[str]:
@@ -857,107 +946,30 @@ def collect_sample(opt: Path, sample_dir: Path, spec: SampleSpec,
     return result
 
 
-def collect_motif_sample(
-    opt: Path, candidate: neura_motifs.MotifCandidate, timeout: int,
-    manifest_path: Optional[Path] = None,
-) -> Optional[Sample]:
-    """Collect one predeclared motif candidate and preserve its manifest state.
-
-    Source/architecture files are materialized before the manifest is written
-    by the caller.  This function consequently only invokes the Rec/Res
-    analysis pass and mapper; it never creates an unannounced candidate.  A failed
-    invocation or missing ``compiled_ii`` is recorded as censored and returns
-    no training row.
-    """
+def _motif_sample_from_artifacts(
+    candidate: neura_motifs.MotifCandidate,
+    values: Mapping[str, object],
+    compiled_ii: int,
+    cost: Path,
+    mapped: Path,
+) -> Sample:
+    """Build a sample from already validated artifacts, without subprocesses."""
     source = Path(candidate.source_path)
     architecture = Path(candidate.architecture_path)
-    sample_dir = source.parent
-    cost = sample_dir / "cost.mlir"
-    mapped = sample_dir / "mapped.mlir"
-
-    def manifest_update(
-        status: str, stage: str, failure: Optional[str] = None,
-        updates: Optional[Mapping[str, object]] = None,
-    ) -> None:
-        if manifest_path is not None:
-            neura_motifs.update_manifest_candidate(
-                manifest_path, candidate.candidate_id, status, stage, failure,
-                updates,
-            )
-
-    # Do not silently map a source or architecture that changed after
-    # predeclaration; such a candidate is censored and can be regenerated with
-    # a new manifest/identity.
-    if (
-        file_sha256(source) != candidate.source_sha256 or
-        file_sha256(architecture) != candidate.architecture_sha256
-    ):
-        manifest_update(
-            "censored", "preflight", "predeclared-input-hash-mismatch"
-        )
-        return None
-
-    manifest_update("running", "rec-res-analysis")
-    failure_start = len(INVOCATION_FAILURES)
-    if not invoke(
-        (str(opt), str(source), f"--architecture-spec={architecture}",
-         "--analyze-rec-res-mii", "-o", str(cost)),
-        timeout,
-    ):
-        failure = "rec-res-analysis-invocation-failed"
-        if len(INVOCATION_FAILURES) > failure_start:
-            failure = str(INVOCATION_FAILURES[-1].get("status", failure))
-        manifest_update("censored", "rec-res-analysis", failure)
-        return None
-
-    try:
-        values = parse_cost_features(cost.read_text())
-    except OSError:
-        values = None
-    if values is None:
-        manifest_update(
-            "censored", "rec-res-analysis", "invalid-rec-res-facts"
-        )
-        return None
-
-    manifest_update("running", "mapper")
-    failure_start = len(INVOCATION_FAILURES)
-    if not invoke(
-        (str(opt), str(source), f"--architecture-spec={architecture}",
-         '--map-to-accelerator=mapping-strategy=heuristic', "-o", str(mapped)),
-        timeout,
-    ):
-        failure = "mapper-invocation-failed"
-        if len(INVOCATION_FAILURES) > failure_start:
-            failure = str(INVOCATION_FAILURES[-1].get("status", failure))
-        manifest_update("censored", "mapper", failure)
-        return None
-
-    try:
-        compiled_ii = parse_checked_mapper_label(mapped.read_text(), values)
-    except OSError:
-        compiled_ii = None
-    if compiled_ii is None:
-        manifest_update("censored", "label-parse", "compiled_ii-unavailable")
-        return None
-
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
     attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(
         source.read_text(), candidate.rows, candidate.columns
     ))
-    # Motif candidates reuse the same DFG text across architecture variants.
-    # ``split_domain`` is therefore architecture metadata, not a property to
-    # infer from the source graph; keep it consistent with the candidate ID and
-    # architecture artifact used for this mapping attempt.
+    # The source is shared by architecture variants.  This field describes
+    # the candidate architecture and therefore comes from the manifest.
     result["split_domain"] = int(
         candidate.architecture_variant == "split-domain"
     )
     add_prediction_features(result)
     result.update({
         "index": candidate.candidate_id,
-        # Group by the base source, not by shape or architecture variant.
         "family": candidate.lineage,
         "lineage": candidate.lineage,
         "effective_lineage": candidate.lineage,
@@ -991,24 +1003,821 @@ def collect_motif_sample(
         "mapped_artifact_sha256": file_sha256(mapped),
         "registers": candidate.registers,
     })
-    manifest_update(
-        "success", "mapper", updates={
-            "sample_id": candidate.candidate_id,
-            "compiled_ii": int(compiled_ii),
-            "lower_bound": int(result["baseline_lb"]),
-            "cost_artifact_path": str(
-                cost.relative_to(manifest_path.parent)
-                if manifest_path is not None else cost.resolve()
-            ),
-            "cost_artifact_sha256": file_sha256(cost),
-            "mapped_artifact_path": str(
-                mapped.relative_to(manifest_path.parent)
-                if manifest_path is not None else mapped.resolve()
-            ),
-            "mapped_artifact_sha256": file_sha256(mapped),
-        }
-    )
     return result
+
+
+def _coerce_invocation_result(
+    value: object, command: Sequence[str], timeout: int,
+) -> InvocationResult:
+    """Accept bool-returning test doubles while keeping workers structured."""
+    if isinstance(value, InvocationResult):
+        return value
+    if isinstance(value, bool):
+        return InvocationResult(
+            ok=value,
+            status="success" if value else "invocation-failed",
+            stage=invocation_stage(command),
+            timeout_seconds=timeout,
+            command=tuple(str(part) for part in command),
+        )
+    raise TypeError("isolated invocation must return InvocationResult or bool")
+
+
+def collect_motif_candidate(
+    opt: Path, candidate: neura_motifs.MotifCandidate, timeout: int,
+    invocation: Callable[[Sequence[str], int], object] = run_invocation,
+) -> MotifCollectionResult:
+    """Collect one candidate with no global, manifest, or stdout mutation.
+
+    The analysis and mapper invocations are intentionally serial within this
+    function.  A coordinator may run independent candidates concurrently.
+    """
+    source = Path(candidate.source_path)
+    architecture = Path(candidate.architecture_path)
+    sample_dir = source.parent
+    cost = sample_dir / "cost.mlir"
+    mapped = sample_dir / "mapped.mlir"
+    calls: List[InvocationResult] = []
+    if (
+        file_sha256(source) != candidate.source_sha256 or
+        file_sha256(architecture) != candidate.architecture_sha256
+    ):
+        return MotifCollectionResult(
+            candidate.candidate_id, "censored", "preflight",
+            "predeclared-input-hash-mismatch", invocations=tuple(calls),
+        )
+
+    analysis_command = (
+        str(opt), str(source), f"--architecture-spec={architecture}",
+        "--analyze-rec-res-mii", "-o", str(cost),
+    )
+    analysis = _coerce_invocation_result(
+        invocation(analysis_command, timeout), analysis_command, timeout,
+    )
+    calls.append(analysis)
+    if not analysis.ok:
+        return MotifCollectionResult(
+            candidate.candidate_id, "censored", "rec-res-analysis",
+            analysis.status, invocations=tuple(calls),
+        )
+    try:
+        values = parse_cost_features(cost.read_text())
+    except OSError:
+        values = None
+    if values is None:
+        raise ValueError(
+            f"candidate {candidate.candidate_id} has invalid Rec/Res facts"
+        )
+
+    mapper_command = (
+        str(opt), str(source), f"--architecture-spec={architecture}",
+        '--map-to-accelerator=mapping-strategy=heuristic', "-o", str(mapped),
+    )
+    mapper = _coerce_invocation_result(
+        invocation(mapper_command, timeout), mapper_command, timeout,
+    )
+    calls.append(mapper)
+    if not mapper.ok:
+        return MotifCollectionResult(
+            candidate.candidate_id, "censored", "mapper", mapper.status,
+            invocations=tuple(calls),
+        )
+    try:
+        compiled_ii = parse_checked_mapper_label(mapped.read_text(), values)
+    except OSError:
+        compiled_ii = None
+    if compiled_ii is None:
+        return MotifCollectionResult(
+            candidate.candidate_id, "censored", "label-parse",
+            "compiled_ii-unavailable", invocations=tuple(calls),
+        )
+    try:
+        sample = _motif_sample_from_artifacts(
+            candidate, values, int(compiled_ii), cost, mapped
+        )
+    except OSError:
+        return MotifCollectionResult(
+            candidate.candidate_id, "censored", "feature-parse",
+            "feature-extraction-failed", invocations=tuple(calls),
+        )
+    return MotifCollectionResult(
+        candidate.candidate_id, "success", "mapper", sample=sample,
+        invocations=tuple(calls),
+    )
+
+
+def collect_motif_sample(
+    opt: Path, candidate: neura_motifs.MotifCandidate, timeout: int,
+    manifest_path: Optional[Path] = None,
+) -> Optional[Sample]:
+    """Legacy sequential wrapper retaining the old bool/manifest API."""
+    def legacy_invocation(command: Sequence[str], limit: int) -> object:
+        return invoke(command, limit)
+
+    outcome = collect_motif_candidate(opt, candidate, timeout, legacy_invocation)
+    if manifest_path is not None:
+        updates: Optional[Mapping[str, object]] = None
+        if outcome.sample is not None:
+            cost = Path(candidate.source_path).parent / "cost.mlir"
+            mapped = Path(candidate.source_path).parent / "mapped.mlir"
+            updates = {
+                "sample_id": candidate.candidate_id,
+                "compiled_ii": int(outcome.sample["compiled_ii"]),
+                "lower_bound": int(outcome.sample["baseline_lb"]),
+                "cost_artifact_path": str(cost.relative_to(manifest_path.parent)),
+                "cost_artifact_sha256": file_sha256(cost),
+                "mapped_artifact_path": str(mapped.relative_to(manifest_path.parent)),
+                "mapped_artifact_sha256": file_sha256(mapped),
+            }
+        neura_motifs.update_manifest_candidate(
+            manifest_path, candidate.candidate_id, outcome.status,
+            outcome.stage, outcome.failure, updates,
+        )
+    return outcome.sample
+
+
+MOTIF_REGISTERS = 16
+MOTIF_IMMUTABLE_FIELDS = (
+    "id", "candidate_id", "lineage", "motif", "generator_family",
+    "generator_version", "generator_type", "base_id", "base_seed",
+    "root_seed", "operation_count", "rows", "columns",
+    "architecture_variant", "registers", "source_path",
+    "architecture_path", "source_sha256", "canonical_dfg_sha256",
+    "architecture_sha256", "architecture_id", "leakage_lineage_id",
+    "base_dfg_id", "ranking_query_id", "training_stratum",
+)
+MOTIF_SUCCESS_ARTIFACTS = (
+    "cost_artifact_path", "cost_artifact_sha256",
+    "mapped_artifact_path", "mapped_artifact_sha256",
+)
+MOTIF_TRANSIENT_FIELDS = (
+    "sample_id", "compiled_ii", "lower_bound",
+    *MOTIF_SUCCESS_ARTIFACTS,
+)
+
+
+def _path_inside(root: Path, raw_path: object, field: str) -> Path:
+    """Resolve a manifest path and reject absolute/escaping/symlink paths."""
+    if not isinstance(raw_path, str) or not raw_path or Path(raw_path).is_absolute():
+        raise ValueError(f"manifest {field} must be a relative path")
+    root_resolved = root.resolve()
+    resolved = (root / raw_path).resolve()
+    if resolved != root_resolved and root_resolved not in resolved.parents:
+        raise ValueError(f"manifest {field} escapes output directory")
+    return resolved
+
+
+def _relative_to_manifest(root: Path, path: Path) -> str:
+    """Return the canonical relative representation used in manifests."""
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
+    if resolved_path != resolved_root and resolved_root not in resolved_path.parents:
+        raise ValueError(f"path escapes output directory: {path}")
+    return resolved_path.relative_to(resolved_root).as_posix()
+
+
+def _expected_manifest_record(
+    candidate: neura_motifs.MotifCandidate, temporary_root: Path,
+) -> Dict[str, object]:
+    record = candidate.manifest_record()
+    record["source_path"] = _relative_to_manifest(
+        temporary_root, Path(candidate.source_path)
+    )
+    record["architecture_path"] = _relative_to_manifest(
+        temporary_root, Path(candidate.architecture_path)
+    )
+    return record
+
+
+def _motif_collection_config(
+    timeout: int, jobs: int, checkpoint_every: int, *,
+    opt_path: str, opt_sha256: Optional[str],
+) -> Dict[str, object]:
+    return {
+        "timeout_seconds": int(timeout),
+        "motif_jobs": int(jobs),
+        "motif_checkpoint_every": int(checkpoint_every),
+        "candidate_execution": "thread-pool-candidate-serial-stages",
+        "manifest_updates": "main-thread-ordinal-batch-atomic",
+        "mlir_neura_opt": opt_path,
+        "mlir_neura_opt_sha256": opt_sha256,
+        "analysis_argument": "--analyze-rec-res-mii",
+        "mapping_strategy": "heuristic",
+    }
+
+
+def _candidate_from_manifest(
+    record: Mapping[str, object], output_dir: Path,
+) -> neura_motifs.MotifCandidate:
+    """Convert a validated manifest record to a worker candidate."""
+    source = _path_inside(output_dir, record.get("source_path"), "source_path")
+    architecture = _path_inside(
+        output_dir, record.get("architecture_path"), "architecture_path"
+    )
+    required = (
+        "id", "lineage", "motif", "generator_family", "generator_version",
+        "generator_type", "base_id", "base_seed", "root_seed",
+        "operation_count", "rows", "columns", "architecture_variant",
+        "registers", "source_sha256", "canonical_dfg_sha256",
+        "architecture_sha256",
+    )
+    missing = [field for field in required if field not in record]
+    if missing:
+        raise ValueError("manifest candidate missing fields: " + ", ".join(missing))
+    candidate_id = str(record["id"])
+    return neura_motifs.MotifCandidate(
+        candidate_id=candidate_id,
+        lineage=str(record["lineage"]),
+        motif=str(record["motif"]),
+        generator_family=str(record["generator_family"]),
+        generator_version=str(record["generator_version"]),
+        generator_type=str(record["generator_type"]),
+        base_id=str(record["base_id"]),
+        base_seed=int(record["base_seed"]),
+        root_seed=int(record["root_seed"]),
+        operation_count=int(record["operation_count"]),
+        rows=int(record["rows"]),
+        columns=int(record["columns"]),
+        architecture_variant=str(record["architecture_variant"]),
+        registers=int(record["registers"]),
+        source_path=str(source),
+        architecture_path=str(architecture),
+        source_sha256=str(record["source_sha256"]),
+        canonical_dfg_sha256=str(record["canonical_dfg_sha256"]),
+        architecture_sha256=str(record["architecture_sha256"]),
+    )
+
+
+def _validate_manifest_record_identity(
+    actual: Mapping[str, object], expected: Mapping[str, object],
+) -> None:
+    for field in MOTIF_IMMUTABLE_FIELDS:
+        if actual.get(field) != expected.get(field):
+            raise ValueError(
+                f"manifest immutable field mismatch for {field}: "
+                f"{actual.get(field)!r} != {expected.get(field)!r}"
+            )
+
+
+def _clear_transient_manifest_fields(record: Dict[str, object]) -> None:
+    for field in MOTIF_TRANSIENT_FIELDS:
+        record.pop(field, None)
+
+
+def _validate_cached_motif_success(
+    candidate: neura_motifs.MotifCandidate,
+    record: Mapping[str, object], output_dir: Path,
+) -> Sample:
+    """Validate all four files of a cached success and rebuild its sample."""
+    source = _path_inside(output_dir, record.get("source_path"), "source_path")
+    architecture = _path_inside(
+        output_dir, record.get("architecture_path"), "architecture_path"
+    )
+    candidate_dir = source.parent
+    expected_cost = candidate_dir / "cost.mlir"
+    expected_mapped = candidate_dir / "mapped.mlir"
+    for field, expected in (
+        ("cost_artifact_path", expected_cost),
+        ("mapped_artifact_path", expected_mapped),
+    ):
+        actual = _path_inside(output_dir, record.get(field), field)
+        if actual != expected.resolve():
+            raise ValueError(
+                f"cached success {field} does not match candidate artifact path"
+            )
+    if file_sha256(source) != candidate.source_sha256:
+        raise ValueError("cached success source hash mismatch")
+    if file_sha256(architecture) != candidate.architecture_sha256:
+        raise ValueError("cached success architecture hash mismatch")
+    if file_sha256(expected_cost) != record.get("cost_artifact_sha256"):
+        raise ValueError("cached success cost artifact hash mismatch")
+    if file_sha256(expected_mapped) != record.get("mapped_artifact_sha256"):
+        raise ValueError("cached success mapped artifact hash mismatch")
+    try:
+        values = parse_cost_features(expected_cost.read_text())
+        if values is None:
+            raise ValueError("cached success has invalid Rec/Res artifact")
+        compiled_ii = parse_checked_mapper_label(
+            expected_mapped.read_text(), values
+        )
+        if compiled_ii is None:
+            raise ValueError("cached success has no compiled_ii")
+    except (OSError, ValueError) as error:
+        raise ValueError(f"cached success artifact validation failed: {error}") from error
+    if record.get("sample_id") != candidate.candidate_id:
+        raise ValueError("cached success sample_id mismatch")
+    if int(record.get("compiled_ii", -1)) != int(compiled_ii):
+        raise ValueError("cached success compiled_ii mismatch")
+    bound = max(int(values["rec_mii"]), int(values["res_mii"]))
+    if int(record.get("lower_bound", -1)) != bound:
+        raise ValueError("cached success lower_bound mismatch")
+    return _motif_sample_from_artifacts(
+        candidate, values, int(compiled_ii), expected_cost, expected_mapped
+    )
+
+
+def _load_or_create_motif_manifest(
+    output_dir: Path, manifest_path: Path, *, resume: bool, clean: bool,
+    count: int, seed: int, motifs: Sequence[str],
+    shapes: Sequence[Tuple[int, int]], variants: Sequence[str],
+    timeout: int, jobs: int, checkpoint_every: int,
+    opt: Path,
+    registers: int = MOTIF_REGISTERS,
+) -> Tuple[
+    Dict[str, object], Tuple[neura_motifs.MotifCandidate, ...],
+    Dict[str, Sample], List[str], Dict[str, List[Dict[str, object]]],
+]:
+    """Prepare a fresh or resumed corpus before any tool invocation."""
+    if resume and clean:
+        raise ValueError("--clean and --motif-resume are mutually exclusive")
+    output_dir = output_dir.resolve()
+    manifest_path = manifest_path.resolve()
+    if resume:
+        if not manifest_path.is_file():
+            raise ValueError(f"motif manifest not found for resume: {manifest_path}")
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"invalid motif manifest: {error}") from error
+        if not isinstance(manifest, dict):
+            raise ValueError("motif manifest must be an object")
+        if manifest.get("schema_version") != neura_motifs.MANIFEST_SCHEMA_VERSION:
+            raise ValueError("unsupported motif manifest schema_version")
+        if manifest.get("output_dir") != ".":
+            raise ValueError("motif manifest output_dir must be relative '.'")
+        generator = manifest.get("generator")
+        if not isinstance(generator, dict):
+            raise ValueError("motif manifest lacks generator configuration")
+        if generator.get("family") != "generated/motif":
+            raise ValueError("motif manifest generator family mismatch")
+        if generator.get("type") != "generated/motif":
+            raise ValueError("motif manifest generator type mismatch")
+        if generator.get("version") != neura_motifs.GENERATOR_VERSION:
+            raise ValueError("motif manifest generator version mismatch")
+        if "count_per_family" not in generator:
+            raise ValueError("motif manifest lacks count_per_family")
+        manifest_count = int(generator.get("count_per_family", 0))
+        manifest_motifs = tuple(str(value) for value in generator.get("motifs", ()))
+        manifest_shapes = tuple(
+            neura_motifs.parse_shape(str(value))
+            for value in generator.get("shapes", ())
+        )
+        manifest_variants = tuple(
+            str(value) for value in generator.get("architecture_variants", ())
+        )
+        manifest_seed = int(generator.get("seed"))
+        manifest_registers = int(generator.get("registers", registers))
+        if count and count != manifest_count:
+            raise ValueError("resume generator count does not match manifest")
+        if tuple(motifs) != manifest_motifs:
+            raise ValueError("resume motif family configuration does not match manifest")
+        if tuple(shapes) != manifest_shapes:
+            raise ValueError("resume shape configuration does not match manifest")
+        if tuple(variants) != manifest_variants:
+            raise ValueError(
+                "resume architecture variant configuration does not match manifest"
+            )
+        if int(seed) != manifest_seed:
+            raise ValueError("resume seed does not match manifest")
+        if manifest_registers != int(registers):
+            raise ValueError("resume register configuration does not match manifest")
+        collection = manifest.get("collection")
+        if not isinstance(collection, dict):
+            raise ValueError("motif manifest lacks collection configuration")
+        required_collection = {
+            "timeout_seconds",
+            "candidate_execution",
+            "manifest_updates",
+            "mlir_neura_opt",
+            "mlir_neura_opt_sha256",
+            "analysis_argument",
+            "mapping_strategy",
+        }
+        missing_collection = required_collection.difference(collection)
+        if missing_collection:
+            raise ValueError(
+                "motif manifest collection configuration is incomplete: "
+                + ", ".join(sorted(missing_collection))
+            )
+        if int(collection["timeout_seconds"]) != int(timeout):
+            raise ValueError("resume timeout does not match manifest")
+        if collection["candidate_execution"] != "thread-pool-candidate-serial-stages":
+            raise ValueError("motif manifest candidate execution contract mismatch")
+        if collection["manifest_updates"] != "main-thread-ordinal-batch-atomic":
+            raise ValueError("motif manifest update contract mismatch")
+        if collection["analysis_argument"] != "--analyze-rec-res-mii":
+            raise ValueError("motif manifest analysis contract mismatch")
+        if collection["mapping_strategy"] != "heuristic":
+            raise ValueError("motif manifest mapper contract mismatch")
+        stored_opt_path = collection["mlir_neura_opt"]
+        stored_opt_sha256 = collection["mlir_neura_opt_sha256"]
+        if not isinstance(stored_opt_path, str) or not stored_opt_path:
+            raise ValueError("motif manifest has invalid compiler path")
+        if (
+            not isinstance(stored_opt_sha256, str) or
+            re.fullmatch(r"[0-9a-f]{64}", stored_opt_sha256) is None
+        ):
+            raise ValueError("motif manifest has invalid compiler SHA-256")
+        records = manifest.get("candidates")
+        expected_count = (
+            manifest_count * len(manifest_motifs) * len(manifest_shapes) *
+            len(manifest_variants)
+        )
+        if manifest.get("candidate_count") != expected_count:
+            raise ValueError("motif manifest candidate_count mismatch")
+        if not isinstance(records, list) or len(records) != expected_count:
+            raise ValueError("resume manifest candidate declaration is incomplete")
+        cached_samples: Dict[str, Sample] = {}
+        prior_failure_events: Dict[str, List[Dict[str, object]]] = {}
+        candidates: List[neura_motifs.MotifCandidate] = []
+        declared_ids: List[str] = []
+        with tempfile.TemporaryDirectory(prefix="ii-motif-expected-") as raw_root:
+            temporary_root = Path(raw_root)
+            # Re-materialize only in the temporary tree to derive the expected
+            # relative identities; never repair the user's output tree.
+            expected_materialized = neura_motifs.make_candidates(
+                neura_motifs.make_base_specs(
+                    manifest_count, manifest_seed, manifest_motifs
+                ), temporary_root, manifest_shapes, manifest_variants,
+                manifest_registers,
+            )
+            for ordinal, (raw_record, expected_candidate) in enumerate(
+                zip(records, expected_materialized)
+            ):
+                if not isinstance(raw_record, dict):
+                    raise ValueError(f"manifest candidate {ordinal} is not an object")
+                expected_record = _expected_manifest_record(
+                    expected_candidate, temporary_root
+                )
+                _validate_manifest_record_identity(raw_record, expected_record)
+                candidate = _candidate_from_manifest(raw_record, output_dir)
+                if candidate.candidate_id != expected_candidate.candidate_id:
+                    raise ValueError("resume candidate order/identity mismatch")
+                # Check both immutable source files before any compiler command.
+                if file_sha256(Path(candidate.source_path)) != candidate.source_sha256:
+                    raise ValueError(
+                        f"resume source hash mismatch before invocation: {candidate.candidate_id}"
+                    )
+                if file_sha256(Path(candidate.architecture_path)) != candidate.architecture_sha256:
+                    raise ValueError(
+                        f"resume architecture hash mismatch before invocation: {candidate.candidate_id}"
+                    )
+                status = str(raw_record.get("status", "declared"))
+                if status == "running":
+                    # Older interrupted manifests are normalized without ever
+                    # retrying a supposed success or persisting running again.
+                    raw_record["status"] = "declared"
+                    raw_record["stage"] = "predeclared"
+                    raw_record["failure"] = None
+                    _clear_transient_manifest_fields(raw_record)
+                    raw_record.pop("invocation_failures", None)
+                    status = "declared"
+                if status not in {"declared", "censored", "success"}:
+                    raise ValueError(f"invalid resume candidate status: {status}")
+                if status == "success":
+                    cached_samples[candidate.candidate_id] = _validate_cached_motif_success(
+                        candidate, raw_record, output_dir
+                    )
+                elif status == "censored":
+                    events = raw_record.get("invocation_failures")
+                    if not isinstance(events, list):
+                        raise ValueError(
+                            "censored resume record lacks structured invocation_failures"
+                        )
+                    normalized_events: List[Dict[str, object]] = []
+                    for event in events:
+                        if not isinstance(event, dict):
+                            raise ValueError(
+                                "censored resume invocation failure is not an object"
+                            )
+                        restored = dict(event)
+                        restored["candidate_id"] = candidate.candidate_id
+                        normalized_events.append(restored)
+                    prior_failure_events[candidate.candidate_id] = normalized_events
+                elif status == "declared":
+                    declared_ids.append(candidate.candidate_id)
+                candidates.append(candidate)
+        if declared_ids:
+            current_opt_sha256 = file_sha256(opt)
+            if current_opt_sha256 != stored_opt_sha256:
+                raise ValueError(
+                    "resume compiler SHA-256 does not match the original corpus"
+                )
+        manifest["collection"] = _motif_collection_config(
+            timeout, jobs, checkpoint_every,
+            opt_path=stored_opt_path, opt_sha256=stored_opt_sha256,
+        )
+        manifest["summary"] = neura_motifs.manifest_summary(records)
+        manifest["status"] = (
+            "incomplete" if any(
+                record.get("status") == "declared" for record in records
+            ) else "partial" if any(
+                record.get("status") == "censored" for record in records
+            ) else "complete"
+        )
+        # Persist running->declared recovery before the first resumed command.
+        neura_motifs.atomic_write_json(manifest_path, manifest)
+        return (
+            manifest, tuple(candidates), cached_samples, declared_ids,
+            prior_failure_events,
+        )
+
+    if clean and output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if manifest_path.exists():
+        raise ValueError(
+            f"motif manifest already exists; use --motif-resume or --clean: {manifest_path}"
+        )
+    candidates = neura_motifs.make_candidates(
+        neura_motifs.make_base_specs(count, seed, motifs), output_dir,
+        shapes, variants, registers,
+    )
+    manifest = neura_motifs.make_manifest(
+        candidates, output_dir, seed, motifs, shapes, variants, registers
+    )
+    manifest["generator"].update({"count_per_family": int(count)})
+    manifest["collection"] = _motif_collection_config(
+        timeout, jobs, checkpoint_every,
+        opt_path=str(opt.resolve()), opt_sha256=file_sha256(opt),
+    )
+    neura_motifs.atomic_write_json(manifest_path, manifest)
+    return (
+        manifest, candidates, {}, [candidate.candidate_id for candidate in candidates],
+        {},
+    )
+
+
+class MotifCollectionCoordinator:
+    """Bounded candidate-parallel collector with main-thread checkpoints."""
+
+    def __init__(
+        self, opt: Path, candidates: Sequence[neura_motifs.MotifCandidate],
+        manifest_path: Path, manifest: Dict[str, object], timeout: int,
+        jobs: int = 1, checkpoint_every: int = 32,
+        cached_samples: Optional[Mapping[str, Sample]] = None,
+        prior_failure_events: Optional[Mapping[str, Sequence[Mapping[str, object]]]] = None,
+    ) -> None:
+        if jobs < 1:
+            raise ValueError("motif jobs must be positive")
+        if checkpoint_every < 1:
+            raise ValueError("motif checkpoint interval must be positive")
+        self.opt = opt
+        self.candidates = tuple(candidates)
+        self.manifest_path = manifest_path
+        self.manifest = manifest
+        self.timeout = timeout
+        self.jobs = jobs
+        self.checkpoint_every = checkpoint_every
+        self.cached_samples = dict(cached_samples or {})
+        self._failure_events: Dict[str, List[Dict[str, object]]] = {
+            str(candidate_id): [dict(event) for event in events]
+            for candidate_id, events in (prior_failure_events or {}).items()
+        }
+        self._failure_events_finalized = False
+        self._records = list(manifest.get("candidates", []))
+        self._ordinal = {
+            candidate.candidate_id: index
+            for index, candidate in enumerate(self.candidates)
+        }
+        self._stop_requested = False
+        self._interrupted = False
+        self._completion_count = 0
+        self._results: Dict[str, MotifCollectionResult] = {}
+        self._errors: List[BaseException] = []
+
+    def request_stop(self) -> None:
+        """Request a cooperative stop (also useful for deterministic tests)."""
+        self._interrupted = True
+        self._stop_requested = True
+
+    @property
+    def stop_requested(self) -> bool:
+        return self._stop_requested
+
+    def _signal_handler(self, _signum: int, _frame: object) -> None:
+        self._interrupted = True
+        self.request_stop()
+
+    def _record_for(self, candidate_id: str) -> Dict[str, object]:
+        ordinal = self._ordinal[candidate_id]
+        record = self._records[ordinal]
+        if record.get("id", record.get("candidate_id")) != candidate_id:
+            raise RuntimeError("manifest candidate order changed during collection")
+        return record
+
+    def _apply_result(self, outcome: MotifCollectionResult) -> None:
+        record = self._record_for(outcome.candidate_id)
+        if outcome.status not in {"success", "censored"}:
+            raise RuntimeError(f"worker returned invalid status: {outcome.status}")
+        record["status"] = outcome.status
+        record["stage"] = outcome.stage
+        record["failure"] = outcome.failure
+        if outcome.status == "success":
+            if outcome.sample is None:
+                raise RuntimeError("successful worker result lacks sample")
+            candidate = self.candidates[self._ordinal[outcome.candidate_id]]
+            cost = Path(candidate.source_path).parent / "cost.mlir"
+            mapped = Path(candidate.source_path).parent / "mapped.mlir"
+            record.update({
+                "sample_id": outcome.candidate_id,
+                "compiled_ii": int(outcome.sample["compiled_ii"]),
+                "lower_bound": int(outcome.sample["baseline_lb"]),
+                "cost_artifact_path": _relative_to_manifest(
+                    self.manifest_path.parent, cost
+                ),
+                "cost_artifact_sha256": file_sha256(cost),
+                "mapped_artifact_path": _relative_to_manifest(
+                    self.manifest_path.parent, mapped
+                ),
+                "mapped_artifact_sha256": file_sha256(mapped),
+            })
+            self.cached_samples[outcome.candidate_id] = outcome.sample
+        else:
+            _clear_transient_manifest_fields(record)
+        self._failure_events[outcome.candidate_id] = [
+            {
+                **invocation_result.failure_record(),
+                "candidate_id": outcome.candidate_id,
+            }
+            for invocation_result in outcome.invocations
+            if not invocation_result.ok
+        ]
+        record["invocation_failures"] = list(
+            self._failure_events[outcome.candidate_id]
+        )
+        self._results[outcome.candidate_id] = outcome
+        self._completion_count += 1
+
+    def _finalize_failure_events(self) -> None:
+        if self._failure_events_finalized:
+            return
+        for candidate in self.candidates:
+            INVOCATION_FAILURES.extend(
+                self._failure_events.get(candidate.candidate_id, ())
+            )
+        self._failure_events_finalized = True
+
+    def flush(self) -> None:
+        """Persist only stable declared/success/censored states atomically."""
+        self.manifest["candidates"] = self._records
+        self.manifest["summary"] = neura_motifs.manifest_summary(self._records)
+        statuses = {str(record.get("status")) for record in self._records}
+        if "declared" in statuses:
+            self.manifest["status"] = (
+                "interrupted" if self._interrupted else "incomplete"
+            )
+        elif "censored" in statuses:
+            self.manifest["status"] = "partial"
+        else:
+            self.manifest["status"] = "complete"
+        neura_motifs.atomic_write_json(self.manifest_path, self.manifest)
+
+    def _harvest_done(
+        self, pending: Dict[concurrent.futures.Future, str],
+        done: Iterable[concurrent.futures.Future],
+    ) -> None:
+        ordered = sorted(
+            done, key=lambda future: self._ordinal[pending[future]]
+        )
+        for future in ordered:
+            candidate_id = pending.pop(future)
+            if future.cancelled():
+                continue
+            try:
+                outcome = future.result()
+            except BaseException as error:  # preserve declared status on error
+                self._errors.append(error)
+                self.request_stop()
+                continue
+            if not isinstance(outcome, MotifCollectionResult):
+                self._errors.append(TypeError("motif worker returned invalid result"))
+                self.request_stop()
+                continue
+            self._apply_result(outcome)
+            if self._completion_count % self.checkpoint_every == 0:
+                self.flush()
+
+    def _flush_cached(self) -> None:
+        for candidate_id, sample in self.cached_samples.items():
+            self._results.setdefault(
+                candidate_id,
+                MotifCollectionResult(
+                    candidate_id, "success", "cached", sample=sample
+                ),
+            )
+
+    def run(self) -> MotifCoordinatorResult:
+        """Run declared candidates, or stop safely on signal/worker failure."""
+        old_handler: object = None
+        handler_installed = False
+        try:
+            try:
+                old_handler = signal.getsignal(signal.SIGINT)
+                signal.signal(signal.SIGINT, self._signal_handler)
+                handler_installed = True
+            except (AttributeError, ValueError):
+                # A coordinator can be tested from a non-main thread; the
+                # explicit request_stop() API remains available there.
+                handler_installed = False
+            executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.jobs, thread_name_prefix="motif-worker"
+            )
+            pending: Dict[concurrent.futures.Future, str] = {}
+            next_ordinal = 0
+            try:
+                while True:
+                    # Observe every already-completed future before filling an
+                    # available slot.  In particular, do not submit more work
+                    # after a protocol exception has already occurred but was
+                    # not part of the preceding FIRST_COMPLETED snapshot.
+                    eager_done = tuple(
+                        future for future in pending if future.done()
+                    )
+                    if eager_done:
+                        self._harvest_done(pending, eager_done)
+                    if self.stop_requested:
+                        for future in tuple(pending):
+                            future.cancel()
+                        done, _ = concurrent.futures.wait(tuple(pending))
+                        self._harvest_done(pending, done)
+                        break
+                    while not self.stop_requested and len(pending) < self.jobs:
+                        while (
+                            next_ordinal < len(self.candidates) and
+                            self.candidates[next_ordinal].candidate_id in self.cached_samples
+                        ):
+                            next_ordinal += 1
+                        if next_ordinal >= len(self.candidates):
+                            break
+                        candidate = self.candidates[next_ordinal]
+                        record = self._record_for(candidate.candidate_id)
+                        next_ordinal += 1
+                        if record.get("status") != "declared":
+                            continue  # censored/success are never retried
+                        future = executor.submit(
+                            collect_motif_candidate,
+                            self.opt, candidate, self.timeout, run_invocation,
+                        )
+                        pending[future] = candidate.candidate_id
+                    if not pending:
+                        break
+                    done, _ = concurrent.futures.wait(
+                        tuple(pending),
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    self._harvest_done(pending, done)
+                    if self.stop_requested:
+                        for future in tuple(pending):
+                            future.cancel()
+                        # At most ``jobs`` futures are in flight.  Drain all
+                        # running ones, harvesting only normal outcomes.
+                        done, _ = concurrent.futures.wait(tuple(pending))
+                        self._harvest_done(pending, done)
+                        break
+                if self._errors:
+                    # Unresolved declarations intentionally remain declared;
+                    # flush before surfacing the worker exception.
+                    self.flush()
+                    self._finalize_failure_events()
+                    raise RuntimeError("motif worker failed") from self._errors[0]
+                self._flush_cached()
+                self.flush()
+            except KeyboardInterrupt:
+                self._interrupted = True
+                self.request_stop()
+                for future in tuple(pending):
+                    future.cancel()
+                done, _ = concurrent.futures.wait(tuple(pending))
+                self._harvest_done(pending, done)
+                self.flush()
+                self._finalize_failure_events()
+            except BaseException:
+                # The stable manifest is useful for resume even when caller
+                # supplied an invalid worker or an unexpected exception.
+                self.flush()
+                self._finalize_failure_events()
+                raise
+            finally:
+                # ``cancel_futures`` is only available in newer Python
+                # versions; all not-yet-started futures are cancelled above.
+                executor.shutdown(wait=True)
+        finally:
+            if handler_installed:
+                signal.signal(signal.SIGINT, old_handler)
+        self._finalize_failure_events()
+        self._flush_cached()
+        samples = [
+            self.cached_samples[candidate.candidate_id]
+            for candidate in self.candidates
+            if candidate.candidate_id in self.cached_samples
+        ]
+        results = [
+            self._results[candidate.candidate_id]
+            for candidate in self.candidates
+            if candidate.candidate_id in self._results
+        ]
+        return MotifCoordinatorResult(samples, results, self._interrupted)
 
 
 def collect_c_sample(opt: Path, sample_dir: Path, spec: CSpec,
@@ -2514,11 +3323,27 @@ def parse_args() -> argparse.Namespace:
               "homogeneous,split-domain)."),
     )
     parser.add_argument(
+        "--motif-jobs", type=int, default=1,
+        help="Maximum number of independent motif candidates collected concurrently.",
+    )
+    parser.add_argument(
+        "--motif-resume", action="store_true",
+        help="Resume a predeclared motif manifest; cached successes are revalidated.",
+    )
+    parser.add_argument(
+        "--motif-checkpoint-every", type=int, default=32,
+        help="Atomically checkpoint the motif manifest after this many completions.",
+    )
+    parser.add_argument(
         "--random-c-samples", type=int, default=0,
         help=("Generate bounded C loops, lower them through the normal "
               "frontend, and label them with the heuristic mapper."),
     )
-    parser.add_argument("--seed", type=int, default=20260829)
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help=(f"Generator seed (fresh default: {DEFAULT_SEED}; on motif "
+              "resume, an omitted seed is inherited from the manifest)"),
+    )
     parser.add_argument("--timeout", type=int, default=15,
                         help="Per cost/map invocation timeout in seconds")
     parser.add_argument("--ridge", type=float, default=1.0)
@@ -2626,6 +3451,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clean", action="store_true",
                         help="Remove the output directory before generation")
     args = parser.parse_args()
+    if args.motif_jobs < 1:
+        parser.error("--motif-jobs must be a positive integer")
+    if args.motif_checkpoint_every < 1:
+        parser.error("--motif-checkpoint-every must be a positive integer")
+    if args.clean and args.motif_resume:
+        parser.error("--clean and --motif-resume are mutually exclusive")
     if args.opt is None:
         if args.neura_root is None:
             parser.error(
@@ -2654,25 +3485,26 @@ def main() -> int:
     )
     if not 0.0 < interval_quantile <= 1.0:
         raise SystemExit("--interval-quantile must be in (0, 1]")
-    if not args.opt.is_file():
-        raise SystemExit(f"mlir-neura-opt not found: {args.opt}")
-    try:
-        require_opt_argument(args.opt, "--analyze-rec-res-mii")
-    except ValueError as error:
-        raise SystemExit(str(error))
     if args.random_c_samples < 0:
         raise SystemExit("--random-c-samples must be non-negative")
     if args.random_c_samples:
         for tool in (args.llvm_extract, args.mlir_translate):
             if not tool.is_file():
                 raise SystemExit(f"frontend tool not found: {tool}")
-    if args.clean and args.output_dir.exists():
-        shutil.rmtree(args.output_dir)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.samples < 0:
         raise SystemExit("--samples must be non-negative")
     if args.motif_samples_per_family < 0:
         raise SystemExit("--motif-samples-per-family must be non-negative")
+    if args.model_report is not None and (
+        args.motif_resume or args.motif_samples_per_family or args.samples or
+        args.random_c_samples or args.input_report or args.real_fixture or
+        args.mapped_real_fixture or args.real_random_masks or
+        args.metadata_holdout_key
+    ):
+        raise SystemExit(
+            "--model-report is prediction-only and cannot be combined with "
+            "motif resume or label collection"
+        )
     try:
         selected_motifs = neura_motifs.parse_motif_names(
             list(args.motif) + list(args.motifs_alias)
@@ -2684,30 +3516,97 @@ def main() -> int:
     except ValueError as error:
         raise SystemExit(str(error))
 
+    # Motif inputs and the complete manifest are prepared before inspecting
+    # the compiler executable or running any other subprocess.  On resume,
+    # omitted generator options inherit the immutable values in the manifest;
+    # explicitly supplied options are checked by the loader below.
+    motif_manifest_path = (args.output_dir / "corpus-manifest.json").resolve()
+    motif_count = args.motif_samples_per_family
+    if args.motif_resume and motif_manifest_path.is_file():
+        try:
+            existing_manifest = json.loads(motif_manifest_path.read_text())
+            existing_generator = existing_manifest.get("generator", {})
+            if args.seed is None:
+                args.seed = int(existing_generator["seed"])
+            if not args.motif and not args.motifs_alias:
+                selected_motifs = tuple(
+                    str(value) for value in existing_generator.get(
+                        "motifs", selected_motifs
+                    )
+                )
+            if not args.motif_shape:
+                selected_motif_shapes = neura_motifs.parse_shapes(
+                    existing_generator.get("shapes", ())
+                )
+            if not args.motif_architecture_variant:
+                selected_motif_architectures = neura_motifs.parse_architecture_variants(
+                    existing_generator.get(
+                        "architecture_variants", selected_motif_architectures
+                    )
+                )
+            if not motif_count:
+                motif_count = int(existing_generator.get("count_per_family", 0))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+            raise SystemExit(f"invalid motif resume manifest: {error}")
+    if args.seed is None:
+        args.seed = DEFAULT_SEED
+
     # Materialize every new corpus candidate and atomically predeclare it
     # before *any* mapper invocation (including legacy --samples below).
     # With the default zero count no files/manifest are created, preserving
     # the legacy generator's behavior and cost.
     motif_candidates: Tuple[neura_motifs.MotifCandidate, ...] = ()
-    motif_manifest_path: Optional[Path] = None
-    if args.motif_samples_per_family:
-        motif_bases = neura_motifs.make_base_specs(
-            args.motif_samples_per_family, args.seed, selected_motifs
-        )
-        motif_candidates = neura_motifs.make_candidates(
-            motif_bases, args.output_dir, selected_motif_shapes,
-            selected_motif_architectures,
-        )
-        motif_manifest_path = args.output_dir / "corpus-manifest.json"
-        motif_manifest = neura_motifs.make_manifest(
-            motif_candidates, args.output_dir, args.seed,
-            selected_motifs, selected_motif_shapes,
-        )
-        neura_motifs.atomic_write_json(motif_manifest_path, motif_manifest)
+    motif_manifest: Optional[Dict[str, object]] = None
+    cached_motif_samples: Dict[str, Sample] = {}
+    declared_motif_ids: List[str] = []
+    prior_motif_failure_events: Dict[str, List[Dict[str, object]]] = {}
+    if motif_count or args.motif_resume:
+        try:
+            (
+                motif_manifest, motif_candidates, cached_motif_samples,
+                declared_motif_ids, prior_motif_failure_events,
+            ) = _load_or_create_motif_manifest(
+                args.output_dir, motif_manifest_path,
+                resume=args.motif_resume, clean=args.clean,
+                count=motif_count, seed=args.seed, motifs=selected_motifs,
+                shapes=selected_motif_shapes,
+                variants=selected_motif_architectures,
+                timeout=args.timeout, jobs=args.motif_jobs,
+                checkpoint_every=args.motif_checkpoint_every,
+                opt=args.opt,
+            )
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+            raise SystemExit(f"invalid motif corpus configuration: {error}")
         print(
-            f"motif_manifest=predeclared candidates={len(motif_candidates)} "
-            f"path={motif_manifest_path}"
+            f"motif_manifest={'resumed' if args.motif_resume else 'predeclared'} "
+            f"candidates={len(motif_candidates)} path={motif_manifest_path}"
         )
+    else:
+        if args.clean and args.output_dir.exists():
+            shutil.rmtree(args.output_dir)
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # This check is deliberately after motif predeclaration/resume validation:
+    # a corrupt cached success must fail before any compiler invocation.  A
+    # terminal motif-only resume rebuilds samples from hashed artifacts and
+    # therefore neither requires nor probes a compiler executable.
+    compiler_required = bool(
+        declared_motif_ids or args.samples or args.random_c_samples or
+        args.real_fixture or args.mapped_real_fixture or args.predict_fixture
+    )
+    if compiler_required:
+        if not args.opt.is_file():
+            raise SystemExit(f"mlir-neura-opt not found: {args.opt}")
+        if declared_motif_ids and motif_manifest is not None:
+            collection = motif_manifest.get("collection", {})
+            if file_sha256(args.opt) != collection.get("mlir_neura_opt_sha256"):
+                raise SystemExit(
+                    "mlir-neura-opt changed after motif corpus predeclaration"
+                )
+        try:
+            require_opt_argument(args.opt, "--analyze-rec-res-mii")
+        except ValueError as error:
+            raise SystemExit(str(error))
     predictor_repository_provenance = git_provenance(PROJECT_ROOT)
     neura_repository_provenance = git_provenance(args.neura_root)
     external_model: Optional[LoadedModel] = None
@@ -2718,7 +3617,7 @@ def main() -> int:
             args.samples or args.random_c_samples or args.input_report or
             args.real_fixture or args.mapped_real_fixture or
             args.real_random_masks or args.metadata_holdout_key or
-            args.motif_samples_per_family
+            args.motif_samples_per_family or args.motif_resume
         ):
             raise SystemExit(
                 "--model-report is prediction-only and cannot be combined with "
@@ -2851,22 +3750,36 @@ def main() -> int:
         else:
             print(f"sample={index:03d} unavailable", file=sys.stderr)
 
-    for candidate in motif_candidates:
-        result = collect_motif_sample(
-            args.opt, candidate, args.timeout, motif_manifest_path
+    if motif_candidates:
+        if motif_manifest is None:
+            raise SystemExit("motif candidates lack a predeclared manifest")
+        coordinator = MotifCollectionCoordinator(
+            args.opt, motif_candidates, motif_manifest_path, motif_manifest,
+            args.timeout, args.motif_jobs, args.motif_checkpoint_every,
+            cached_motif_samples, prior_motif_failure_events,
         )
-        if result is not None:
-            samples.append(result)
-            print(
-                f"motif={candidate.candidate_id} "
-                f"lb={result['baseline_lb']} compiled={result['compiled_ii']} "
-                f"ops={candidate.operation_count}"
-            )
-        else:
-            print(
-                f"motif={candidate.candidate_id} unavailable",
-                file=sys.stderr,
-            )
+        try:
+            motif_result = coordinator.run()
+        except RuntimeError as error:
+            print(f"motif collection failed: {error}", file=sys.stderr)
+            return 1
+        samples.extend(motif_result.samples)
+        for result in motif_result.results:
+            if result.status == "success" and result.sample is not None:
+                print(
+                    f"motif={result.candidate_id} "
+                    f"lb={result.sample['baseline_lb']} "
+                    f"compiled={result.sample['compiled_ii']}"
+                )
+            elif result.status == "censored":
+                print(
+                    f"motif={result.candidate_id} unavailable",
+                    file=sys.stderr,
+                )
+        if motif_result.interrupted:
+            # Do not fit or emit a training report from an interrupted corpus;
+            # resume can continue from the atomically checkpointed manifest.
+            return 130
 
     for index in range(args.random_c_samples):
         rows, columns = rng.choice(((3, 3), (3, 4), (4, 4)))
@@ -3359,14 +4272,27 @@ def main() -> int:
     prediction_complete = (
         prediction_request_count == len(predictions)
     )
+    motif_collection_identity = (
+        motif_manifest.get("collection", {})
+        if motif_manifest is not None else {}
+    )
+    reported_opt_path = (
+        motif_collection_identity.get("mlir_neura_opt")
+        if motif_candidates else str(args.opt.resolve())
+    )
+    reported_opt_sha256 = (
+        motif_collection_identity.get("mlir_neura_opt_sha256")
+        if motif_candidates else file_sha256(args.opt)
+    )
     provenance = {
         "adapter": "neura",
         "predictor_repository": predictor_repository_provenance,
         "adapter_path": str(Path(__file__).resolve()),
         "adapter_sha256": file_sha256(Path(__file__)),
         "neura": neura_repository_provenance,
-        "mlir_neura_opt": str(args.opt.resolve()),
-        "mlir_neura_opt_sha256": file_sha256(args.opt),
+        "mlir_neura_opt": reported_opt_path,
+        "mlir_neura_opt_sha256": reported_opt_sha256,
+        "motif_collection": motif_collection_identity or None,
         "architecture": str(args.real_architecture.resolve()),
         "architecture_sha256": file_sha256(args.real_architecture),
         "mapping_strategy": "heuristic",
@@ -3395,7 +4321,10 @@ def main() -> int:
             "ridge_candidates": ridge_candidates,
             "residual_dead_zone_candidates": dead_zone_candidates,
             "interval_empirical_quantile": interval_quantile,
-            "motif_samples_per_family": args.motif_samples_per_family,
+            "motif_samples_per_family": motif_count,
+            "motif_jobs": args.motif_jobs,
+            "motif_resume": args.motif_resume,
+            "motif_checkpoint_every": args.motif_checkpoint_every,
             "motifs": list(selected_motifs),
             "motif_shapes": [
                 f"{rows}x{columns}"

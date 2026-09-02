@@ -1122,6 +1122,8 @@ def atomic_write_json(path: Path, payload: Mapping[str, object]) -> None:
 def make_manifest(
     candidates: Sequence[MotifCandidate], output_dir: Path,
     seed: int, motifs: Sequence[str], shapes: Sequence[Tuple[int, int]],
+    architecture_variants: Optional[Sequence[str]] = None,
+    registers: int = 16,
 ) -> Dict[str, object]:
     """Build a pre-mapper manifest with every candidate in ``declared`` state."""
     records = []
@@ -1142,6 +1144,10 @@ def make_manifest(
             "seed": seed,
             "motifs": list(motifs),
             "shapes": [f"{rows}x{columns}" for rows, columns in shapes],
+            "architecture_variants": list(
+                parse_architecture_variants(architecture_variants)
+            ),
+            "registers": int(registers),
         },
         # All paths in candidate records are relative to the manifest.  Using
         # "." here keeps a manifest reproducible when the corpus is generated
