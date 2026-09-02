@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import List
 
@@ -17,10 +18,32 @@ from .model import (
 
 
 def _numbers(value: str, allow_zero: bool) -> List[float]:
-    result = sorted({float(item) for item in value.split(",") if item})
-    if not result or any(number < 0.0 or (number == 0.0 and not allow_zero)
-                         for number in result):
-        raise argparse.ArgumentTypeError("invalid numeric candidate list")
+    if not isinstance(value, str):
+        raise argparse.ArgumentTypeError("candidate list must be a string")
+    items = [item.strip() for item in value.split(",")]
+    if not items or any(not item for item in items):
+        raise argparse.ArgumentTypeError(
+            "candidate list must not be empty or contain empty entries"
+        )
+    try:
+        numbers = [float(item) for item in items]
+    except (TypeError, ValueError, OverflowError) as error:
+        raise argparse.ArgumentTypeError(
+            "candidate list must contain numeric values"
+        ) from error
+    if any(not math.isfinite(number) for number in numbers):
+        raise argparse.ArgumentTypeError(
+            "candidate values must be finite"
+        )
+    if any(number < 0.0 or (number == 0.0 and not allow_zero)
+           for number in numbers):
+        requirement = "non-negative" if allow_zero else "positive"
+        raise argparse.ArgumentTypeError(
+            f"candidate values must be {requirement}"
+        )
+    result = sorted(set(numbers))
+    if not result:
+        raise argparse.ArgumentTypeError("candidate list must be non-empty")
     return result
 
 
@@ -75,9 +98,17 @@ def main() -> int:
         aliases[source] = lineage
 
     names = args.features.split(",") if args.features else None
+    try:
+        ridge_candidates = _numbers(args.ridge_candidates, allow_zero=False)
+    except argparse.ArgumentTypeError as error:
+        parser.error(f"--ridge-candidates: {error}")
+    try:
+        dead_zone_candidates = _numbers(
+            args.dead_zone_candidates, allow_zero=True,
+        )
+    except argparse.ArgumentTypeError as error:
+        parser.error(f"--dead-zone-candidates: {error}")
     dataset = remap_groups(load_dataset(args.dataset, names), aliases)
-    ridge_candidates = _numbers(args.ridge_candidates, allow_zero=False)
-    dead_zone_candidates = _numbers(args.dead_zone_candidates, allow_zero=True)
     holdout = nested_group_holdout(
         dataset.samples, dataset.feature_names,
         ridge_candidates, dead_zone_candidates,

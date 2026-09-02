@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 import hashlib
 import json
 import math
+from numbers import Real
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -39,6 +40,7 @@ def _validate_samples(
         )
     seen_sample_ids = set()
     scoped_candidates: Dict[Tuple[str, str], Tuple[Any, ...]] = {}
+    query_groups: Dict[str, str] = {}
     provenance_fields = (
         "architecture_id", "architecture_variant", "mapper_id",
         "mapper_revision", "mapper_config", "source_sha256",
@@ -127,9 +129,37 @@ def _validate_samples(
                 f"sample {sample.sample_id} has inconsistent base_dfg_id "
                 "and ranking_query_id"
             )
-        query = sample.metadata.get(
-            "ranking_query_id", sample.metadata.get("base_dfg_id")
-        )
+        # ``ranking_query_id`` and ``base_dfg_id`` are aliases for the same
+        # workload identity.  Do not let the presence of an empty primary
+        # alias hide a non-empty fallback alias, and apply the group-ownership
+        # check even when candidate_id is absent (or differs between rows).
+        query_aliases = [
+            (name, sample.metadata.get(name))
+            for name in ("ranking_query_id", "base_dfg_id")
+            if sample.metadata.get(name) not in (None, "")
+        ]
+        for name, value in query_aliases:
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"sample {sample.sample_id} metadata.{name} must be a "
+                    "string"
+                )
+        query = query_aliases[0][1] if query_aliases else None
+        if len(query_aliases) == 2 and query_aliases[0][1] != query_aliases[1][1]:
+            # Keep the historical error wording for callers that depend on
+            # this consistency check, while using the non-empty aliases above
+            # so an empty alias cannot bypass it.
+            raise ValueError(
+                f"sample {sample.sample_id} has inconsistent base_dfg_id "
+                "and ranking_query_id"
+            )
+        if query is not None:
+            prior_group = query_groups.setdefault(query, sample.group)
+            if prior_group != sample.group:
+                raise ValueError(
+                    f"ranking query {query} maps to multiple sample.group "
+                    f"values: {prior_group!r} and {sample.group!r}"
+                )
         candidate = sample.metadata.get("candidate_id")
         if query in (None, "") or candidate in (None, ""):
             continue
@@ -261,38 +291,117 @@ def distinct_observations(
     return result
 
 
+def _validated_control(value: Any, name: str, *, strictly_positive: bool) -> float:
+    """Return a finite Ridge control value with a stable public error."""
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise ValueError(f"{name} must be finite and numeric")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(f"{name} must be finite and numeric") from error
+    if not math.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    if strictly_positive and numeric <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    if not strictly_positive and numeric < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return numeric
+
+
+def _validated_control_grid(
+    values: Sequence[float], name: str, *, strictly_positive: bool,
+) -> Tuple[float, ...]:
+    """Validate one hyperparameter grid before any cross-validation work."""
+    if isinstance(values, (str, bytes)) or values is None:
+        raise ValueError(f"{name} candidate grid must be a non-empty sequence")
+    try:
+        candidates = tuple(values)
+    except TypeError as error:
+        raise ValueError(
+            f"{name} candidate grid must be a non-empty sequence"
+        ) from error
+    if not candidates:
+        raise ValueError(f"{name} candidate grid must be non-empty")
+    return tuple(
+        _validated_control(value, f"{name} candidate", strictly_positive=strictly_positive)
+        for value in candidates
+    )
+
+
+def _require_finite_array(array: np.ndarray, name: str) -> np.ndarray:
+    """Raise a useful contract error instead of returning NaN model fields."""
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"fitted {name} must be finite")
+    return array
+
+
 def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
               ridge: float, residual_dead_zone: float = 0.0) -> Model:
     if not samples:
         raise ValueError("cannot fit an empty sample set")
-    if ridge <= 0.0 or residual_dead_zone < 0.0:
-        raise ValueError("ridge must be positive and dead zone non-negative")
+    ridge = _validated_control(ridge, "ridge", strictly_positive=True)
+    residual_dead_zone = _validated_control(
+        residual_dead_zone, "residual dead zone", strictly_positive=False,
+    )
     _validate_samples(samples, feature_names)
-    x = np.asarray([
-        [sample.features[name] for name in feature_names]
-        for sample in samples
-    ], dtype=float)
-    y = np.asarray([
-        sample.compiled_ii - sample.lower_bound for sample in samples
-    ], dtype=float)
-    sample_weights = group_balanced_sample_weights(samples, feature_names)
+    try:
+        with np.errstate(over="raise", divide="raise", invalid="raise"):
+            x = np.asarray([
+                [sample.features[name] for name in feature_names]
+                for sample in samples
+            ], dtype=float)
+            y = np.asarray([
+                sample.compiled_ii - sample.lower_bound for sample in samples
+            ], dtype=float)
+            sample_weights = group_balanced_sample_weights(
+                samples, feature_names
+            )
+            _require_finite_array(x, "feature statistics")
+            _require_finite_array(y, "training labels")
+            _require_finite_array(sample_weights, "sample weights")
+            mean = np.average(x, axis=0, weights=sample_weights)
+            _require_finite_array(mean, "feature means")
+            centered = x - mean
+            _require_finite_array(centered, "centered features")
+            scale = np.sqrt(np.average(
+                centered ** 2, axis=0, weights=sample_weights
+            ))
+            _require_finite_array(scale, "feature scales")
+            scale[scale == 0.0] = 1.0
+            _require_finite_array(scale, "feature scales")
+            design = np.column_stack((
+                np.ones(len(samples)), centered / scale,
+            ))
+            _require_finite_array(design, "design matrix")
+            penalty = np.eye(design.shape[1]) * ridge
+            penalty[0, 0] = 0.0
+            weighted_design = sample_weights[:, None] * design
+            _require_finite_array(weighted_design, "weighted design matrix")
+            normal_matrix = design.T @ weighted_design + penalty
+            rhs = design.T @ (sample_weights * y)
+            _require_finite_array(normal_matrix, "normal equation")
+            _require_finite_array(rhs, "normal-equation right-hand side")
+            weights = np.linalg.solve(normal_matrix, rhs)
+            _require_finite_array(weights, "weights")
+    except FloatingPointError as error:
+        raise ValueError(
+            "Ridge fit overflowed; fitted statistics must be finite"
+        ) from error
+    except np.linalg.LinAlgError as error:
+        raise ValueError(
+            "Ridge fit failed while solving finite normal equations"
+        ) from error
     training_strata = {
         str(sample.metadata["training_stratum"])
         for sample in samples
         if sample.metadata.get("training_stratum") not in (None, "")
     }
-    mean = np.average(x, axis=0, weights=sample_weights)
-    scale = np.sqrt(np.average((x - mean) ** 2, axis=0,
-                               weights=sample_weights))
-    scale[scale == 0.0] = 1.0
-    design = np.column_stack((np.ones(len(samples)), (x - mean) / scale))
-    penalty = np.eye(design.shape[1]) * ridge
-    penalty[0, 0] = 0.0
-    weighted_design = sample_weights[:, None] * design
-    weights = np.linalg.solve(
-        design.T @ weighted_design + penalty,
-        design.T @ (sample_weights * y),
-    )
+    _require_finite_array(sample_weights, "sample weights")
+    _require_finite_array(mean, "feature means")
+    _require_finite_array(scale, "feature scales")
+    _require_finite_array(weights, "weights")
+    if not math.isfinite(float(sample_weights.sum())):
+        raise ValueError("fitted training weight sum must be finite")
     return {
         "model_type": "residual_ridge",
         "feature_names": list(feature_names),
@@ -751,6 +860,12 @@ def select_ridge_hyperparameters(
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
 ) -> Tuple[float, float]:
     _validate_samples(samples, feature_names)
+    ridge_candidates = _validated_control_grid(
+        ridge_candidates, "ridge", strictly_positive=True,
+    )
+    dead_zone_candidates = _validated_control_grid(
+        dead_zone_candidates, "residual dead zone", strictly_positive=False,
+    )
     selection_samples = distinct_observations(samples, feature_names)
     folds = _validation_group_folds(selection_samples)
     best: Tuple[float, float, float, float, float] = None  # type: ignore[assignment]

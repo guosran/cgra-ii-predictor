@@ -108,6 +108,73 @@ class ModelTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inconsistent base_dfg"):
             fit_ridge([inconsistent], ["pressure"], ridge=1.0)
 
+    def test_nested_holdout_rejects_query_identity_spanning_groups(self):
+        # Candidate names are intentionally different: query ownership is a
+        # separate leakage boundary and cannot be inferred from candidate IDs.
+        rows = [
+            Sample(
+                "query-a", "lineage-a", 1, 1, {"pressure": 1},
+                contract(
+                    1, ranking_query_id="shared-dfg", candidate_id="mesh-a",
+                ),
+            ),
+            Sample(
+                "query-b", "lineage-b", 1, 1, {"pressure": 2},
+                contract(
+                    1, base_dfg_id="shared-dfg", candidate_id="mesh-b",
+                ),
+            ),
+            sample("query-c", "lineage-c", 1, 1, 3),
+        ]
+        with self.assertRaisesRegex(ValueError, "multiple sample.group"):
+            nested_group_holdout(
+                rows, ["pressure"],
+                ridge_candidates=[1.0], dead_zone_candidates=[0.0],
+            )
+
+    def test_ridge_controls_reject_non_finite_and_invalid_values(self):
+        for value in (0.0, -1.0, math.nan, math.inf, -math.inf, True, "1"):
+            with self.subTest(ridge=value), self.assertRaises(ValueError):
+                fit_ridge(self.samples, ["pressure"], ridge=value)
+        for value in (-1.0, math.nan, math.inf, -math.inf, True, "0"):
+            with self.subTest(dead_zone=value), self.assertRaises(ValueError):
+                fit_ridge(
+                    self.samples, ["pressure"], ridge=1.0,
+                    residual_dead_zone=value,
+                )
+
+    def test_ridge_selection_rejects_empty_or_invalid_grids(self):
+        with self.assertRaisesRegex(ValueError, "ridge candidate grid must be"):
+            select_ridge_hyperparameters(
+                self.samples, ["pressure"], [], [0.0],
+            )
+        with self.assertRaisesRegex(ValueError, "residual dead zone candidate grid"):
+            select_ridge_hyperparameters(
+                self.samples, ["pressure"], [1.0], [],
+            )
+        with self.assertRaisesRegex(ValueError, "ridge candidate must be finite"):
+            select_ridge_hyperparameters(
+                self.samples, ["pressure"], [math.nan], [0.0],
+            )
+        with self.assertRaisesRegex(ValueError, "residual dead zone candidate must be finite"):
+            select_ridge_hyperparameters(
+                self.samples, ["pressure"], [1.0], [math.inf],
+            )
+
+    def test_ridge_fit_reports_extreme_statistics_overflow(self):
+        rows = [
+            Sample(
+                "extreme-a", "extreme-a", 1, 1, {"pressure": -1e308},
+                contract(1),
+            ),
+            Sample(
+                "extreme-b", "extreme-b", 1, 1, {"pressure": 1e308},
+                contract(1),
+            ),
+        ]
+        with self.assertRaisesRegex(ValueError, "overflowed|finite"):
+            fit_ridge(rows, ["pressure"], ridge=1.0)
+
     def test_direct_sample_api_allows_zero_rec_or_res_but_not_zero_floor(self):
         for rec_mii, res_mii in ((0, 3), (3, 0)):
             row = Sample(
