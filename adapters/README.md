@@ -68,14 +68,35 @@ selects the deterministic homogeneous and split-domain attempts.
 
 The old `--samples` switch remains a legacy narrow random DAG and is not
 implicitly folded into the motif corpus.  Motif source files are materialized
-first, then `corpus-manifest.json` is atomically predeclared before the first
-mapper invocation.  It records source/canonical hashes, root/base seeds,
+implicitly folded into the motif corpus.  Motif source files are materialized
+first, then `corpus-manifest.json` is atomically predeclared before any
+compiler subprocess.  It records source/canonical hashes, root/base seeds,
 operation counts, architecture identity, candidate IDs, and lineage
 `generated/<generator_version>/<motif>/<base_id>`.  Each base DFG keeps the
 same source hash across shapes and architecture variants.  Success records
 point to cost/mapped artifacts; failed or timed-out candidates remain
-censored and have no numeric label.  For generator-family holdout use
+censored and have no numeric label.  `--motif-jobs N` (default `1`) bounds
+candidate-level parallelism, while each candidate's Rec/Res analysis and
+mapper invocation remain serial.  The main coordinator alone updates the
+manifest; terminal records are atomically checkpointed in declaration order
+after completion batches.  For generator-family holdout use
 `--metadata-holdout-key generator_family`.
+
+Use `--motif-resume` with the same output directory to continue a partial
+collection; it is incompatible with `--clean`.  Resume validates the
+manifest schema, generator configuration, timeout, compiler SHA-256, candidate
+inputs, and source/architecture/cost/mapped artifact path/hash identities.
+Cached successes are rebuilt from those artifacts without a compiler
+subprocess, censored candidates are skipped without retrying, and a corrupt
+cache fails before invocation.  A legacy `running` record is normalized to
+`declared` before retry.  If every candidate is terminal, resume neither
+requires nor probes the compiler.  SIGINT stops scheduling, drains at most the
+configured in-flight candidates, checkpoints atomically, exits 130, and does
+not fit a model.
+
+This is a single-coordinator/single-writer manifest contract; no cross-process
+lock is provided.  Do not run two fresh or resume processes concurrently
+against the same output directory.
 
 The three v2 additions contain real lowered recurrence, predicated-control,
 and pointer/load structure, but they remain structural generators rather than

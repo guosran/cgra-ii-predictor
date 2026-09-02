@@ -169,18 +169,45 @@ python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
   --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
+  --motif-jobs 4 --motif-checkpoint-every 32 \
   --timeout 60
 ~~~
 
 This first materializes every source/architecture candidate and atomically
-writes `corpus-manifest.json` before invoking the mapper.  A base DFG's shape
-and architecture variants share one lineage and source/canonical hash; mapper
+writes `corpus-manifest.json` before invoking any compiler subprocess. Candidate
+collection is bounded by `--motif-jobs` (default `1`); Rec/Res analysis and
+mapping remain serial within each candidate. A base DFG's shape and
+architecture variants share one lineage and source/canonical hash; mapper
 timeouts remain censored manifest entries. Only bases that succeed in all six
 shape/layout cells enter validation or fitting; partial successes remain
-auditable but excluded. `--samples` is retained as a
+auditable but excluded. Checkpoints are atomic and ordered by candidate
+declaration, and only the main coordinator updates the manifest. `--samples` is
+retained as a
 legacy narrow random-DAG generator and is not automatically mixed into this
 motif corpus.  See [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
+
+To resume that collection after an interruption, use the same output directory
+and omit `--clean`:
+
+~~~sh
+python3 adapters/neura_experiment.py \
+  --output-dir /path/to/random-training \
+  --motif-resume \
+  --motif-jobs 4 --motif-checkpoint-every 32 \
+  --timeout 60
+~~~
+
+Resume validates the manifest, generator/timeout/compiler identity, candidate
+inputs, and cached artifact hashes before invoking a subprocess. It reconstructs
+cached successes without the compiler, skips censored candidates without
+retrying them, and fails before invocation if a cached artifact is corrupt. A
+fully terminal resume needs no compiler probe. `--clean` and `--motif-resume`
+are mutually exclusive; SIGINT exits 130 after draining at most the configured
+in-flight candidates and does not train a model.
+The manifest is a single-coordinator/single-writer contract with no
+cross-process lock; do not run two fresh or resume processes against one
+output directory concurrently.
 
 To predict a lowered DFG without labels, refitting, or invoking the mapper:
 

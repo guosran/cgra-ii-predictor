@@ -145,3 +145,10 @@ and frozen MachSuite results over both scored and all 19 declared variants.
 Architecture ranking is reported
 only inside explicit base-DFG queries with at least two candidates and
 non-constant target II.
+
+Collection execution does not change this statistical contract.  The motif
+collector predeclares every candidate before any compiler subprocess; bounded
+candidate parallelism is controlled by `--motif-jobs` (default `1`), while
+Rec/Res analysis and mapping are serial within a candidate.  A SIGINT leaves
+only atomically checkpointed terminal results and declared work for resume,
+returns status 130, and performs no fitting or training.

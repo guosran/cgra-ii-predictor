@@ -175,21 +175,46 @@ accidental duplicate bases from masquerading as independent training lineages.
 
 For motif collection, all source and architecture files are materialized and
 `output-dir/corpus-manifest.json` is atomically written in `predeclared` state
-before the first mapper subprocess.  The manifest lists every candidate's
-motif, seed, operation count, shape, architecture parameters, hashes, and
-lineage.  It is updated atomically after each Rec/Res-analysis and mapper stage:
+before any compiler subprocess.  Thus every candidate is in the manifest before
+the first Rec/Res analysis or mapper invocation.  The manifest lists every
+candidate's motif, seed, operation count, shape, architecture parameters,
+hashes, and lineage.  `--motif-jobs N` bounds candidate-level parallelism
+(default `1`); within each candidate, the shared Rec/Res analysis and heuristic
+mapper stages remain serial.  Only the coordinator/main thread mutates the
+manifest.
 
 ```text
-declared -> running(rec-res-analysis) -> running(mapper) -> success
-                                           \-> censored
+manifest predeclared; candidate declared -> success
+                                      \-> censored
 ```
 
-Successful records point to hashed Rec/Res-analysis and mapped artifacts and
-the corresponding `sample_id`; frozen-model validation re-parses both and
-requires identical RecMII/ResMII. Censored records contain stage/failure status
-and no label.
-Interrupted runs may leave `running` records and must be resumed or reported
-as incomplete rather than treated as successful.
+The stable manifest contains terminal `success` or `censored` records and is
+checkpointed atomically after completion batches in deterministic candidate
+order.  Successful records point to hashed Rec/Res-analysis and mapped
+artifacts and the corresponding `sample_id`; frozen-model validation re-parses
+both and requires identical RecMII/ResMII. Censored records contain
+stage/failure status and no label. There is no persistent `running` state in
+the current collector. On `--motif-resume`, a legacy `running` record is
+normalized back to `declared` with `stage=predeclared` before scheduling and
+can be retried.
+
+`--motif-resume` validates the manifest schema, generator configuration,
+timeout, compiler SHA-256, candidate inputs, and recorded artifact
+identities/path/hash values before invoking a subprocess. Cached successes are
+rebuilt from their hashed source, architecture, Rec/Res-cost, and mapped
+artifacts without invoking the compiler; censored candidates are skipped and
+are never retried. A corrupt cached record fails before any subprocess. If a
+resume has no non-terminal candidates, it neither requires nor probes the
+compiler. `--clean` and `--motif-resume` are mutually exclusive.
+
+On SIGINT, the coordinator stops scheduling new candidates, drains at most
+`N` in-flight candidates, atomically checkpoints the stable manifest, and exits
+with status 130 without fitting or emitting a training report. Resume can
+continue the remaining `predeclared` candidates.
+
+The manifest is a single-coordinator/single-writer contract; there is currently
+no cross-process lock. Do not start two fresh or resume processes against the
+same output directory concurrently.
 
 ## Evaluation and ablations
 

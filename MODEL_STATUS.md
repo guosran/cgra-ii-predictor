@@ -223,5 +223,5 @@ generated v2 smoke: 54 declared, 54 labels, 0 mapper-censored; Ridge fit complet
 v2 smoke nested MAE: LB 0.42593, Ridge 0.42502 (pipeline check, not paper evidence)
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
-predictor unit tests: 114 passed before parallel/resume integration
+predictor unit tests: 115 passed before parallel/resume integration
 ```
