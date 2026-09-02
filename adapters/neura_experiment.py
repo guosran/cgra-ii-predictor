@@ -919,6 +919,13 @@ def collect_motif_sample(
     result.update(graph_features_from_neura(
         source.read_text(), candidate.rows, candidate.columns
     ))
+    # Motif candidates reuse the same DFG text across architecture variants.
+    # ``split_domain`` is therefore architecture metadata, not a property to
+    # infer from the source graph; keep it consistent with the candidate ID and
+    # architecture artifact used for this mapping attempt.
+    result["split_domain"] = int(
+        candidate.architecture_variant == "split-domain"
+    )
     add_prediction_features(result)
     result.update({
         "index": candidate.candidate_id,

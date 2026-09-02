@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from adapters import neura_experiment as adapter
+from adapters import machsuite_frozen, neura_experiment as adapter, neura_motifs
 
 
 def cost_text(**overrides):
@@ -341,6 +341,57 @@ class NeuraAdapterTest(unittest.TestCase):
         command = " ".join(commands[0])
         self.assertIn("--analyze-rec-res-mii=", command)
         self.assertNotIn("--map-to-accelerator", command)
+
+    def test_motif_split_domain_feature_comes_from_architecture_variant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = neura_motifs.make_base_specs(
+                1, seed=17, motifs=("chain",)
+            )
+            candidates = neura_motifs.make_candidates(
+                base, root, ((3, 3),), ("homogeneous", "split-domain")
+            )
+
+            def fake_invoke(command, timeout):
+                output = Path(command[-1])
+                if any(
+                    part.startswith("--analyze-rec-res-mii")
+                    for part in command
+                ):
+                    output.write_text(cost_text(rec_mii=4, res_mii=5))
+                else:
+                    output.write_text(
+                        "module attributes {"
+                        'mapping_strategy = "heuristic", '
+                        "compiled_ii = 8 : i32, rec_mii = 4 : i32, "
+                        "res_mii = 5 : i32} {}\n"
+                    )
+                return True
+
+            with patch.object(adapter, "invoke", side_effect=fake_invoke):
+                samples = [
+                    adapter.collect_motif_sample(Path("opt"), candidate, 5)
+                    for candidate in candidates
+                ]
+
+            for candidate, sample, expected in zip(
+                candidates, samples, (0, 1)
+            ):
+                self.assertIsNotNone(sample)
+                sample = dict(sample)
+                self.assertEqual(sample["architecture_variant"],
+                                 candidate.architecture_variant)
+                self.assertEqual(sample["split_domain"], expected)
+
+                # The main report assembly supplies these two provenance
+                # fields before the frozen generated-sample validator runs.
+                sample["declared_leakage_lineage_id"] = candidate.lineage
+                sample["mapper_revision"] = (
+                    machsuite_frozen.FROZEN_NEURA_REVISION
+                )
+                machsuite_frozen._validated_generated_sample(
+                    sample, 0, machsuite_frozen.FROZEN_NEURA_REVISION
+                )
 
 
 if __name__ == "__main__":
