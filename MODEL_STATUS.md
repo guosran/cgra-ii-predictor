@@ -219,9 +219,10 @@ At this update:
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
-generated v2 smoke: 54 declared, 54 labels, 0 mapper-censored; Ridge fit completed
+generated v2 parallel smoke: 54 declared, 54 labels, 0 mapper-censored; Ridge fit completed
 v2 smoke nested MAE: LB 0.42593, Ridge 0.42502 (pipeline check, not paper evidence)
+terminal resume with a nonexistent compiler path: identical sample/model hashes
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
-predictor unit tests: 115 passed before parallel/resume integration
+predictor unit tests: 124 passed after parallel/resume integration
 ```

@@ -180,10 +180,10 @@ mapping remain serial within each candidate. A base DFG's shape and
 architecture variants share one lineage and source/canonical hash; mapper
 timeouts remain censored manifest entries. Only bases that succeed in all six
 shape/layout cells enter validation or fitting; partial successes remain
-auditable but excluded. Checkpoints are atomic and ordered by candidate
-declaration, and only the main coordinator updates the manifest. `--samples` is
-retained as a
-legacy narrow random-DAG generator and is not automatically mixed into this
+auditable but excluded. Checkpoints are atomic, manifest records remain in
+candidate-declaration order, and only the main coordinator updates the
+manifest. `--samples` is retained as a legacy narrow random-DAG generator and
+is not automatically mixed into this
 motif corpus.  See [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
 
@@ -240,6 +240,7 @@ python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
   --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
+  --motif-jobs 4 --motif-checkpoint-every 32 \
   --timeout 60 \
   --output-dir /path/to/random-training
 

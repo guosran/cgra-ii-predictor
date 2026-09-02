@@ -68,7 +68,6 @@ selects the deterministic homogeneous and split-domain attempts.
 
 The old `--samples` switch remains a legacy narrow random DAG and is not
 implicitly folded into the motif corpus.  Motif source files are materialized
-implicitly folded into the motif corpus.  Motif source files are materialized
 first, then `corpus-manifest.json` is atomically predeclared before any
 compiler subprocess.  It records source/canonical hashes, root/base seeds,
 operation counts, architecture identity, candidate IDs, and lineage
@@ -78,8 +77,9 @@ point to cost/mapped artifacts; failed or timed-out candidates remain
 censored and have no numeric label.  `--motif-jobs N` (default `1`) bounds
 candidate-level parallelism, while each candidate's Rec/Res analysis and
 mapper invocation remain serial.  The main coordinator alone updates the
-manifest; terminal records are atomically checkpointed in declaration order
-after completion batches.  For generator-family holdout use
+manifest; terminal records are atomically checkpointed after completion
+batches, while the manifest records remain in declaration order. For
+generator-family holdout use
 `--metadata-holdout-key generator_family`.
 
 Use `--motif-resume` with the same output directory to continue a partial
