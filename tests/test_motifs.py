@@ -9,6 +9,30 @@ from adapters import neura_experiment, neura_motifs
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_balanced_shape_design_pairs_full_array_with_one_secondary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bases = neura_motifs.make_base_specs(
+                250, seed=31, motifs=("chain",)
+            )
+            candidates = neura_motifs.make_candidates(bases, root)
+            self.assertEqual(len(candidates), 500)
+            counts = {}
+            for candidate in candidates:
+                shape = (candidate.rows, candidate.columns)
+                counts[shape] = counts.get(shape, 0) + 1
+            self.assertEqual(counts[(4, 4)], 250)
+            self.assertEqual(set(counts), set(neura_motifs.DEFAULT_SHAPES))
+            for shape in set(neura_motifs.DEFAULT_SHAPES) - {(4, 4)}:
+                self.assertIn(counts[shape], (31, 32))
+            self.assertEqual(
+                {candidate.architecture_sha256 for candidate in candidates},
+                {neura_motifs.PINNED_ARCHITECTURE_SHA256},
+            )
+            self.assertEqual(
+                len({candidate.architecture_path for candidate in candidates}), 1
+            )
+
     def test_shape_parser_has_no_hidden_route_bound_tile_cap(self):
         self.assertEqual(neura_motifs.parse_shape("8x8"), (8, 8))
         with self.assertRaisesRegex(ValueError, "positive"):
@@ -17,12 +41,15 @@ class MotifCorpusTest(unittest.TestCase):
     def test_generated_architectures_satisfy_main_branch_memory_contract(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for variant in ("homogeneous", "split-domain"):
-                path = root / f"{variant}.yaml"
-                neura_motifs.write_architecture(path, 4, 4, variant, 16)
-                text = path.read_text()
-                self.assertIn('"mem"', text)
-                self.assertIn('"mem_indexed"', text)
+            path = root / "neura-main.yaml"
+            neura_motifs.write_architecture(
+                path, 4, 4, "neura-main",
+                neura_motifs.PINNED_REGISTERS_PER_TILE,
+            )
+            self.assertEqual(
+                neura_motifs.sha256_file(path),
+                neura_motifs.PINNED_ARCHITECTURE_SHA256,
+            )
 
     def test_generation_is_deterministic_and_shape_independent(self):
         first = neura_motifs.generate_motif_mlir("mixed", 16, 123)
@@ -40,9 +67,9 @@ class MotifCorpusTest(unittest.TestCase):
                 generator_family="generated/motif/mixed",
             )
             candidates = neura_motifs.make_candidates(
-                (base,), root, ((3, 3), (3, 4), (4, 4)), ("homogeneous",),
+                (base,), root, ((3, 3), (3, 4), (4, 4)), ("neura-main",),
             )
-            self.assertEqual(len(candidates), 3)
+            self.assertEqual(len(candidates), 2)
             self.assertEqual(len({c.source_sha256 for c in candidates}), 1)
             self.assertEqual(len({c.canonical_dfg_sha256 for c in candidates}), 1)
             self.assertEqual(len({c.lineage for c in candidates}), 1)
@@ -78,7 +105,7 @@ class MotifCorpusTest(unittest.TestCase):
         )
         self.assertEqual(
             {spec.generator_family for spec in all_motifs},
-            {"generated/motif/chain", "generated/motif/fanout", "generated/motif/mixed"},
+            {"generated/motif/chain", "generated/motif/fanout", "generated/motif/random_dag"},
         )
 
     def test_motifs_have_binary_and_multi_input_graphs(self):
@@ -87,10 +114,8 @@ class MotifCorpusTest(unittest.TestCase):
         }
         for motif in legacy_motifs:
             text = neura_motifs.generate_motif_mlir(motif, 16, 9)
-            binary = re.findall(
-                r'"neura\.(?:add|mul)"\(%[^,]+, %[^)]+\)', text
-            )
-            self.assertEqual(len(binary), 16, motif)
+            operations = re.findall(r'"neura\.(?:add|mul)"', text)
+            self.assertEqual(len(operations), 16, motif)
             self.assertIn("data_mov", text, motif)
         reduction = neura_motifs.generate_motif_mlir("reduction", 16, 9)
         self.assertGreaterEqual(reduction.count('"neura.add"'), 1)
@@ -149,9 +174,8 @@ class MotifCorpusTest(unittest.TestCase):
             )
 
     def test_v2_frozen_bands_are_mapper_feasible_with_explicit_stress_limits(self):
-        self.assertEqual(neura_motifs.DEFAULT_MOTIFS[-3:], (
-            "recurrence_chain", "predicated_diamond", "pointer_chase",
-        ))
+        self.assertIn("memory_stream", neura_motifs.DEFAULT_MOTIFS)
+        self.assertIn("recurrence_chain", neura_motifs.DEFAULT_MOTIFS)
         self.assertLessEqual(
             max(high for _, high in neura_motifs.operation_bands_for_motif(
                 "random_dag"
@@ -160,7 +184,7 @@ class MotifCorpusTest(unittest.TestCase):
         self.assertLessEqual(
             max(high for _, high in neura_motifs.operation_bands_for_motif(
                 "recurrence_chain"
-            )), 32
+            )), 16
         )
         for motif in ("random_dag", "predicated_diamond", "pointer_chase"):
             self.assertGreaterEqual(
@@ -230,7 +254,7 @@ class MotifCorpusTest(unittest.TestCase):
         counts = [spec.operation_count for spec in specs]
         self.assertEqual(len(counts), 9)
         for index, count in enumerate(counts):
-            low, high = neura_motifs.OPERATION_BANDS[
+            low, high = neura_motifs.operation_bands_for_motif("chain")[
                 index % len(neura_motifs.OPERATION_BANDS)
             ]
             self.assertGreaterEqual(count, low)
@@ -282,7 +306,7 @@ class MotifCorpusTest(unittest.TestCase):
             root = Path(directory)
             bases = neura_motifs.make_base_specs(1, seed=11, motifs=("chain",))
             candidates = neura_motifs.make_candidates(
-                bases, root, ((3, 3), (3, 4)), ("homogeneous", "split-domain"),
+                bases, root, ((3, 3), (3, 4)), ("neura-main",),
             )
             manifest_path = root / "corpus-manifest.json"
             manifest = neura_motifs.make_manifest(
@@ -291,7 +315,7 @@ class MotifCorpusTest(unittest.TestCase):
             neura_motifs.atomic_write_json(manifest_path, manifest)
             loaded = json.loads(manifest_path.read_text())
             self.assertEqual(loaded["status"], "predeclared")
-            self.assertEqual(loaded["summary"]["declared_count"], 4)
+            self.assertEqual(loaded["summary"]["declared_count"], 2)
             self.assertTrue(all(c["status"] == "declared" for c in loaded["candidates"]))
             first = loaded["candidates"][0]
             self.assertEqual(first["leakage_lineage_id"], first["lineage"])
@@ -343,7 +367,7 @@ class MotifCorpusTest(unittest.TestCase):
                     1, seed=19, motifs=("fanout", "chain")
                 )
                 candidates = neura_motifs.make_candidates(
-                    bases, root, ((3, 3),), ("homogeneous",)
+                    bases, root, ((3, 3),), ("neura-main",)
                 )
                 manifests.append(neura_motifs.make_manifest(
                     candidates, root, 19, ("fanout", "chain"), ((3, 3),)

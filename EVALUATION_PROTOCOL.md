@@ -67,12 +67,13 @@ manifest must be written
 atomically before mapper execution and must retain every timeout/nonzero exit
 as a censored candidate.
 
-The frozen grid has six cells per base (`3x3`, `3x4`, and `4x4`, each with
-homogeneous and split-domain FU placement). Only a lineage with exactly one
-successful row in every cell enters any fit or holdout. Successful rows from
-partial lineages stay in the labelled audit record, and all attempts stay in
-the manifest denominator. Completion rates are reported because this
-complete-case rule conditions the fitted population on mapper success.
+The frozen design has two cells per base on the same pinned Neura YAML: 4x4
+plus one secondary rectangle balanced across the other eight 2x2-through-4x4
+shapes. Only a lineage with exactly one successful row in both declared cells
+enters a fit or holdout. Partial successes stay in the labelled audit record,
+and all attempts stay in the manifest denominator. Completion rates are
+reported because this paired complete-case rule conditions the fitted
+population on mapper success.
 
 Before a model can be frozen, its generated nested-base-lineage macro MAE must
 be strictly below the RecMII/ResMII-floor macro MAE. This is a pre-MachSuite
@@ -140,7 +141,6 @@ mapping-derived auxiliary labels—such as scheduling priority, spatial and
 temporal distance, or routing pressure—and test whether they improve the
 unchanged mapper. A GNN is justified only after there are enough independent
 graphs and architecture domains for lineage, suite, and architecture holdouts.
-The current `motif-v2` smoke has 54/54 successful candidates (one complete
-six-cell base in each of nine families). Its nested MAE is 0.42593 for the
-Rec/Res floor and 0.42502 for Ridge. This verifies the pipeline only; one base
-per family is not evidence for a model or for a GNN.
+The initial `motif-v3` smoke had 54/54 successful candidates (three complete
+paired-shape bases in each of nine families). This verifies the pipeline only;
+three bases per family are not evidence for a model or for a GNN.

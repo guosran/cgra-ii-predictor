@@ -97,21 +97,21 @@ is therefore label-blind, not covariate-blind.
 
 ## Generated motif corpus
 
-The current `motif-v2` implementation in `adapters/neura_motifs.py` emits
+The current `motif-v3` implementation in `adapters/neura_motifs.py` emits
 already-lowered DFGs for nine families:
 
 ```text
-chain, fanout, reduction, diamond, mixed, random_dag,
-recurrence_chain, predicated_diamond, pointer_chase
+chain, fanout, reduction, diamond, random_dag, recurrence_chain,
+predicated_diamond, memory_stream, pointer_chase
 ```
 
 `chain` exercises dependence depth, `fanout` exercises broadcast pressure,
 `reduction` is a binary reduction tree, `diamond` is split/join
-reconvergence, `mixed` combines independent inputs, fanout, and reconvergence,
-and `random_dag` samples operation kinds and dependency edges while guaranteeing
+reconvergence, and `random_dag` samples operation kinds and dependency edges while guaranteeing
 weak connectivity and acyclicity. `recurrence_chain` emits a real
 reserve/phi/arithmetic/control backedge, `predicated_diamond` emits predicate
-generation, complementary grants and reconvergence, and `pointer_chase` emits
+generation, complementary grants and reconvergence, `memory_stream` emits
+parallel GEP/load lanes, and `pointer_chase` emits
 argument-backed and indirect GEP/load paths plus a loop backedge. These are
 lowered structural generators, not source-level workload semantics; real-suite
 evaluation remains necessary.
@@ -124,15 +124,16 @@ generated/<generator_version>/<motif>/<base_id>
 ```
 
 The same source text, source SHA-256, and canonical DFG hash are reused for
-all current shape/FU variants of that base at the selected register capacity.
+both target-shape candidates of that base.
 `generator_family` is motif specific (`generated/motif/chain`, for example), while `generator_type`
 (`generated/motif`) may be used for aggregate reporting.  Thus a holdout by
 `generator_family` can leave out one motif family, and a holdout by `lineage`
 can leave out one base DFG.
 
-Operation counts are stratified over `8--15`, `16--31`, and `32--48` for most
-families; the formal recurrence bands end at 32 to keep the mapper-feasible
-corpus from being dominated by very large RecMII. Larger direct-generator
+Operation counts use family-specific low/medium/high bands. Dense random and
+predicated graphs end at 20 payload operations, recurrence ends at 16, and
+sparser chain/memory families extend farther. These caps keep the formal
+distribution in the reference mapper's completion regime. Larger direct-generator
 limits are explicit stress tests and are not silently included in the frozen
 distribution. Operation count is checked against emitted arithmetic structure.
 Changing only a loop trip count, launch count, input size, or constant literal
@@ -229,7 +230,8 @@ folds above that threshold. Then report:
 
 - generated-only training/validation by base lineage;
 - whole-generator-family holdout as a topology-transfer diagnostic;
-- architecture-family holdout (YAML/topology identity not seen during fit);
+- paired target-shape ranking within a base DFG; the single pinned YAML does
+  not support an architecture-family holdout claim;
 - the frozen MachSuite result whose labels were not inspected during feature,
   model, generator, dead-zone, or interval selection.
 
@@ -244,15 +246,16 @@ weight equal to the number of lineages. See `TRAINING.md` for the exact formula.
 
 ## Recommended scale and current boundary
 
-The frozen study fixes **nine families × 250 requested bases × six candidates**
-(three shapes times two FU layouts): 2,250 predeclared base DFGs and 13,500
-attempts. A base is fit-eligible only if all six cells succeed. The gate requires
-at least 200 complete bases in every family, or 1,800 lineages and 10,800
-training rows. Partial successes remain visible in `labelled_samples`; every
-failure remains in the manifest.
+The frozen study fixes **nine families × 250 requested bases × two candidates**:
+2,250 predeclared base DFGs and 4,500 attempts. Every candidate references the
+same byte-exact Neura 4x4 YAML. A base receives 4x4 plus one secondary rectangle
+balanced over the other eight 2x2-through-4x4 shapes. It is fit-eligible only if
+both cells succeed. The gate requires at least 200 complete bases in every
+family, or 1,800 lineages and 3,600 training rows. Partial successes remain
+visible in `labelled_samples`; every failure remains in the manifest.
 
-This complete-case design makes architecture comparisons balanced but selects
-for graphs that the current mapper completes on all six candidates. Report
+This paired complete-case design makes shape effects identifiable but selects
+for graphs that the current mapper completes on both candidates. Report
 requested, successful, complete, and censored counts per family and failure
 stage; do not describe the fitted subset as an unbiased sample of all generated
 graphs. The old `--samples` option remains a legacy narrow random-DAG generator

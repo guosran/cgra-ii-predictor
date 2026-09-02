@@ -131,6 +131,38 @@ def validate_model(model: Mapping[str, Any]) -> Dict[str, Any]:
             raise ValueError(
                 "model.unseen_group_interval_empirical_quantile must be in (0, 1]"
             )
+    support = model.get("training_feature_support")
+    if support is not None:
+        if not isinstance(support, Mapping) or set(support) != set(raw_names):
+            raise ValueError(
+                "model.training_feature_support must cover every model feature"
+            )
+        for name in raw_names:
+            record = support[name]
+            if not isinstance(record, Mapping):
+                raise ValueError(f"model support for {name} must be an object")
+            values = [
+                _finite_number(record.get(key), f"model support {name}.{key}")
+                for key in ("minimum", "p01", "p99", "maximum")
+            ]
+            if values != sorted(values):
+                raise ValueError(f"model support quantiles for {name} are unordered")
+    if "training_design_rank" in model:
+        rank = model["training_design_rank"]
+        columns = model.get("training_design_column_count")
+        if (
+            isinstance(rank, bool) or not isinstance(rank, int) or rank < 1 or
+            isinstance(columns, bool) or not isinstance(columns, int) or
+            columns != feature_count + 1 or rank > columns
+        ):
+            raise ValueError("model training design rank contract is invalid")
+        condition = model.get("training_design_condition_number")
+        if condition is not None:
+            condition_value = _finite_number(
+                condition, "model.training_design_condition_number"
+            )
+            if condition_value < 1.0:
+                raise ValueError("model training design condition number is invalid")
     # Round-trip through JSON to detach the artifact from custom mapping types
     # and reject non-JSON values. allow_nan=False preserves the finite contract.
     return json.loads(json.dumps(dict(model), allow_nan=False))
@@ -496,7 +528,46 @@ def _contract_warnings(
         warnings.append(
             f"mapper_revision_mismatch:model={expected_revision},input={actual_revision}"
         )
+    support = loaded.model.get("training_feature_support")
+    if isinstance(support, Mapping):
+        outside = []
+        for name in loaded.model["feature_names"]:
+            record = support.get(name)
+            value = sample.features.get(name)
+            if not isinstance(record, Mapping) or not isinstance(value, (int, float)):
+                continue
+            if float(value) < float(record["minimum"]) or float(value) > float(
+                record["maximum"]
+            ):
+                outside.append(name)
+        if outside:
+            warnings.append("feature_outside_training_range:" + ",".join(outside))
     return warnings
+
+
+def _feature_support_diagnostics(
+    loaded: LoadedModel, sample: PredictionSample,
+) -> Mapping[str, List[str]]:
+    """Report central-tail and hard-range support without reading labels."""
+    support = loaded.model.get("training_feature_support")
+    if not isinstance(support, Mapping):
+        return {"outside_central_98_percent": [], "outside_observed_range": []}
+    central: List[str] = []
+    hard: List[str] = []
+    for name in loaded.model["feature_names"]:
+        record = support.get(name)
+        value = sample.features.get(name)
+        if not isinstance(record, Mapping) or not isinstance(value, (int, float)):
+            continue
+        numeric = float(value)
+        if numeric < float(record["minimum"]) or numeric > float(record["maximum"]):
+            hard.append(name)
+        if numeric < float(record["p01"]) or numeric > float(record["p99"]):
+            central.append(name)
+    return {
+        "outside_central_98_percent": central,
+        "outside_observed_range": hard,
+    }
 
 
 def predict_sample(
@@ -535,6 +606,7 @@ def predict_sample(
         "model_features": dict(sample.features),
         "model_sha256": loaded.model_sha256,
         "warnings": _contract_warnings(loaded, sample),
+        "feature_support": _feature_support_diagnostics(loaded, sample),
     }
     if sample.metadata:
         result["metadata"] = dict(sample.metadata)

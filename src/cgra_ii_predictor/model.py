@@ -383,6 +383,22 @@ def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
             _require_finite_array(rhs, "normal-equation right-hand side")
             weights = np.linalg.solve(normal_matrix, rhs)
             _require_finite_array(weights, "weights")
+            singular_values = np.linalg.svd(design, compute_uv=False)
+            _require_finite_array(singular_values, "design singular values")
+            design_rank = int(np.linalg.matrix_rank(design))
+            condition_number = (
+                float(singular_values[0] / singular_values[-1])
+                if singular_values[-1] > 0.0 else None
+            )
+            feature_support = {
+                name: {
+                    "minimum": float(np.min(x[:, index])),
+                    "p01": float(np.quantile(x[:, index], 0.01)),
+                    "p99": float(np.quantile(x[:, index], 0.99)),
+                    "maximum": float(np.max(x[:, index])),
+                }
+                for index, name in enumerate(feature_names)
+            }
     except FloatingPointError as error:
         raise ValueError(
             "Ridge fit overflowed; fitted statistics must be finite"
@@ -432,6 +448,10 @@ def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
             )
             for sample in samples
         }),
+        "training_feature_support": feature_support,
+        "training_design_rank": design_rank,
+        "training_design_column_count": int(design.shape[1]),
+        "training_design_condition_number": condition_number,
     }
 
 

@@ -107,6 +107,16 @@ FEATURE_NAMES = (
     "tiles",
     "links",
     "rows",
+    "columns",
+    "memory_tiles",
+    "bisection_links",
+    "total_registers",
+    "fu_class_peak_ops",
+    "compute_fu_peak_pressure",
+    "memory_fu_pressure",
+    "routing_edge_pressure",
+    "routing_cut_pressure",
+    "register_pressure",
     "split_domain",
 )
 
@@ -123,18 +133,18 @@ MODEL_FEATURE_NAMES = (
     "semantic_branch_nodes",
     "semantic_cutwidth",
     "live_value_peak",
+    "multi_input_nodes",
+    "memory_ops",
+    "phis",
+    "predicates",
     "pointer_path",
     "memory_path",
     "control_path",
-    "multi_input_nodes",
-    "memory_ops",
-    "gep_ops",
-    "indirect_geps",
-    "pointer_loads",
-    "tiles",
-    "links",
-    "rows",
-    "split_domain",
+    "compute_fu_peak_pressure",
+    "memory_fu_pressure",
+    "routing_edge_pressure",
+    "routing_cut_pressure",
+    "register_pressure",
 )
 
 LOWER_BOUND_COMPONENT_NAMES = ("rec_mii", "res_mii")
@@ -745,6 +755,7 @@ SAMPLE_PROVENANCE_FIELDS = (
     "base_id",
     "base_seed",
     "root_seed",
+    "base_index",
     "operation_count",
     "canonical_dfg_sha256",
     "registers",
@@ -753,6 +764,8 @@ SAMPLE_PROVENANCE_FIELDS = (
     "base_dfg_id",
     "ranking_query_id",
     "training_stratum",
+    "target_config_id",
+    "valid_tiles",
 )
 
 
@@ -962,11 +975,6 @@ def _motif_sample_from_artifacts(
     result.update(graph_features_from_neura(
         source.read_text(), candidate.rows, candidate.columns
     ))
-    # The source is shared by architecture variants.  This field describes
-    # the candidate architecture and therefore comes from the manifest.
-    result["split_domain"] = int(
-        candidate.architecture_variant == "split-domain"
-    )
     add_prediction_features(result)
     result.update({
         "index": candidate.candidate_id,
@@ -988,6 +996,7 @@ def _motif_sample_from_artifacts(
         "base_id": candidate.base_id,
         "base_seed": candidate.base_seed,
         "root_seed": candidate.root_seed,
+        "base_index": candidate.base_index,
         "operation_count": candidate.operation_count,
         "canonical_dfg_sha256": candidate.canonical_dfg_sha256,
         "source_sha256": candidate.source_sha256,
@@ -996,9 +1005,14 @@ def _motif_sample_from_artifacts(
         "architecture_sha256": candidate.architecture_sha256,
         "architecture_variant": candidate.architecture_variant,
         "architecture_id": candidate.architecture_id,
+        "target_config_id": candidate.target_config_id,
+        "valid_tiles": candidate.valid_tiles,
         "candidate_id": candidate.candidate_id,
         "mapper_id": "neura-heuristic",
-        "mapper_config": "mapping-strategy=heuristic",
+        "mapper_config": (
+            "mapping-strategy=heuristic "
+            f"x-tiles={candidate.columns} y-tiles={candidate.rows}"
+        ),
         "mapped_artifact_path": str(mapped.resolve()),
         "mapped_artifact_sha256": file_sha256(mapped),
         "registers": candidate.registers,
@@ -1046,9 +1060,12 @@ def collect_motif_candidate(
             f"candidate {candidate.candidate_id} predeclared input hash changed"
         )
 
+    if candidate.valid_tiles:
+        raise ValueError("motif-v3 does not permit valid-tiles masks")
+    target_options = f"x-tiles={candidate.columns} y-tiles={candidate.rows}"
     analysis_command = (
         str(opt), str(source), f"--architecture-spec={architecture}",
-        "--analyze-rec-res-mii", "-o", str(cost),
+        f"--analyze-rec-res-mii={target_options}", "-o", str(cost),
     )
     analysis = _coerce_invocation_result(
         invocation(analysis_command, timeout), analysis_command, timeout,
@@ -1070,7 +1087,8 @@ def collect_motif_candidate(
 
     mapper_command = (
         str(opt), str(source), f"--architecture-spec={architecture}",
-        '--map-to-accelerator=mapping-strategy=heuristic', "-o", str(mapped),
+        "--map-to-accelerator=mapping-strategy=heuristic " + target_options,
+        "-o", str(mapped),
     )
     mapper = _coerce_invocation_result(
         invocation(mapper_command, timeout), mapper_command, timeout,
@@ -1082,7 +1100,16 @@ def collect_motif_candidate(
             invocations=tuple(calls),
         )
     try:
-        compiled_ii = parse_checked_mapper_label(mapped.read_text(), values)
+        mapped_text = mapped.read_text()
+        compiled_ii = parse_checked_mapper_label(mapped_text, values)
+        expected_dimensions = {
+            "x_tiles": candidate.columns,
+            "y_tiles": candidate.rows,
+        }
+        for name, expected in expected_dimensions.items():
+            match = re.search(rf"\b{name}\s*=\s*(\d+)\s*:\s*i32", mapped_text)
+            if match is None or int(match.group(1)) != expected:
+                compiled_ii = None
     except OSError:
         compiled_ii = None
     if compiled_ii is None:
@@ -1129,14 +1156,15 @@ def collect_motif_sample(
     return outcome.sample
 
 
-MOTIF_REGISTERS = 16
+MOTIF_REGISTERS = neura_motifs.PINNED_REGISTERS_PER_TILE
 MOTIF_IMMUTABLE_FIELDS = (
     "id", "candidate_id", "lineage", "motif", "generator_family",
     "generator_version", "generator_type", "base_id", "base_seed",
-    "root_seed", "operation_count", "rows", "columns",
+    "root_seed", "base_index", "operation_count", "rows", "columns",
     "architecture_variant", "registers", "source_path",
     "architecture_path", "source_sha256", "canonical_dfg_sha256",
-    "architecture_sha256", "architecture_id", "leakage_lineage_id",
+    "architecture_sha256", "target_config_id", "valid_tiles",
+    "architecture_id", "leakage_lineage_id",
     "base_dfg_id", "ranking_query_id", "training_stratum",
 )
 MOTIF_SUCCESS_ARTIFACTS = (
@@ -1209,10 +1237,10 @@ def _candidate_from_manifest(
     )
     required = (
         "id", "lineage", "motif", "generator_family", "generator_version",
-        "generator_type", "base_id", "base_seed", "root_seed",
+        "generator_type", "base_id", "base_seed", "root_seed", "base_index",
         "operation_count", "rows", "columns", "architecture_variant",
         "registers", "source_sha256", "canonical_dfg_sha256",
-        "architecture_sha256",
+        "architecture_sha256", "target_config_id", "valid_tiles",
     )
     missing = [field for field in required if field not in record]
     if missing:
@@ -1228,6 +1256,7 @@ def _candidate_from_manifest(
         base_id=str(record["base_id"]),
         base_seed=int(record["base_seed"]),
         root_seed=int(record["root_seed"]),
+        base_index=int(record["base_index"]),
         operation_count=int(record["operation_count"]),
         rows=int(record["rows"]),
         columns=int(record["columns"]),
@@ -1238,6 +1267,8 @@ def _candidate_from_manifest(
         source_sha256=str(record["source_sha256"]),
         canonical_dfg_sha256=str(record["canonical_dfg_sha256"]),
         architecture_sha256=str(record["architecture_sha256"]),
+        target_config_id=str(record["target_config_id"]),
+        valid_tiles=str(record["valid_tiles"]),
     )
 
 
@@ -1290,9 +1321,14 @@ def _validate_cached_motif_success(
         values = parse_cost_features(expected_cost.read_text())
         if values is None:
             raise ValueError("cached success has invalid Rec/Res artifact")
-        compiled_ii = parse_checked_mapper_label(
-            expected_mapped.read_text(), values
-        )
+        mapped_text = expected_mapped.read_text()
+        compiled_ii = parse_checked_mapper_label(mapped_text, values)
+        for name, expected in (
+            ("x_tiles", candidate.columns), ("y_tiles", candidate.rows),
+        ):
+            match = re.search(rf"\b{name}\s*=\s*(\d+)\s*:\s*i32", mapped_text)
+            if match is None or int(match.group(1)) != expected:
+                raise ValueError(f"cached success {name} mismatch")
         if compiled_ii is None:
             raise ValueError("cached success has no compiled_ii")
     except (OSError, ValueError) as error:
@@ -1316,6 +1352,7 @@ def _load_or_create_motif_manifest(
     timeout: int, jobs: int, checkpoint_every: int,
     opt: Path,
     registers: int = MOTIF_REGISTERS,
+    architecture_source: Optional[Path] = None,
 ) -> Tuple[
     Dict[str, object], Tuple[neura_motifs.MotifCandidate, ...],
     Dict[str, Sample], List[str], Dict[str, List[Dict[str, object]]],
@@ -1347,6 +1384,8 @@ def _load_or_create_motif_manifest(
             raise ValueError("motif manifest generator type mismatch")
         if generator.get("version") != neura_motifs.GENERATOR_VERSION:
             raise ValueError("motif manifest generator version mismatch")
+        if generator.get("candidate_design") != neura_motifs.SHAPE_DESIGN:
+            raise ValueError("motif manifest candidate design mismatch")
         if "count_per_family" not in generator:
             raise ValueError("motif manifest lacks count_per_family")
         manifest_count = int(generator.get("count_per_family", 0))
@@ -1374,6 +1413,30 @@ def _load_or_create_motif_manifest(
             raise ValueError("resume seed does not match manifest")
         if manifest_registers != int(registers):
             raise ValueError("resume register configuration does not match manifest")
+        architecture_record = manifest.get("architecture")
+        expected_architecture_record = {
+            "sha256": neura_motifs.PINNED_ARCHITECTURE_SHA256,
+            "neura_revision": neura_motifs.PINNED_NEURA_REVISION,
+            "source_path": (
+                neura_motifs.PINNED_ARCHITECTURE_RELATIVE_PATH.as_posix()
+            ),
+            "rows": neura_motifs.PINNED_ARCHITECTURE_ROWS,
+            "columns": neura_motifs.PINNED_ARCHITECTURE_COLUMNS,
+            "registers_per_tile": neura_motifs.PINNED_REGISTERS_PER_TILE,
+            "ctrl_mem_items": neura_motifs.PINNED_CTRL_MEM_ITEMS,
+            "target_shape_design": neura_motifs.SHAPE_DESIGN,
+            "valid_tiles": "",
+        }
+        if not isinstance(architecture_record, dict):
+            raise ValueError("motif manifest lacks the pinned architecture contract")
+        for name, expected in expected_architecture_record.items():
+            if architecture_record.get(name) != expected:
+                raise ValueError(f"motif manifest architecture {name} mismatch")
+        architecture_path = _path_inside(
+            output_dir, architecture_record.get("path"), "architecture.path"
+        )
+        if file_sha256(architecture_path) != neura_motifs.PINNED_ARCHITECTURE_SHA256:
+            raise ValueError("motif corpus pinned architecture hash mismatch")
         collection = manifest.get("collection")
         if not isinstance(collection, dict):
             raise ValueError("motif manifest lacks collection configuration")
@@ -1412,13 +1475,7 @@ def _load_or_create_motif_manifest(
         ):
             raise ValueError("motif manifest has invalid compiler SHA-256")
         records = manifest.get("candidates")
-        expected_count = (
-            manifest_count * len(manifest_motifs) * len(manifest_shapes) *
-            len(manifest_variants)
-        )
-        if manifest.get("candidate_count") != expected_count:
-            raise ValueError("motif manifest candidate_count mismatch")
-        if not isinstance(records, list) or len(records) != expected_count:
+        if not isinstance(records, list):
             raise ValueError("resume manifest candidate declaration is incomplete")
         cached_samples: Dict[str, Sample] = {}
         prior_failure_events: Dict[str, List[Dict[str, object]]] = {}
@@ -1432,8 +1489,13 @@ def _load_or_create_motif_manifest(
                 neura_motifs.make_base_specs(
                     manifest_count, manifest_seed, manifest_motifs
                 ), temporary_root, manifest_shapes, manifest_variants,
-                manifest_registers,
+                manifest_registers, architecture_path,
             )
+            expected_count = len(expected_materialized)
+            if manifest.get("candidate_count") != expected_count:
+                raise ValueError("motif manifest candidate_count mismatch")
+            if len(records) != expected_count:
+                raise ValueError("resume manifest candidate declaration is incomplete")
             for ordinal, (raw_record, expected_candidate) in enumerate(
                 zip(records, expected_materialized)
             ):
@@ -1531,7 +1593,7 @@ def _load_or_create_motif_manifest(
         )
     candidates = neura_motifs.make_candidates(
         neura_motifs.make_base_specs(count, seed, motifs), output_dir,
-        shapes, variants, registers,
+        shapes, variants, registers, architecture_source,
     )
     manifest = neura_motifs.make_manifest(
         candidates, output_dir, seed, motifs, shapes, variants, registers
@@ -1901,7 +1963,7 @@ def collect_c_sample(opt: Path, sample_dir: Path, spec: CSpec,
     return result
 
 
-def semantic_features_from_neura(text: str) -> Dict[str, int]:
+def semantic_features_from_neura(text: str) -> Dict[str, float]:
     """Features invariant under a tile-shape or valid-tile-mask change."""
     ignored = {"data_mov", "reserve", "ctrl_mov", "yield"}
     op_names = re.findall(
@@ -1909,6 +1971,31 @@ def semantic_features_from_neura(text: str) -> Dict[str, int]:
     )
     materialized = [name for name in op_names if name not in ignored]
     moves = sum(name == "data_mov" for name in op_names)
+    fu_classes = {
+        "add": {"add", "sub"},
+        "mul": {"mul"},
+        "div": {"div", "rem"},
+        "fadd": {"fadd", "fsub"},
+        "fmul": {"fmul"},
+        "fdiv": {"fdiv"},
+        "logic": {"or", "and", "xor", "not"},
+        "cmp": {"icmp", "fcmp"},
+        "sel": {"sel"},
+        "type_conv": {"cast", "sext", "zext"},
+        "vfmul": {"vfmul"},
+        "fadd_fadd": {"fadd_fadd"},
+        "fmul_fadd": {"fmul_fadd"},
+        "grant": {"grant_predicate", "grant_once", "grant_always"},
+        "loop_control": {"loop_control"},
+        "phi": {"phi", "phi_start"},
+        "constant": {"constant"},
+        "alloca": {"alloca"},
+        "shift": {"shl"},
+    }
+    fu_class_peak_ops = max((
+        sum(name in kinds for name in materialized)
+        for kinds in fu_classes.values()
+    ), default=0)
 
     # SSA use counts give a stable fanout feature without needing to reimplement
     # MLIR parsing in the experiment harness.  Count only values defined by a
@@ -1995,7 +2082,9 @@ def semantic_features_from_neura(text: str) -> Dict[str, int]:
     semantic_fanout: Dict[str, int] = {}
     semantic_edges: List[Tuple[int, int]] = []
     multi_input_nodes = 0
-    memory_kinds = {"gep", "load", "store", "memset"}
+    memory_kinds = {
+        "gep", "load", "store", "memset", "load_indexed", "store_indexed"
+    }
     control_kinds = {
         "grant_predicate", "phi", "phi_start", "not", "icmp", "fcmp"
     }
@@ -2047,7 +2136,10 @@ def semantic_features_from_neura(text: str) -> Dict[str, int]:
         "reserves": sum(name == "reserve" for name in op_names),
         "phis": sum(name in {"phi", "phi_start"} for name in op_names),
         "predicates": sum(name == "grant_predicate" for name in op_names),
-        "memory_ops": sum(name in {"load", "store", "memset"}
+        "memory_ops": sum(name in {
+                              "load", "store", "memset",
+                              "load_indexed", "store_indexed",
+                          }
                           for name in op_names),
         "gep_ops": sum(name == "gep" for name in op_names),
         "indirect_geps": indirect_geps,
@@ -2072,13 +2164,14 @@ def semantic_features_from_neura(text: str) -> Dict[str, int]:
         "memory_path": max(memory_depths.values(), default=0),
         "control_path": max(control_depths.values(), default=0),
         "multi_input_nodes": multi_input_nodes,
+        "fu_class_peak_ops": fu_class_peak_ops,
     }
 
 
 def graph_features_from_neura(
     text: str, rows: int, columns: int,
     valid_tiles: Optional[Set[Tuple[int, int]]] = None,
-) -> Dict[str, int]:
+) -> Dict[str, float]:
     """Extract mapper-visible structural features from already-lowered IR."""
     active_tiles = valid_tiles or {
         (x, y) for y in range(rows) for x in range(columns)
@@ -2088,13 +2181,32 @@ def graph_features_from_neura(
         for x, y in active_tiles
     )
     result = semantic_features_from_neura(text)
+    tile_count = len(active_tiles)
+    memory_tiles = sum(x == 0 or y == 0 for x, y in active_tiles)
+    # For the supported rectangular prefix targets, the minimum directed
+    # bisection contains two directed links per tile on the shorter boundary.
+    bisection_links = 2 * min(rows, columns)
+    total_registers = tile_count * neura_motifs.PINNED_REGISTERS_PER_TILE
     result.update({
-        "tiles": len(active_tiles),
+        "tiles": tile_count,
         "links": 2 * adjacent_pairs,
         "rows": rows,
+        "columns": columns,
+        "memory_tiles": memory_tiles,
+        "bisection_links": bisection_links,
+        "total_registers": total_registers,
         # The production YAML has heterogeneous memory tiles, but not the
         # source/compute partition used by the synthetic split-domain mode.
         "split_domain": 0,
+    })
+    result.update({
+        "compute_fu_peak_pressure": result["fu_class_peak_ops"] / tile_count,
+        "memory_fu_pressure": result["memory_ops"] / memory_tiles,
+        "routing_edge_pressure": result["semantic_edges"] / result["links"],
+        "routing_cut_pressure": (
+            result["semantic_cutwidth"] / bisection_links
+        ),
+        "register_pressure": result["live_value_peak"] / total_registers,
     })
     return result
 
@@ -2275,7 +2387,8 @@ def to_core_sample(row: Sample) -> CoreSample:
                 "lineage", "declared_leakage_lineage_id",
                 "generator_family", "generator_version", "motif",
                 "generator_type", "base_id", "base_seed", "root_seed",
-                "operation_count",
+                "base_index", "operation_count", "target_config_id",
+                "valid_tiles",
                 "canonical_dfg_sha256",
                 "leakage_lineage_id", "base_dfg_id", "ranking_query_id",
                 "training_stratum", "rec_mii", "res_mii",
@@ -2316,13 +2429,85 @@ def predict_unlabelled_candidate(
         model, float(lower_bound), model_features,
         rec_mii=float(row["rec_mii"]), res_mii=float(row["res_mii"]),
     )
+    support = model.get("training_feature_support")
+    outside_central: List[str] = []
+    outside_range: List[str] = []
+    if isinstance(support, Mapping):
+        for name, value in model_features.items():
+            record = support.get(name)
+            if not isinstance(record, Mapping):
+                continue
+            if value < float(record["minimum"]) or value > float(record["maximum"]):
+                outside_range.append(name)
+            if value < float(record["p01"]) or value > float(record["p99"]):
+                outside_central.append(name)
     return {
         "model_features": model_features,
         "raw_predicted_residual": raw_residual,
         "nonnegative_predicted_residual": max(0.0, raw_residual),
         "predicted_residual": predicted_residual,
         "predicted_compiled_ii": prediction,
+        "feature_support": {
+            "outside_central_98_percent": outside_central,
+            "outside_observed_range": outside_range,
+        },
     }
+
+
+def shape_selection_summary(
+    predictions: Sequence[Mapping[str, object]],
+) -> List[Dict[str, object]]:
+    """Build label-free area/II Pareto frontiers for each input DFG.
+
+    The model ranks candidates; it does not claim that a predicted shape is a
+    legal final mapping.  Callers should try the returned verification order
+    with Neura's mapper and stop according to their area/throughput objective.
+    """
+    grouped: Dict[str, List[Mapping[str, object]]] = {}
+    for prediction in predictions:
+        task = prediction.get("task")
+        if isinstance(task, str) and task:
+            grouped.setdefault(task, []).append(prediction)
+    summaries: List[Dict[str, object]] = []
+    for task, candidates in grouped.items():
+        ordered = sorted(
+            candidates,
+            key=lambda row: (
+                float(row["predicted_compiled_ii"]),
+                int(row["tile_count"]),
+                str(row["shape"]),
+            ),
+        )
+        frontier = []
+        for candidate in candidates:
+            area = int(candidate["tile_count"])
+            ii = float(candidate["predicted_compiled_ii"])
+            dominated = any(
+                int(other["tile_count"]) <= area and
+                float(other["predicted_compiled_ii"]) <= ii and
+                (
+                    int(other["tile_count"]) < area or
+                    float(other["predicted_compiled_ii"]) < ii
+                )
+                for other in candidates if other is not candidate
+            )
+            if not dominated:
+                frontier.append(candidate)
+        frontier.sort(key=lambda row: (
+            int(row["tile_count"]), float(row["predicted_compiled_ii"]),
+            str(row["shape"]),
+        ))
+        summaries.append({
+            "task": task,
+            "objective": "minimize_predicted_ii_and_active_tile_count",
+            "pareto_candidate_ids": [row["sample"] for row in frontier],
+            "pareto_shapes": [row["shape"] for row in frontier],
+            "throughput_first_candidate_id": ordered[0]["sample"],
+            "throughput_first_shape": ordered[0]["shape"],
+            "mapper_verification_order": [row["sample"] for row in ordered],
+            "selection_status": "prediction_ranking_requires_mapper_verification",
+        })
+    return summaries
 
 
 def residual_sse(rows: Sequence[Sample]) -> float:
@@ -2879,10 +3064,12 @@ def motif_coverage_summary(
 ) -> Dict[str, object]:
     """Compute the auditable generated-motif coverage contract.
 
-    A base is identified only by its canonical DFG hash.  A base is complete
-    when a successful labelled row exists for every required shape/variant
-    cell.  Counts in this record are therefore invariant to row ordering and
-    cannot be inflated by duplicate labels for one candidate.
+    A base is identified only by its canonical DFG hash.  Under the v3
+    balanced-incomplete design, each base declares the full 4x4 target plus
+    one secondary rectangle.  A base is complete when every *declared* cell
+    succeeds; global cell coverage is balanced across base indices.  This
+    avoids treating an unattempted shape as a mapper failure while retaining
+    paired per-DFG evidence for the shape effect.
     """
     families = tuple(dict.fromkeys(str(value) for value in required_families))
     shapes = tuple(dict.fromkeys(str(value) for value in required_shapes))
@@ -2913,6 +3100,12 @@ def motif_coverage_summary(
     declared_cross_family_duplicate_rows = 0
     declared_count = 0
     declared_seen_pairs: Set[Tuple[str, str, str]] = set()
+    declared_base_cells: Dict[Tuple[str, str], Set[str]] = {}
+    declared_base_indices: Dict[Tuple[str, str], int] = {}
+    declared_family_indices: Dict[str, Set[int]] = {
+        family: set() for family in families
+    }
+    declared_design_mismatch_count = 0
     declared_canonical_family: Dict[str, str] = {}
     observed_families: Set[str] = set()
     canonical_family: Dict[str, str] = {}
@@ -2934,6 +3127,7 @@ def motif_coverage_summary(
         raw_columns = row.get("columns")
         raw_tiles = row.get("tiles")
         variant = row.get("architecture_variant")
+        raw_base_index = row.get("base_index")
         if (
             raw_tiles is None and isinstance(raw_rows, int) and
             isinstance(raw_columns, int)
@@ -2946,7 +3140,9 @@ def motif_coverage_summary(
             isinstance(raw_rows, bool) or not isinstance(raw_rows, int) or
             isinstance(raw_tiles, bool) or not isinstance(raw_tiles, int) or
             raw_rows <= 0 or raw_tiles <= 0 or raw_tiles % raw_rows != 0 or
-            not isinstance(variant, str) or not variant
+            not isinstance(variant, str) or not variant or
+            isinstance(raw_base_index, bool) or
+            not isinstance(raw_base_index, int) or raw_base_index < 0
         ):
             declared_invalid_rows += 1
             continue
@@ -2967,6 +3163,43 @@ def motif_coverage_summary(
         declared_seen_pairs.add(pair)
         declared_family_bases[family].add(canonical)
         declared_family_cells[(family, cell)].add(canonical)
+        base_key = (family, canonical)
+        previous_index = declared_base_indices.get(base_key)
+        if previous_index is not None and previous_index != raw_base_index:
+            declared_invalid_rows += 1
+            continue
+        declared_base_indices[base_key] = raw_base_index
+        declared_base_cells.setdefault(base_key, set()).add(cell)
+
+    parsed_shapes = tuple(neura_motifs.parse_shape(shape) for shape in shapes)
+    primary_shape = (
+        neura_motifs.PRIMARY_SHAPE
+        if neura_motifs.PRIMARY_SHAPE in parsed_shapes else
+        max(parsed_shapes, key=lambda item: (item[0] * item[1], item[0], item[1]))
+    ) if parsed_shapes else None
+    secondary_shapes = tuple(
+        shape for shape in parsed_shapes if shape != primary_shape
+    )
+
+    def expected_cells_for_index(base_index: int) -> Set[str]:
+        if primary_shape is None:
+            return set()
+        selected = [primary_shape]
+        if secondary_shapes:
+            selected.append(secondary_shapes[base_index % len(secondary_shapes)])
+        return {
+            f"{rows}x{columns}/{variant}"
+            for rows, columns in selected for variant in variants
+        }
+
+    for base_key, declared_cells in declared_base_cells.items():
+        family, _ = base_key
+        base_index = declared_base_indices[base_key]
+        if base_index in declared_family_indices[family]:
+            declared_design_mismatch_count += 1
+        declared_family_indices[family].add(base_index)
+        if declared_cells != expected_cells_for_index(base_index):
+            declared_design_mismatch_count += 1
 
     for row in samples:
         if not is_synthetic_row(row):
@@ -3024,15 +3257,17 @@ def motif_coverage_summary(
         base_map = family_bases[family]
         complete = {
             canonical for canonical, seen_cells in base_map.items()
-            if set(seen_cells) == set(cells)
+            if set(seen_cells) == declared_base_cells.get(
+                (family, canonical), cell_set
+            ) and len(seen_cells) == len(declared_base_cells.get(
+                (family, canonical), cell_set
+            ))
         }
         complete_by_family[family] = complete
         declared_complete_by_family[family] = {
             canonical for canonical in declared_family_bases[family]
-            if all(
-                canonical in declared_family_cells[(family, cell)]
-                for cell in cells
-            )
+            if declared_base_cells.get((family, canonical), set()) ==
+            expected_cells_for_index(declared_base_indices[(family, canonical)])
         }
         all_successful_bases.update(base_map)
         family_records[family] = {
@@ -3051,11 +3286,15 @@ def motif_coverage_summary(
             },
             "missing_shape_variant_cells": {
                 canonical: [
-                    cell for cell in cells
+                    cell for cell in sorted(declared_base_cells.get(
+                        (family, canonical), cell_set
+                    ))
                     if cell not in seen_cells
                 ]
                 for canonical, seen_cells in sorted(base_map.items())
-                if set(seen_cells) != set(cells)
+                if set(seen_cells) != declared_base_cells.get(
+                    (family, canonical), cell_set
+                )
             },
             "minimum_complete_bases_per_family": (
                 minimum_complete_bases_per_family
@@ -3090,15 +3329,19 @@ def motif_coverage_summary(
     }
     complete_count = len(complete_ids)
     minimum_total = minimum_complete_bases_per_family * len(families)
+    cells_per_base = len(variants) * (2 if secondary_shapes else 1)
     expected_declared_count = (
-        requested * len(families) * len(cells)
+        requested * len(families) * cells_per_base
         if requested is not None else None
     )
     expected_declared_by_family = {
         family: requested for family in families
     }
     expected_declared_by_cell = {
-        f"{family}/{cell}": requested
+        f"{family}/{cell}": sum(
+            cell in expected_cells_for_index(base_index)
+            for base_index in range(requested or 0)
+        )
         for family in families for cell in cells
     }
     declaration_contract_passed = bool(
@@ -3107,13 +3350,13 @@ def motif_coverage_summary(
         declared_count == expected_declared_count and
         declared_invalid_rows == 0 and declared_duplicate_rows == 0 and
         declared_cross_family_duplicate_rows == 0 and
+        declared_design_mismatch_count == 0 and
         {
             family: len(declared_family_bases[family]) for family in families
         } == expected_declared_by_family and
-        {
-            family: len(declared_complete_by_family[family])
-            for family in families
-        } == expected_declared_by_family and
+        {family: declared_family_indices[family] for family in families} == {
+            family: set(range(requested)) for family in families
+        } and
         {
             f"{family}/{cell}": len(declared_family_cells[(family, cell)])
             for family in families for cell in cells
@@ -3142,6 +3385,9 @@ def motif_coverage_summary(
         "declared_cross_family_duplicate_candidate_count": (
             declared_cross_family_duplicate_rows
         ),
+        "declared_design_mismatch_count": declared_design_mismatch_count,
+        "candidate_design": neura_motifs.SHAPE_DESIGN,
+        "declared_cells_per_base": cells_per_base,
         "declared_distinct_base_dfg_count": len({
             canonical for values in declared_family_bases.values()
             for canonical in values
@@ -3184,21 +3430,60 @@ def motif_coverage_summary(
 
 def complete_generated_training_subset(
     samples: Sequence[Sample], required_cells: Sequence[str],
+    declared_candidates: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> Tuple[List[Sample], Dict[str, object]]:
-    """Keep only generated bases with a successful row in every cell.
+    """Keep generated bases with one successful row per declared cell.
 
     The full labelled report remains available for auditing and denominator
     accounting.  Only this returned subset may be used for model fitting or
     holdout evaluation when generated motif rows are present.
     """
     cell_set = set(str(value) for value in required_cells)
+    declared_cells: Dict[Tuple[str, str], Set[str]] = {}
+    declared_lineages: Dict[Tuple[str, str], str] = {}
+    for candidate in declared_candidates or ():
+        if not isinstance(candidate, Mapping):
+            continue
+        family = str(candidate.get("generator_family", ""))
+        canonical = str(candidate.get(
+            "canonical_dfg_sha256", candidate.get("base_dfg_id", "")
+        ))
+        raw_rows = candidate.get("rows")
+        raw_columns = candidate.get("columns")
+        raw_tiles = candidate.get("tiles")
+        variant = candidate.get("architecture_variant")
+        if raw_tiles is None and isinstance(raw_rows, int) and isinstance(
+            raw_columns, int
+        ):
+            raw_tiles = raw_rows * raw_columns
+        if (
+            not family.startswith("generated/motif/") or not canonical or
+            isinstance(raw_rows, bool) or not isinstance(raw_rows, int) or
+            isinstance(raw_tiles, bool) or not isinstance(raw_tiles, int) or
+            raw_rows <= 0 or raw_tiles <= 0 or raw_tiles % raw_rows != 0 or
+            not isinstance(variant, str)
+        ):
+            continue
+        cell = f"{raw_rows}x{raw_tiles // raw_rows}/{variant}"
+        key = (family, canonical)
+        declared_cells.setdefault(key, set()).add(cell)
+        lineage = candidate.get("leakage_lineage_id", candidate.get("lineage"))
+        if isinstance(lineage, str) and lineage:
+            declared_lineages[key] = lineage
     generated_rows: List[Sample] = []
     other_rows: List[Sample] = []
     groups: Dict[Tuple[str, str], List[Sample]] = {}
     group_cells: Dict[Tuple[str, str], Set[str]] = {}
     for row in samples:
         family = str(row.get("generator_family", ""))
-        if not family.startswith("generated/motif/"):
+        # ``samples`` in an imported experiment report is already the exact
+        # fit/evaluation population selected by that report.  Reapplying the
+        # current corpus design without its original pre-mapper declarations
+        # would incorrectly interpret a balanced incomplete design as a
+        # partial full Cartesian design.  Newly collected rows have no
+        # input_report_path and remain subject to the declaration check below.
+        if (not family.startswith("generated/motif/") or
+                "input_report_path" in row):
             other_rows.append(row)
             continue
         generated_rows.append(row)
@@ -3238,15 +3523,16 @@ def complete_generated_training_subset(
 
     excluded_rows: List[Sample] = []
     excluded_keys: List[Tuple[str, str]] = []
-    for key in sorted(groups):
+    for key in sorted(set(groups).union(declared_cells)):
         # A complete lineage has exactly one successful sample for each
         # required cell.  Set equality alone would admit an extra duplicate
         # row for a cell and make the training denominator ambiguous.
+        expected_cells = declared_cells.get(key, cell_set)
         if not (
-            group_cells[key] == cell_set and
-            len(groups[key]) == len(cell_set)
+            group_cells.get(key, set()) == expected_cells and
+            len(groups.get(key, ())) == len(expected_cells)
         ):
-            excluded_rows.extend(groups[key])
+            excluded_rows.extend(groups.get(key, ()))
             excluded_keys.append(key)
     # Keep the original report order.  Besides making the fit deterministic,
     # this lets the frozen validator compare the producer's selected rows
@@ -3255,16 +3541,15 @@ def complete_generated_training_subset(
     included_keys = set(groups).difference(excluded_key_set)
     included = [
         row for row in samples
-        if not str(row.get("generator_family", "")).startswith(
+        if (not str(row.get("generator_family", "")).startswith(
             "generated/motif/"
-        ) or (
+        ) or "input_report_path" in row) or (
             str(row.get("generator_family", "")), str(row.get(
                 "canonical_dfg_sha256", row.get("base_dfg_id", "")
             ))) in included_keys
     ]
     excluded_lineages = sorted({
-        str(row.get("leakage_lineage_id", row.get("lineage", key[0])))
-        for key in excluded_keys for row in groups[key]
+        declared_lineages.get(key, key[1]) for key in excluded_keys
     })
     excluded_sample_ids = sorted(
         str(row.get("index", row.get("sample_id", "")))
@@ -3272,6 +3557,10 @@ def complete_generated_training_subset(
     )
     return included, {
         "required_shape_variant_cells": list(required_cells),
+        "candidate_design": (
+            neura_motifs.SHAPE_DESIGN
+            if declared_candidates is not None else "full-cartesian-legacy"
+        ),
         "included_sample_count": len(included),
         "excluded_sample_count": len(excluded_rows),
         "excluded_lineage_count": len(excluded_lineages),
@@ -3314,7 +3603,7 @@ def parse_args() -> argparse.Namespace:
         "--motif", dest="motif", action="append", default=[],
         metavar="NAME[,NAME...]",
         help=("Compute motif family to generate; repeat or use commas. "
-              "Defaults to all nine motif-v2 families."),
+              "Defaults to all nine motif-v3 families."),
     )
     parser.add_argument(
         "--motifs", dest="motifs_alias", action="append", default=[],
@@ -3323,13 +3612,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--motif-shape", action="append", default=[], metavar="ROWSxCOLS",
-        help="Shape(s) for every motif base (default: 3x3,3x4,4x4).",
+        help=("Target rectangles covered by the balanced design (default: "
+              "all 2x2 through 4x4 shapes)."),
     )
     parser.add_argument(
         "--motif-architecture-variant", action="append", default=[],
         metavar="NAME[,NAME...]",
-        help=("Architecture variant(s) for motif attempts (default: "
-              "homogeneous,split-domain)."),
+        help="Pinned architecture identity (default and only value: neura-main).",
     )
     parser.add_argument(
         "--motif-jobs", type=int, default=1,
@@ -3438,7 +3727,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--predict-shape", action="append", default=[], metavar="ROWSxCOLS",
-        help="Shape(s) for --predict-fixture (default: 4x4).",
+        help=("Shape(s) for --predict-fixture (default: scan every rectangle "
+              "from 2x2 through 4x4 and report the area/II Pareto frontier)."),
     )
     parser.add_argument(
         "--real-shape", action="append", default=[],
@@ -3583,6 +3873,7 @@ def main() -> int:
                 timeout=args.timeout, jobs=args.motif_jobs,
                 checkpoint_every=args.motif_checkpoint_every,
                 opt=args.opt,
+                architecture_source=args.real_architecture,
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
             raise SystemExit(f"invalid motif corpus configuration: {error}")
@@ -3990,8 +4281,13 @@ def main() -> int:
         for shape in required_training_shapes
         for variant in neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS
     )
+    selection_candidates = (
+        motif_manifest.get("candidates", ())
+        if isinstance(motif_manifest, Mapping) else ()
+    )
     training_samples, training_selection = complete_generated_training_subset(
-        samples, required_training_cells
+        samples, required_training_cells,
+        selection_candidates if isinstance(selection_candidates, list) else (),
     )
     row_holdout: Optional[Dict[str, object]] = None
     family_holdout: Optional[Dict[str, object]] = None
@@ -4065,16 +4361,23 @@ def main() -> int:
                 "--predict-fixture needs at least two labelled kernel families"
             )
         prediction_shapes: List[Tuple[int, int]] = []
-        for value in args.predict_shape or ["4x4"]:
+        default_prediction_shapes = [
+            f"{rows}x{columns}"
+            for rows, columns in neura_motifs.DEFAULT_SHAPES
+        ]
+        for value in args.predict_shape or default_prediction_shapes:
             match = re.fullmatch(r"(\d+)x(\d+)", value)
             if not match:
                 raise SystemExit(
                     "invalid --predict-shape (expected ROWSxCOLS): " + value
                 )
             rows, columns = (int(component) for component in match.groups())
-            if rows < 1 or columns < 1:
-                raise SystemExit("--predict-shape dimensions must be positive")
-            prediction_shapes.append((rows, columns))
+            if not (2 <= rows <= 4 and 2 <= columns <= 4):
+                raise SystemExit(
+                    "--predict-shape must be a rectangle from 2x2 through 4x4"
+                )
+            if (rows, columns) not in prediction_shapes:
+                prediction_shapes.append((rows, columns))
         for fixture in args.predict_fixture:
             name, separator, raw_path = fixture.partition("=")
             source = Path(raw_path)
@@ -4124,6 +4427,13 @@ def main() -> int:
                 predicted_residual = float(point["predicted_residual"])
                 predicted_ii = float(point["predicted_compiled_ii"])
                 prediction_warnings: List[str] = []
+                feature_support = point["feature_support"]
+                outside_range = feature_support["outside_observed_range"]
+                if outside_range:
+                    prediction_warnings.append(
+                        "feature_outside_training_range:" +
+                        ",".join(str(value) for value in outside_range)
+                    )
                 if external_model is not None:
                     training_neura = external_model.provenance.get("neura")
                     expected_revision = (
@@ -4189,6 +4499,11 @@ def main() -> int:
                         )
                 prediction = {
                     "sample": features["index"],
+                    "task": name,
+                    "shape": f"{rows}x{columns}",
+                    "rows": rows,
+                    "columns": columns,
+                    "tile_count": rows * columns,
                     "predicted_compiled_ii": predicted_ii,
                     "prediction_kind": "continuous_point_estimate",
                     "raw_predicted_residual": raw_residual,
@@ -4222,6 +4537,7 @@ def main() -> int:
                     "mapper_revision": features.get("mapper_revision"),
                     "mapper_config": features.get("mapper_config"),
                     "model_features": model_features,
+                    "feature_support": feature_support,
                     "model_sha256": active_model_sha256,
                     "warnings": prediction_warnings,
                     "evaluation": {
@@ -4281,6 +4597,7 @@ def main() -> int:
                     f"compiled_ii={prediction['predicted_compiled_ii']:.2f} "
                     f"lb={prediction['baseline_lb']}"
                 )
+    shape_selections = shape_selection_summary(predictions)
     prediction_complete = (
         prediction_request_count == len(predictions)
     )
@@ -4419,8 +4736,15 @@ def main() -> int:
     generated_improvement = generated_nested_improvement_gate(
         nested_ridge_holdout
     )
+    model_design_full_rank = bool(
+        isinstance(trained_full_model, Mapping) and
+        trained_full_model.get("training_design_rank") ==
+        trained_full_model.get("training_design_column_count") ==
+        len(MODEL_FEATURE_NAMES) + 1
+    )
     frozen_model_scale_ready = bool(
         generated_only_training and trained_full_model is not None and
+        model_design_full_rank and
         nested_ridge_holdout is not None and
         generator_family_holdout_available and
         generated_coverage["passed"] is True and
@@ -4494,6 +4818,7 @@ def main() -> int:
         ),
         "prediction_failures": prediction_failures,
         "predictions": predictions,
+        "shape_selections": shape_selections,
         "invocation_failures": list(INVOCATION_FAILURES),
         "candidate_status": (
             (
@@ -4518,10 +4843,12 @@ def main() -> int:
             "requires": [
                 "generated-only training rows with source/canonical identities",
                 "at least 200 complete distinct base DFGs per generator family",
-                "every required shape/architecture cell for every complete base",
+                "both declared shape cells for every complete base",
+                "balanced global coverage of all 2x2-through-4x4 rectangles",
                 "nested generated-base lineage model selection",
                 "whole-generator-family holdout requested and available",
                 "nested generated-lineage Ridge macro MAE strictly below LB",
+                "full-rank intercept-plus-feature training design",
                 "structure-only model features disjoint from Rec/Res floor",
             ],
             "required_generator_families": list(required_generator_families),
@@ -4537,6 +4864,15 @@ def main() -> int:
             ),
             "coverage": generated_coverage,
             "generated_nested_improvement": generated_improvement,
+            "model_design_full_rank": model_design_full_rank,
+            "model_design_rank": (
+                trained_full_model.get("training_design_rank")
+                if isinstance(trained_full_model, Mapping) else None
+            ),
+            "model_design_column_count": (
+                trained_full_model.get("training_design_column_count")
+                if isinstance(trained_full_model, Mapping) else None
+            ),
             "training_selection": training_selection,
             "generated_only_training": generated_only_training,
             "generated_distinct_base_dfg_count": generated_base_dfg_count,

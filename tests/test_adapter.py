@@ -20,6 +20,24 @@ def cost_text(**overrides):
 
 
 class NeuraAdapterTest(unittest.TestCase):
+    def test_shape_selection_reports_area_ii_pareto_and_verification_order(self):
+        predictions = [
+            {"task": "k", "sample": "k-2x2", "shape": "2x2",
+             "tile_count": 4, "predicted_compiled_ii": 8.0},
+            {"task": "k", "sample": "k-3x3", "shape": "3x3",
+             "tile_count": 9, "predicted_compiled_ii": 5.0},
+            {"task": "k", "sample": "k-4x3", "shape": "4x3",
+             "tile_count": 12, "predicted_compiled_ii": 6.0},
+            {"task": "k", "sample": "k-4x4", "shape": "4x4",
+             "tile_count": 16, "predicted_compiled_ii": 4.0},
+        ]
+        summary = adapter.shape_selection_summary(predictions)[0]
+        self.assertEqual(
+            summary["pareto_shapes"], ["2x2", "3x3", "4x4"]
+        )
+        self.assertEqual(summary["throughput_first_shape"], "4x4")
+        self.assertEqual(summary["mapper_verification_order"][0], "k-4x4")
+
     def test_neura_root_prefers_environment_then_initialized_submodule(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict("os.environ", {"NEURA_ROOT": directory}):
@@ -412,14 +430,14 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertIn("--analyze-rec-res-mii=", command)
         self.assertNotIn("--map-to-accelerator", command)
 
-    def test_motif_split_domain_feature_comes_from_architecture_variant(self):
+    def test_motif_uses_pinned_architecture_and_target_rectangle(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             base = neura_motifs.make_base_specs(
                 1, seed=17, motifs=("chain",)
             )
             candidates = neura_motifs.make_candidates(
-                base, root, ((3, 3),), ("homogeneous", "split-domain")
+                base, root, ((3, 3),), ("neura-main",)
             )
 
             def fake_invoke(command, timeout):
@@ -433,6 +451,7 @@ class NeuraAdapterTest(unittest.TestCase):
                     output.write_text(
                         "module attributes {"
                         'mapping_strategy = "heuristic", '
+                        "x_tiles = 3 : i32, y_tiles = 3 : i32, "
                         "compiled_ii = 8 : i32, rec_mii = 4 : i32, "
                         "res_mii = 5 : i32} {}\n"
                     )
@@ -444,14 +463,13 @@ class NeuraAdapterTest(unittest.TestCase):
                     for candidate in candidates
                 ]
 
-            for candidate, sample, expected in zip(
-                candidates, samples, (0, 1)
-            ):
+            for candidate, sample in zip(candidates, samples):
                 self.assertIsNotNone(sample)
                 sample = dict(sample)
                 self.assertEqual(sample["architecture_variant"],
                                  candidate.architecture_variant)
-                self.assertEqual(sample["split_domain"], expected)
+                self.assertEqual(sample["split_domain"], 0)
+                self.assertEqual(sample["target_config_id"], "prefix-3x3")
 
                 # The main report assembly supplies these two provenance
                 # fields before the frozen generated-sample validator runs.

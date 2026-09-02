@@ -52,18 +52,18 @@ semantic_max_fanout
 semantic_branch_nodes
 semantic_cutwidth
 live_value_peak
+multi_input_nodes
+memory_ops
+phis
+predicates
 pointer_path
 memory_path
 control_path
-multi_input_nodes
-memory_ops
-gep_ops
-indirect_geps
-pointer_loads
-tiles
-links
-rows
-split_domain
+compute_fu_peak_pressure
+memory_fu_pressure
+routing_edge_pressure
+routing_cut_pressure
+register_pressure
 ```
 
 This separation avoids label leakage, double counting, and the interpretability
@@ -92,35 +92,46 @@ are in `TRAINING.md` and `II_PREDICTION.md`.
 ## Training corpus decision
 
 All primary fit and selection data are generated DFGs. The implemented
-`motif-v2` generator contains nine families:
+`motif-v3` generator contains nine families:
 
 ```text
-chain, fanout, reduction, diamond, mixed, random_dag,
-recurrence_chain, predicated_diamond, pointer_chase
+chain, fanout, reduction, diamond, random_dag, recurrence_chain,
+predicated_diamond, memory_stream, pointer_chase
 ```
 
 It varies real operation count, dependency edges, depth/width, fanout,
-reconvergence, recurrence cycles, predicated control, pointer/load paths, and
-architecture candidates. All shapes/FU variants of one base DFG share one
+reconvergence, recurrence cycles, predicated control, streaming memory,
+pointer/load paths, and target rectangles. All target shapes of one base DFG share one
 leakage lineage and canonical DFG identity. A manifest is written before any
 mapper invocation; failures and timeouts are censored rather than fabricated
 as numeric II labels.
 
-The frozen protocol requests exactly 250 bases per family and attempts three
-shapes (`3x3/3x4/4x4`) under homogeneous and split-domain FU placement. This
-predeclares 2,250 bases and 13,500 candidates. A base contributes its six rows
-to CV/fitting only when all six attempts succeed. At least 200 complete bases
-per family are required, hence at least 1,800 fitted lineages and 10,800 rows.
+The frozen protocol requests exactly 250 bases per family. Every attempt uses
+the exact pinned Neura 4x4 YAML; target resources are selected only with the
+existing `x-tiles`/`y-tiles` pass options. Supported target rectangles are all
+nine shapes from 2x2 through 4x4. Each base is assigned 4x4 plus one secondary
+shape in balanced round-robin order, giving 2,250 bases and 4,500 candidates.
+A base contributes its paired rows only when both attempts succeed. At least
+200 complete bases per family are required, hence at least 1,800 fitted
+lineages and 3,600 rows.
 Successful rows from incomplete lineages remain in `labelled_samples`, and all
 attempts remain in the manifest denominator. This complete-case rule avoids an
 unbalanced architecture grid but conditions training on DFGs that map across
-all six candidates; per-family completion fractions and failure stages must be
+both declared candidates; per-family completion fractions and failure stages must be
 reported as a possible selection bias.
+
+`valid-tiles` masks are deliberately excluded: Neura main currently applies
+false entries before true overrides can restore them. Rectangular dimension
+overrides are shared by the analysis and mapping passes and are the reusable,
+verified path. At inference the predictor scans all nine rectangles, reports
+the active-tile-count/predicted-II Pareto frontier, and orders candidates for
+mapper verification. It does not declare a predicted candidate feasible.
 
 The same direct, clean-checkout run must use the predeclared Ridge/dead-zone
 grid and whole-generator-family holdout. The generated nested-lineage Ridge
 macro MAE must strictly improve on the Rec/Res-only baseline or no final model
-can be frozen. A small override produces only a smoke artifact that frozen
+can be frozen, and the 19 features plus intercept must be full rank. A small
+override produces only a smoke artifact that frozen
 `predict` rejects. No large training run or final frozen model is claimed yet.
 
 Freezing verifies the pinned clean Neura checkout, mapper-binary hash,
@@ -201,7 +212,7 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 
 ## Remaining work before a paper result
 
-1. Collect the predeclared large `motif-v2` generated corpus, retaining every
+1. Collect the predeclared large `motif-v3` generated corpus, retaining every
    censored candidate and complete-case exclusion.
 2. Run nested generated-lineage and whole-generator-family selection once and
    freeze the resulting model artifact.
@@ -219,8 +230,9 @@ At this update:
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
-generated v2 parallel smoke: 54 declared, 54 labels, 0 mapper-censored; Ridge fit completed
-v2 smoke nested MAE: LB 0.42593, Ridge 0.42502 (pipeline check, not paper evidence)
+generated v3 shape pilot: 162 declared, 154 labels; every supported rectangle exercised
+v3 design matrix: rank 20/21 before dropping the exactly aliased `gep_ops` input, then rank 20/20 with 19 features plus intercept
+predicated-v3 feasibility pilot: 48/48 candidates mapped after bounding control topology
 terminal resume with a nonexistent compiler path: identical sample/model hashes
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0

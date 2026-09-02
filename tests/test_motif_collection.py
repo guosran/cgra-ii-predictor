@@ -14,10 +14,12 @@ from adapters import neura_motifs
 COST_TEXT = (
     "rec_res_mii_info = {rec_mii = 1 : i32 res_mii = 2 : i32}"
 )
-MAPPED_TEXT = (
-    'mapping_info = {mapping_strategy = "heuristic"} '
-    "compiled_ii = 3 : i32 rec_mii = 1 : i32 res_mii = 2 : i32"
-)
+def mapped_text(rows=3, columns=3):
+    return (
+        'mapping_info = {mapping_strategy = "heuristic", '
+        f"x_tiles = {columns} : i32, y_tiles = {rows} : i32}} "
+        "compiled_ii = 3 : i32 rec_mii = 1 : i32 res_mii = 2 : i32"
+    )
 
 
 class MotifCollectionTest(unittest.TestCase):
@@ -29,7 +31,7 @@ class MotifCollectionTest(unittest.TestCase):
 
     def fresh_corpus(
         self, root, *, count=1, shapes=((3, 3),),
-        variants=("homogeneous",), jobs=2,
+        variants=("neura-main",), jobs=2,
     ):
         opt = root / "mlir-neura-opt"
         opt.write_bytes(b"test-opt-v1")
@@ -58,7 +60,7 @@ class MotifCollectionTest(unittest.TestCase):
         cost = sample_dir / "cost.mlir"
         mapped = sample_dir / "mapped.mlir"
         cost.write_text(COST_TEXT)
-        mapped.write_text(MAPPED_TEXT)
+        mapped.write_text(mapped_text(candidate.rows, candidate.columns))
         values = adapter.parse_cost_features(COST_TEXT)
         sample = adapter._motif_sample_from_artifacts(
             candidate, values, 3, cost, mapped
@@ -248,7 +250,7 @@ class MotifCollectionTest(unittest.TestCase):
                 seed=17,
                 motifs=("chain",),
                 shapes=((2, 2), (3, 3)),
-                variants=("homogeneous",),
+                variants=("neura-main",),
                 timeout=5,
                 jobs=4,
                 checkpoint_every=7,
@@ -300,7 +302,7 @@ class MotifCollectionTest(unittest.TestCase):
                     seed=17,
                     motifs=("chain",),
                     shapes=((3, 3),),
-                    variants=("homogeneous",),
+                    variants=("neura-main",),
                     timeout=5,
                     jobs=1,
                     checkpoint_every=1,
@@ -318,7 +320,10 @@ class MotifCollectionTest(unittest.TestCase):
                     cached, failures,
                 ).run()
             mapped = Path(candidates[0].source_path).parent / "mapped.mlir"
-            mapped.write_text(MAPPED_TEXT + " tampered")
+            mapped.write_text(
+                mapped_text(candidates[0].rows, candidates[0].columns) +
+                " tampered"
+            )
             with self.assertRaisesRegex(ValueError, "mapped artifact hash mismatch"):
                 adapter._load_or_create_motif_manifest(
                     root, manifest_path,
@@ -328,7 +333,7 @@ class MotifCollectionTest(unittest.TestCase):
                     seed=17,
                     motifs=("chain",),
                     shapes=((3, 3),),
-                    variants=("homogeneous",),
+                    variants=("neura-main",),
                     timeout=5,
                     jobs=1,
                     checkpoint_every=1,
@@ -350,7 +355,7 @@ class MotifCollectionTest(unittest.TestCase):
                 seed=17,
                 motifs=("chain",),
                 shapes=((3, 3),),
-                variants=("homogeneous",),
+                variants=("neura-main",),
                 timeout=5,
                 jobs=1,
                 checkpoint_every=1,
@@ -378,6 +383,7 @@ class MotifCollectionTest(unittest.TestCase):
             root = Path(directory)
             opt, manifest_path, prepared = self.fresh_corpus(
                 root,
+                count=3,
                 shapes=((2, 2), (2, 3), (3, 3), (3, 4), (4, 4)),
                 jobs=2,
             )
@@ -448,9 +454,9 @@ class MotifCollectionTest(unittest.TestCase):
             root = Path(directory)
             opt, manifest_path, prepared = self.fresh_corpus(
                 root,
-                count=2,
+                count=6,
                 shapes=((3, 3), (3, 4), (4, 4)),
-                variants=("homogeneous", "split-domain"),
+                variants=("neura-main",),
                 jobs=4,
             )
             manifest, candidates, cached, _declared, failures = prepared
@@ -506,13 +512,13 @@ class MotifCollectionTest(unittest.TestCase):
                 "not_requested",
             )
             self.assertEqual(
-                report["candidate_gate"]["requested_bases_per_family"], 2
+                report["candidate_gate"]["requested_bases_per_family"], 6
             )
             self.assertEqual(
                 report["candidate_gate"]["coverage"][
                     "requested_bases_per_family"
                 ],
-                2,
+                6,
             )
 
             # Reusing the directory for an ordinary input-report run must not

@@ -54,6 +54,13 @@ class ModelTest(unittest.TestCase):
             "equal_total_weight_per_group_and_distinct_observation",
         )
         self.assertEqual(model["training_weight_sum"], 3.0)
+        self.assertEqual(set(model["training_feature_support"]), {
+            "pressure", "depth",
+        })
+        self.assertEqual(model["training_feature_support"]["pressure"]["minimum"], 1.0)
+        self.assertEqual(model["training_feature_support"]["pressure"]["maximum"], 5.2)
+        self.assertEqual(model["training_design_rank"], 2)
+        self.assertEqual(model["training_design_column_count"], 3)
         for row in self.samples:
             self.assertGreaterEqual(predict_ridge(model, row), row.lower_bound)
         with self.assertRaisesRegex(ValueError, "must equal max"):

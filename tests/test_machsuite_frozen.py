@@ -68,13 +68,19 @@ def cost_text(rec_mii=1, res_mii=2):
 
 
 def generated_sample(
-    root, motif, base_index, shape="4x4", variant="homogeneous",
+    root, motif, base_index, shape="4x4", variant="neura-main",
     compiled_ii=3,
 ):
-    base_seed = 1000 + base_index + 100 * list(neura_motifs.DEFAULT_MOTIFS).index(motif)
-    operation_count = 8 + (base_index % 7)
-    base_id = f"base-{base_index:04d}-rp7"
-    lineage = f"generated/{neura_motifs.GENERATOR_VERSION}/{motif}/{base_id}"
+    base = next(
+        candidate for candidate in neura_motifs.make_base_specs(
+            base_index + 1, 7, neura_motifs.DEFAULT_MOTIFS
+        )
+        if candidate.motif == motif and candidate.base_index == base_index
+    )
+    base_seed = base.base_seed
+    operation_count = base.operation_count
+    base_id = base.base_id
+    lineage = base.lineage
     rows, columns = neura_motifs.parse_shape(shape)
     candidate_dir = root / (
         f"generated-{motif}-{base_index:04d}-{shape}-{variant}"
@@ -89,11 +95,13 @@ def generated_sample(
     )
     source.write_text(source_text)
     neura_motifs.write_architecture(
-        architecture, rows, columns, variant, 16
+        architecture, rows, columns, variant,
+        neura_motifs.PINNED_REGISTERS_PER_TILE,
     )
     cost.write_text(cost_text())
     mapped.write_text(
         "module attributes {mapping_strategy = \"heuristic\", "
+        f"x_tiles = {columns} : i32, y_tiles = {rows} : i32, "
         f"compiled_ii = {compiled_ii} : i32, rec_mii = 1 : i32, "
         "res_mii = 2 : i32} {}\n"
     )
@@ -108,8 +116,8 @@ def generated_sample(
         "compiled_ii": compiled_ii,
     })
     graph.update({
-        "index": f"{lineage}/{shape}/{variant}/r16",
-        "candidate_id": f"{lineage}/{shape}/{variant}/r16",
+        "index": f"{lineage}/{shape}/{variant}/r32",
+        "candidate_id": f"{lineage}/{shape}/{variant}/r32",
         "training_stratum": "generated",
         "source_kind": "generated",
         "source_family": f"generated/{neura_motifs.GENERATOR_VERSION}/{motif}",
@@ -126,27 +134,33 @@ def generated_sample(
         "motif": motif,
         "base_id": base_id,
         "base_seed": base_seed,
+        "root_seed": base.root_seed,
+        "base_index": base_index,
         "operation_count": operation_count,
         "rows": rows,
         "tiles": rows * columns,
-        "registers": 16,
+        "registers": neura_motifs.PINNED_REGISTERS_PER_TILE,
         "source_path": str(source),
         "source_sha256": source_sha,
         "architecture_path": str(architecture),
         "architecture_sha256": architecture_sha,
         "architecture_variant": variant,
-        "architecture_id": f"{architecture_sha}:{variant}",
+        "target_config_id": f"prefix-{shape}",
+        "valid_tiles": "",
+        "architecture_id": f"{architecture_sha}:prefix-{shape}",
         "mapped_artifact_path": str(mapped),
         "mapped_artifact_sha256": machsuite_frozen.raw_sha256(mapped),
         "lower_bound_source": "rec_res_max_v1",
         "mapper_id": "neura-heuristic",
         "mapper_revision": machsuite_frozen.FROZEN_NEURA_REVISION,
-        "mapper_config": "mapping-strategy=heuristic",
+        "mapper_config": (
+            f"mapping-strategy=heuristic x-tiles={columns} y-tiles={rows}"
+        ),
         "rec_res_evidence": "neura_shared_rec_res_analysis_v1",
         "cost_artifact_path": str(cost),
         "cost_artifact_sha256": machsuite_frozen.raw_sha256(cost),
     })
-    graph["split_domain"] = int(variant == "split-domain")
+    graph["split_domain"] = 0
     return graph
 
 
@@ -164,7 +178,14 @@ def generated_report(
     samples = []
     for motif in motifs:
         for base_index in range(base_count):
-            for shape in shapes:
+            base = neura_motifs.MotifBaseSpec(
+                motif, base_index, 0, 8, root_seed=7
+            )
+            selected_shapes = neura_motifs.candidate_shapes_for_base(
+                base, tuple(neura_motifs.parse_shape(shape) for shape in shapes)
+            )
+            for rows, columns in selected_shapes:
+                shape = f"{rows}x{columns}"
                 for variant in variants:
                     samples.append(generated_sample(
                         root, motif, base_index, shape, variant,
@@ -180,14 +201,18 @@ def generated_report(
             "canonical_dfg_sha256": sample["canonical_dfg_sha256"],
             "rows": sample["rows"],
             "columns": sample["tiles"] // sample["rows"],
+            "base_index": sample["base_index"],
             "architecture_variant": sample["architecture_variant"],
+            "target_config_id": sample["target_config_id"],
+            "valid_tiles": "",
             "status": "success",
         } for sample in samples],
     })
     required_cells = machsuite_frozen.required_shape_variant_cells()
     training_samples, training_selection = (
         neura_experiment.complete_generated_training_subset(
-            samples, required_cells
+            samples, required_cells,
+            json.loads(manifest_path.read_text())["candidates"],
         )
     )
     selected_ridge, selected_dead_zone = (
@@ -215,6 +240,9 @@ def generated_report(
     ready = bool(
         coverage["passed"] and
         improvement["passed"] and
+        model["training_design_rank"] ==
+        model["training_design_column_count"] ==
+        len(neura_experiment.MODEL_FEATURE_NAMES) + 1 and
         requested_per_family == machsuite_frozen.FROZEN_REQUESTED_BASES_PER_FAMILY
     )
     generated_corpus = neura_experiment.motif_corpus_summary(
@@ -293,6 +321,13 @@ def generated_report(
             ),
             "coverage": coverage,
             "generated_nested_improvement": improvement,
+            "model_design_full_rank": (
+                model["training_design_rank"] ==
+                model["training_design_column_count"] ==
+                len(neura_experiment.MODEL_FEATURE_NAMES) + 1
+            ),
+            "model_design_rank": model["training_design_rank"],
+            "model_design_column_count": model["training_design_column_count"],
             "training_selection": training_selection,
             "overall_ready_for_machsuite_freeze": ready,
         },
@@ -476,13 +511,13 @@ class MachSuiteFrozenTest(unittest.TestCase):
             with patch.object(
                 machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 1
             ), patch.object(
-                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 1
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 9
             ), patch.object(
                 machsuite_frozen, "require_clean_revision",
                 return_value={"revision": revision, "dirty": False},
             ):
                 report = generated_report(
-                    root, list(neura_motifs.DEFAULT_MOTIFS)
+                    root, list(neura_motifs.DEFAULT_MOTIFS), base_count=9
                 )
                 write_json(report_path, report)
                 artifact = machsuite_frozen.freeze_random_training_model(
@@ -613,8 +648,8 @@ class MachSuiteFrozenTest(unittest.TestCase):
                     sample for sample in report["samples"]
                     if not (
                         sample["generator_family"] == "generated/motif/chain" and
-                        sample["architecture_variant"] == "split-domain" and
-                        sample["rows"] == 3 and sample["tiles"] == 9
+                        sample["architecture_variant"] == "neura-main" and
+                        sample["rows"] == 2 and sample["tiles"] == 4
                     )
                 ]
                 report_path = root / "training-report.json"
@@ -645,8 +680,8 @@ class MachSuiteFrozenTest(unittest.TestCase):
                     candidate for candidate in manifest["candidates"]
                     if not (
                         candidate["generator_family"] == "generated/motif/chain" and
-                        candidate["architecture_variant"] == "homogeneous" and
-                        candidate["rows"] == 3 and candidate["columns"] == 3
+                        candidate["architecture_variant"] == "neura-main" and
+                        candidate["rows"] == 2 and candidate["columns"] == 2
                     )
                 ]
                 write_json(manifest_path, manifest)

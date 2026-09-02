@@ -60,11 +60,12 @@ the hashed `rec_res_mii_info` artifact produced in the same direct run.
 
 The opt-in `--motif-samples-per-family N` mode uses
 `neura_motifs.py` to generate nine lowered families: `chain`, `fanout`,
-`reduction`, `diamond`, `mixed`, `random_dag`, `recurrence_chain`,
-`predicated_diamond`, and `pointer_chase`. Repeat `--motif-shape
-ROWSxCOLS` (default `3x3`, `3x4`, `4x4`) and select families with repeated or
-comma-separated `--motif`/`--motifs` options.  `--motif-architecture-variant`
-selects the deterministic homogeneous and split-domain attempts.
+`reduction`, `diamond`, `random_dag`, `recurrence_chain`,
+`predicated_diamond`, `memory_stream`, and `pointer_chase`. By default the
+declared shape population is every rectangle from 2x2 through 4x4; each base
+runs on 4x4 plus one balanced secondary shape. Repeat `--motif-shape ROWSxCOLS`
+to narrow this population. Every candidate references the exact pinned Neura
+4x4 YAML, and shape is applied through the existing pass dimension options.
 
 The old `--samples` switch remains a legacy narrow random DAG and is not
 implicitly folded into the motif corpus.  Motif source files are materialized

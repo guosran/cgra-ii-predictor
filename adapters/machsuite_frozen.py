@@ -22,6 +22,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -100,7 +101,7 @@ def required_generator_families() -> Tuple[str, ...]:
 
 
 def required_shape_variant_cells() -> Tuple[str, ...]:
-    """Return the frozen Cartesian shape/architecture coverage cells."""
+    """Return every shape cell covered across the balanced training design."""
     return tuple(
         f"{shape}/{variant}"
         for shape in FROZEN_MOTIF_SHAPES
@@ -697,7 +698,7 @@ def _validated_generated_sample(
         "architecture_sha256", "architecture_variant", "mapped_artifact_path",
         "mapped_artifact_sha256", "leakage_lineage_id", "lower_bound_source",
         "mapper_id", "mapper_revision", "mapper_config", "cost_artifact_path",
-        "cost_artifact_sha256", "rec_res_evidence",
+        "cost_artifact_sha256", "rec_res_evidence", "target_config_id",
     )
     for name in required_strings:
         if not isinstance(sample.get(name), str) or not sample[name]:
@@ -721,6 +722,7 @@ def _validated_generated_sample(
 
     try:
         base_seed = int(sample["base_seed"])
+        base_index = int(sample["base_index"])
         operation_count = int(sample["operation_count"])
         raw_rows = sample["rows"]
         raw_tiles = sample["tiles"]
@@ -745,8 +747,15 @@ def _validated_generated_sample(
     architecture_variant = sample.get("architecture_variant")
     if architecture_variant not in FROZEN_ARCHITECTURE_VARIANTS:
         raise ValueError(f"{label}: architecture variant is not frozen")
-    if registers <= 0:
-        raise ValueError(f"{label}: registers must be positive")
+    if base_index < 0:
+        raise ValueError(f"{label}: base_index must be non-negative")
+    if registers != neura_motifs.PINNED_REGISTERS_PER_TILE:
+        raise ValueError(f"{label}: registers differ from pinned Neura YAML")
+    target_config_id = f"prefix-{rows}x{columns}"
+    if sample.get("target_config_id") != target_config_id:
+        raise ValueError(f"{label}: target_config_id changed")
+    if sample.get("valid_tiles") != "":
+        raise ValueError(f"{label}: valid-tiles masks are outside the protocol")
     source_text = neura_motifs.generate_motif_mlir(
         motif, operation_count, base_seed
     )
@@ -780,15 +789,14 @@ def _validated_generated_sample(
     architecture_path = Path(str(sample["architecture_path"])).resolve()
     if raw_sha256(architecture_path) != sample["architecture_sha256"]:
         raise ValueError(f"{label}: architecture artifact hash changed")
+    if sample["architecture_sha256"] != neura_motifs.PINNED_ARCHITECTURE_SHA256:
+        raise ValueError(f"{label}: architecture is not the pinned Neura YAML")
     if sample.get("architecture_id") != (
-        f"{sample['architecture_sha256']}:{sample['architecture_variant']}"
+        f"{sample['architecture_sha256']}:{target_config_id}"
     ):
         raise ValueError(f"{label}: architecture identity changed")
     structural = neura_experiment.graph_features_from_neura(
         source_text, rows, columns
-    )
-    structural["split_domain"] = int(
-        sample["architecture_variant"] == "split-domain"
     )
     for name in neura_experiment.MODEL_FEATURE_NAMES:
         if name not in structural or sample.get(name) != structural[name]:
@@ -806,6 +814,10 @@ def _validated_generated_sample(
     mapped_text = mapped_path.read_text()
     if 'mapping_strategy = "heuristic"' not in mapped_text:
         raise ValueError(f"{label}: mapped artifact is not heuristic")
+    for name, expected in (("x_tiles", columns), ("y_tiles", rows)):
+        match = re.search(rf"\b{name}\s*=\s*(\d+)\s*:\s*i32", mapped_text)
+        if match is None or int(match.group(1)) != expected:
+            raise ValueError(f"{label}: mapped {name} changed")
     compiled_ii = neura_experiment.parse_checked_mapper_label(
         mapped_text, analysis
     )
@@ -827,7 +839,9 @@ def _validated_generated_sample(
         raise ValueError(f"{label}: lower-bound source changed")
     if (
         sample["mapper_id"] != "neura-heuristic" or
-        sample["mapper_config"] != "mapping-strategy=heuristic" or
+        sample["mapper_config"] != (
+            f"mapping-strategy=heuristic x-tiles={columns} y-tiles={rows}"
+        ) or
         sample["mapper_revision"] != neura_revision
     ):
         raise ValueError(f"{label}: mapper identity changed")
@@ -929,6 +943,21 @@ def validate_generated_training_report(
     labelled_samples = report.get("labelled_samples", samples)
     if not isinstance(labelled_samples, list) or not labelled_samples:
         raise ValueError("training report has no labelled samples")
+    motif_corpus = report.get("motif_corpus")
+    if not isinstance(motif_corpus, Mapping):
+        raise ValueError("training motif corpus coverage is missing")
+    motif_manifest_value = motif_corpus.get("manifest_path")
+    if not isinstance(motif_manifest_value, str) or not motif_manifest_value:
+        raise ValueError("training motif corpus manifest path is missing")
+    motif_manifest_path = Path(motif_manifest_value).resolve()
+    if not motif_manifest_path.is_file():
+        raise ValueError("training motif corpus manifest is missing")
+    declared_manifest = read_json(motif_manifest_path)
+    declared_candidates = declared_manifest.get("candidates")
+    if not isinstance(declared_candidates, list):
+        raise ValueError("training motif corpus manifest candidates are missing")
+    if motif_corpus.get("manifest_sha256") != raw_sha256(motif_manifest_path):
+        raise ValueError("training motif corpus manifest changed")
     for index, sample in enumerate(labelled_samples):
         if not isinstance(sample, Mapping):
             raise ValueError(f"training sample {index} is not an object")
@@ -941,7 +970,8 @@ def validate_generated_training_report(
 
     training_samples, training_selection = (
         neura_experiment.complete_generated_training_subset(
-            labelled_samples, required_shape_variant_cells()
+            labelled_samples, required_shape_variant_cells(),
+            declared_candidates,
         )
     )
     if report.get("training_selection") != training_selection:
@@ -965,21 +995,6 @@ def validate_generated_training_report(
         base_dfg_ids.add(base_dfg)
         generator_families.add(generator_family)
 
-    motif_corpus = report.get("motif_corpus")
-    if not isinstance(motif_corpus, Mapping):
-        raise ValueError("training motif corpus coverage is missing")
-    motif_manifest_value = motif_corpus.get("manifest_path")
-    if not isinstance(motif_manifest_value, str) or not motif_manifest_value:
-        raise ValueError("training motif corpus manifest path is missing")
-    motif_manifest_path = Path(motif_manifest_value).resolve()
-    if not motif_manifest_path.is_file():
-        raise ValueError("training motif corpus manifest is missing")
-    declared_manifest = read_json(motif_manifest_path)
-    declared_candidates = declared_manifest.get("candidates")
-    if not isinstance(declared_candidates, list):
-        raise ValueError("training motif corpus manifest candidates are missing")
-    if motif_corpus.get("manifest_sha256") != raw_sha256(motif_manifest_path):
-        raise ValueError("training motif corpus manifest changed")
     coverage = generated_training_coverage(
         labelled_samples,
         requested_bases_per_family=requested_per_family,
@@ -1042,9 +1057,17 @@ def validate_generated_training_report(
     verified_improvement = neura_experiment.generated_nested_improvement_gate(
         verified_nested
     )
+    reported_model = report.get("trained_full_model")
+    model_design_full_rank = bool(
+        isinstance(reported_model, Mapping) and
+        reported_model.get("training_design_rank") ==
+        reported_model.get("training_design_column_count") ==
+        len(neura_experiment.MODEL_FEATURE_NAMES) + 1
+    )
     independently_ready = bool(
         verified_nested is not None and bool(verified_nested.get("rows")) and
         verified_improvement.get("passed") is True and
+        model_design_full_rank and
         isinstance(generator_holdout, Mapping) and
         generator_holdout.get("status") == "ok" and
         int(generator_holdout.get("group_count", -1)) == len(
@@ -1092,6 +1115,19 @@ def validate_generated_training_report(
     # nested coverage object.  Check the identity-bearing fields explicitly;
     # readiness itself is checked against independently recomputed statistics.
     for field, expected in expected_gate_fields.items():
+        if candidate_gate.get(field) != expected:
+            raise ValueError(f"training candidate gate {field} disagrees")
+    for field, expected in {
+        "model_design_full_rank": model_design_full_rank,
+        "model_design_rank": (
+            reported_model.get("training_design_rank")
+            if isinstance(reported_model, Mapping) else None
+        ),
+        "model_design_column_count": (
+            reported_model.get("training_design_column_count")
+            if isinstance(reported_model, Mapping) else None
+        ),
+    }.items():
         if candidate_gate.get(field) != expected:
             raise ValueError(f"training candidate gate {field} disagrees")
     declared_ready = candidate_gate.get("overall_ready_for_machsuite_freeze")
@@ -1366,9 +1402,16 @@ def freeze_random_training_model(
     labelled_samples = report.get("labelled_samples", samples)
     if not isinstance(samples, list) or not isinstance(labelled_samples, list):
         raise ValueError("training report samples are not lists")
+    report_motif_corpus = report.get("motif_corpus", {})
+    report_manifest_path = Path(
+        str(report_motif_corpus.get("manifest_path", ""))
+    ).resolve()
+    report_manifest = read_json(report_manifest_path)
+    declared_candidates = report_manifest.get("candidates", [])
     training_samples, training_selection = (
         neura_experiment.complete_generated_training_subset(
-            labelled_samples, required_shape_variant_cells()
+            labelled_samples, required_shape_variant_cells(),
+            declared_candidates,
         )
     )
     if samples != training_samples or report.get("training_selection") != (
@@ -1389,12 +1432,6 @@ def freeze_random_training_model(
     requested_bases_per_family = int(
         report_config.get("motif_samples_per_family", -1)
     )
-    report_motif_corpus = report.get("motif_corpus", {})
-    report_manifest_path = Path(
-        str(report_motif_corpus.get("manifest_path", ""))
-    ).resolve()
-    report_manifest = read_json(report_manifest_path)
-    declared_candidates = report_manifest.get("candidates", [])
     if (
         minimum_base_dfgs <= 0 or minimum_generator_families <= 0 or
         minimum_complete_bases_per_family <= 0

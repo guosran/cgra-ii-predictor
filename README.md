@@ -49,19 +49,18 @@ A generality claim must cover a distribution of triples:
 The primary paper protocol assigns different sources to different roles:
 
 1. Training and every fitted-model/hyperparameter decision use generated DFGs
-   only. `motif-v2` contains chain, fanout, reduction, diamond, mixed,
-   random-DAG, recurrence-chain, predicated-diamond, and pointer-chase
+   only. `motif-v3` contains chain, fanout, reduction, diamond, random-DAG,
+   recurrence-chain, predicated-diamond, memory-stream, and pointer-chase
    families. Generated base graphs, not individual rows, are the split unit.
 2. The fixed MachSuite revision is the final real-program test. No MachSuite
    mapper label has been accessed while designing or fitting Model 1. Its
    label-free preflight status and covariates have been inspected, so the
    current protocol is label-blind, not covariate-blind; that limitation is
    stated rather than presented as a stronger statistical-blindness claim.
-3. The implemented generated stratum varies array shape and homogeneous versus
-   split-domain FU placement. Tile masks, register capacity, memory-tile
-   placement, link width/bandwidth, and latency are separate architecture
-   extensions; they are not claimed as dimensions of the current frozen
-   training protocol.
+3. The physical architecture is the exact pinned Neura 4x4 YAML. The generated
+   stratum varies only rectangular active domains through Neura's existing
+   `x-tiles`/`y-tiles` options. Tile masks and other architecture changes are
+   outside the current frozen training protocol.
 4. Mapper configuration varies only when configuration is part of the target;
    otherwise it remains fixed and recorded.
 
@@ -70,7 +69,8 @@ program belong to the same leakage group. Evaluation should include:
 
 - nested generated-base lineage holdout for model selection;
 - generator-family holdout inside generated development data;
-- architecture-family holdout for YAML/topology transfer;
+- within-DFG target-shape ranking on the pinned YAML; the current corpus does
+  not support a cross-YAML architecture-family claim;
 - the separately sealed MachSuite test, with unsupported variants retained as
   censored records in the declared-suite denominator.
 
@@ -167,9 +167,8 @@ ordinary invocations do not run it):
 ~~~sh
 python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
-  --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
-  --motif-jobs 4 --motif-checkpoint-every 32 \
+  --motif-jobs 12 --motif-checkpoint-every 32 \
   --timeout 60 \
   --output-dir /path/to/random-training
 ~~~
@@ -179,8 +178,9 @@ writes `corpus-manifest.json` before invoking any compiler subprocess. Candidate
 collection is bounded by `--motif-jobs` (default `1`); Rec/Res analysis and
 mapping remain serial within each candidate. A base DFG's shape and
 architecture variants share one lineage and source/canonical hash; mapper
-timeouts remain censored manifest entries. Only bases that succeed in all six
-shape/layout cells enter validation or fitting; partial successes remain
+timeouts remain censored manifest entries. Each base declares 4x4 plus one
+balanced secondary rectangle from the 2x2-through-4x4 scan. Only bases that
+succeed in both cells enter validation or fitting; partial successes remain
 auditable but excluded. Checkpoints are atomic, manifest records remain in
 candidate-declaration order, and only the main coordinator updates the
 manifest. `--samples` is retained as a legacy narrow random-DAG generator and
@@ -219,9 +219,14 @@ To predict a lowered DFG without labels, refitting, or invoking the mapper:
 ~~~sh
 python3 adapters/neura_experiment.py \
   --model-report /path/to/frozen-random-dfg-model.json \
-  --predict-fixture kernel=/path/to/lowered-kernel.mlir \
-  --predict-shape 4x4
+  --predict-fixture kernel=/path/to/lowered-kernel.mlir
 ~~~
+
+With no `--predict-shape`, inference scans all nine 2x2-through-4x4
+rectangles and records both the area/II Pareto frontier and the order in which
+the unchanged Neura mapper should verify candidates. A single final shape is
+objective-dependent; the predictor itself never treats a ranking as proof of
+feasibility.
 
 The current model is residual Ridge regression above the fixed floor
 `max(RecMII, ResMII)`, recorded as `rec_res_max_v1`. Neither the floor nor
@@ -243,9 +248,8 @@ observation's weight.
 # Train/select only on generated motif and random-DFG data.
 python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
-  --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
-  --motif-jobs 4 --motif-checkpoint-every 32 \
+  --motif-jobs 12 --motif-checkpoint-every 32 \
   --timeout 60 \
   --output-dir /path/to/random-training
 
@@ -278,8 +282,9 @@ python3 adapters/machsuite_frozen.py reveal \
 ~~~
 
 The formal contract predeclares exactly 250 bases in each of nine families:
-2,250 bases and 13,500 shape/layout candidates. At least 200 complete bases per
-family must remain, giving at least 1,800 fitted lineages and 10,800 rows.
+2,250 bases and 4,500 paired shape candidates. At least 200 complete bases per
+family must remain, giving at least 1,800 fitted lineages and 3,600 rows.
+The 19-feature design plus intercept must also be full rank before freezing.
 `--allow-small-smoke` can exercise serialization on a tiny corpus, but marks
 the artifact smoke-only and `predict` refuses it for frozen MachSuite.
 `freeze-model` also re-generates each source, verifies all source,

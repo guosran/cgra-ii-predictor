@@ -4,13 +4,13 @@
 The legacy ``--samples`` generator in :mod:`neura_experiment` is intentionally
 kept as a compatibility path.  This module is the newer, auditable corpus
 stratum: a base DFG is generated once from ``(generator version, motif,
-base_seed, operation count)`` and then paired with several architectural
-candidates.  Shape and architectural variation never changes the base DFG,
+base_seed, operation count)`` and then paired with target rectangles on one
+pinned architecture.  Shape variation never changes the base DFG,
 which makes it possible to group all variants under one leakage-safe lineage.
 
 The emitted IR is already in the lowered Neura dataflow dialect.  The original
-six families remain compute-only compatibility motifs; v2 additionally emits
-recurrence, predicated-control, and pointer-chasing DFGs directly.  No C
+compute families are joined by direct recurrence, predicated-control,
+streaming-memory, and pointer-chasing DFGs.  No C
 frontend or compiler lowering is involved, so each structural edge is visible
 to the analysis-only Rec/Res pass and heuristic mapper.
 """
@@ -22,21 +22,23 @@ import json
 import os
 import random
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
-GENERATOR_VERSION = "motif-v2"
-MANIFEST_SCHEMA_VERSION = "cgra-ii-motif-corpus-v2"
+GENERATOR_VERSION = "motif-v3"
+MANIFEST_SCHEMA_VERSION = "cgra-ii-motif-corpus-v3"
 DATA_TYPE = "!neura.data<i32, i1>"
 I64_DATA_TYPE = "!neura.data<i64, i1>"
 PREDICATE_DATA_TYPE = "!neura.data<i1, i1>"
 POINTER_DATA_TYPE = "!neura.data<!llvm.ptr, i1>"
 DEFAULT_MOTIFS = (
-    "chain", "fanout", "reduction", "diamond", "mixed", "random_dag",
-    "recurrence_chain", "predicated_diamond", "pointer_chase",
+    "chain", "fanout", "reduction", "diamond", "random_dag",
+    "recurrence_chain", "predicated_diamond", "memory_stream",
+    "pointer_chase",
 )
 MOTIF_ALIASES = {
     "broadcast": "fanout",
@@ -44,8 +46,9 @@ MOTIF_ALIASES = {
     "binary_reduction": "reduction",
     "reduction_tree": "reduction",
     "split_join": "diamond",
-    "mixed_dag": "mixed",
-    "multi_input": "mixed",
+    "mixed": "random_dag",
+    "mixed_dag": "random_dag",
+    "multi_input": "random_dag",
     "random": "random_dag",
     "random-dag": "random_dag",
     "recurrence": "recurrence_chain",
@@ -54,47 +57,62 @@ MOTIF_ALIASES = {
     "control": "predicated_diamond",
     "pointer": "pointer_chase",
     "pointer-chase": "pointer_chase",
+    "memory": "memory_stream",
+    "memory-stream": "memory_stream",
 }
-DEFAULT_SHAPES = ((3, 3), (3, 4), (4, 4))
+DEFAULT_SHAPES = tuple(
+    (rows, columns)
+    for rows in range(2, 5)
+    for columns in range(2, 5)
+)
+PRIMARY_SHAPE = (4, 4)
+SHAPE_DESIGN = "full-4x4-plus-balanced-secondary-v1"
 # Three strata make the operation-count distribution explicit and reproducible.
 # The lower edge is deliberately above the tiny legacy examples: these are
 # intended to exercise graph pressure while still being practical smoke tests.
 OPERATION_BANDS = ((8, 15), (16, 31), (32, 48))
-# v1 callers use OPERATION_BANDS directly, so retain it as the compatibility
-# contract for the six original compute motifs.  v2's direct-lowered motifs
+# v1 callers use OPERATION_BANDS directly, so retain it as a compatibility
+# contract.  The v3 direct-lowered motifs
 # use family-specific bands.  The frozen corpus stays in the tens-of-operations
 # regime used by LISA and by mapper-feasible Neura examples; larger direct API
 # limits remain available for explicitly declared stress experiments.
 FAMILY_OPERATION_BANDS = {
-    "chain": OPERATION_BANDS,
-    "fanout": OPERATION_BANDS,
-    "reduction": OPERATION_BANDS,
-    "diamond": OPERATION_BANDS,
-    "mixed": OPERATION_BANDS,
-    "random_dag": OPERATION_BANDS,
-    # Corpus generation tops recurrence cycles out at 32 so the size tiers
-    # cover RecMII without making every large sample dominated by one loop.
-    # The direct API still accepts 33--48 for compatibility (see below).
-    "recurrence_chain": ((8, 15), (16, 23), (24, 32)),
-    "predicated_diamond": OPERATION_BANDS,
-    "pointer_chase": OPERATION_BANDS,
+    "chain": ((8, 23), (24, 47), (48, 96)),
+    "fanout": ((8, 23), (24, 47), (48, 96)),
+    "reduction": ((8, 11), (12, 19), (20, 31)),
+    "diamond": ((8, 15), (16, 31), (32, 64)),
+    # Dense random/predicated graphs trigger exponential backtracking in the
+    # reference heuristic above roughly twenty payload ops.  Keep the frozen
+    # distribution in the mapper-complete regime; the larger direct API is
+    # retained for explicit stress tests that are reported as censored.
+    "random_dag": ((8, 11), (12, 15), (16, 20)),
+    # The pinned Neura architecture has 20 control-memory items per tile.
+    # Recurrences longer than 16 fail systematically under that production
+    # contract, so v3 samples the useful range instead of manufacturing
+    # inevitable censored rows.
+    "recurrence_chain": ((8, 10), (11, 13), (14, 16)),
+    "predicated_diamond": ((8, 11), (12, 15), (16, 20)),
+    "memory_stream": ((8, 15), (16, 31), (32, 64)),
+    "pointer_chase": ((8, 15), (16, 31), (32, 64)),
 }
 DIRECT_OPERATION_LIMITS = {
     "random_dag": 160,
     "recurrence_chain": 48,
     "predicated_diamond": 128,
+    "memory_stream": 128,
     "pointer_chase": 128,
 }
-DEFAULT_ARCHITECTURE_VARIANTS = ("homogeneous", "split-domain")
-
-# These are the FU classes present in Neura's main architecture.yaml.  The
-# generated architecture enables memory classes on every homogeneous tile and
-# on the compute half of a split-domain mesh, so all v2 operations have a
-# legal placement domain.
-NEURA_FU_TYPES = (
-    "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel",
-    "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control",
-    "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed",
+DEFAULT_ARCHITECTURE_VARIANTS = ("neura-main",)
+PINNED_ARCHITECTURE_SHA256 = (
+    "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6"
+)
+PINNED_NEURA_REVISION = "47b7e3a68c321075293e6fcb45fb3b1cabb93b88"
+PINNED_ARCHITECTURE_ROWS = 4
+PINNED_ARCHITECTURE_COLUMNS = 4
+PINNED_REGISTERS_PER_TILE = 32
+PINNED_CTRL_MEM_ITEMS = 20
+PINNED_ARCHITECTURE_RELATIVE_PATH = Path(
+    "third_party/neura/test/arch_spec/architecture.yaml"
 )
 
 
@@ -142,6 +160,7 @@ class MotifCandidate:
     base_id: str
     base_seed: int
     root_seed: int
+    base_index: int
     operation_count: int
     rows: int
     columns: int
@@ -152,13 +171,15 @@ class MotifCandidate:
     source_sha256: str
     canonical_dfg_sha256: str
     architecture_sha256: str
+    target_config_id: str
+    valid_tiles: str = ""
     status: str = "declared"
     stage: str = "predeclared"
     failure: Optional[str] = None
 
     @property
     def architecture_id(self) -> str:
-        return f"{self.architecture_sha256}:{self.architecture_variant}"
+        return f"{self.architecture_sha256}:{self.target_config_id}"
 
     def manifest_record(self) -> Dict[str, object]:
         record = asdict(self)
@@ -249,7 +270,7 @@ def stratified_operation_count(
 
     The optional ``motif`` argument preserves the v1 two-argument API.  With
     no motif, the historical 8--48 bands are used; ``make_base_specs`` passes
-    the family explicitly so v2 corpora include large structural examples.
+    the family explicitly so v3 corpora include large structural examples.
     """
     if base_index < 0:
         raise ValueError("base_index must be non-negative")
@@ -429,11 +450,11 @@ def _emit_constants(
 def _generate_chain(operation_count: int, seed: int) -> str:
     rng = random.Random(seed)
     lines = _emit_header("chain")
-    values = _emit_constants(lines, operation_count + 1, seed=seed)
-    current = values[0]
+    current = _emit_constants(lines, 1, seed=seed)[0]
     for index in range(operation_count):
-        current = _emit_binary(
-            lines, index, _operation_kind(rng, index), current, values[index + 1]
+        current = _emit_unary_binary(
+            lines, index, _operation_kind(rng, index), current,
+            1 + rng.randrange(31),
         )
     return _emit_footer(lines)
 
@@ -441,21 +462,21 @@ def _generate_chain(operation_count: int, seed: int) -> str:
 def _generate_fanout(operation_count: int, seed: int) -> str:
     rng = random.Random(seed)
     lines = _emit_header("fanout")
-    constants = _emit_constants(lines, operation_count + 1, seed=seed)
-    branch_count = max(2, min(4, operation_count // 4))
+    root = _emit_constants(lines, 1, seed=seed)[0]
+    branch_count = 2 + ((abs(seed) >> 3) % min(7, operation_count - 1))
     branches: List[str] = []
     # Each branch starts from the same source.  Remaining operations extend
     # branches round-robin, preserving a large semantic fanout at the root.
     for index in range(branch_count):
-        branches.append(_emit_binary(
-            lines, index, _operation_kind(rng, index), constants[0],
-            constants[index + 1],
+        branches.append(_emit_unary_binary(
+            lines, index, _operation_kind(rng, index), root,
+            1 + rng.randrange(31),
         ))
     for index in range(branch_count, operation_count):
         branch = (index - branch_count) % branch_count
-        branches[branch] = _emit_binary(
+        branches[branch] = _emit_unary_binary(
             lines, index, _operation_kind(rng, index), branches[branch],
-            constants[index + 1],
+            1 + rng.randrange(31),
         )
     return _emit_footer(lines)
 
@@ -488,14 +509,30 @@ def _generate_reduction(operation_count: int, seed: int) -> str:
 def _generate_diamond(operation_count: int, seed: int) -> str:
     rng = random.Random(seed)
     lines = _emit_header("diamond")
-    constants = _emit_constants(lines, operation_count + 2, seed=seed)
-    first = _emit_binary(lines, 0, _operation_kind(rng, 0), constants[0], constants[1])
-    second = _emit_binary(lines, 1, _operation_kind(rng, 1), constants[0], constants[2])
-    current = _emit_binary(lines, 2, _operation_kind(rng, 2), first, second)
-    for index in range(3, operation_count):
-        current = _emit_binary(
-            lines, index, _operation_kind(rng, index), current, constants[index + 1]
+    current = _emit_constants(lines, 1, seed=seed)[0]
+    index = 0
+    diamond_count = 1 + ((abs(seed) >> 4) % min(6, operation_count // 3))
+    for _ in range(diamond_count):
+        first = _emit_unary_binary(
+            lines, index, _operation_kind(rng, index), current,
+            1 + rng.randrange(31),
         )
+        index += 1
+        second = _emit_unary_binary(
+            lines, index, _operation_kind(rng, index), current,
+            1 + rng.randrange(31),
+        )
+        index += 1
+        current = _emit_binary(
+            lines, index, _operation_kind(rng, index), first, second
+        )
+        index += 1
+    while index < operation_count:
+        current = _emit_unary_binary(
+            lines, index, _operation_kind(rng, index), current,
+            1 + rng.randrange(31),
+        )
+        index += 1
     return _emit_footer(lines)
 
 
@@ -557,9 +594,10 @@ def _generate_random_dag(operation_count: int, seed: int) -> str:
             # result, each constant joins the same weak component.
             if index < constant_count - 1:
                 rhs = constant_order[index + 1]
-                pool = constants + results
+                pool = constants + results[-min(12, len(results)):]
             else:
-                pool = constants + results
+                lookback = 4 + ((abs(seed) >> 6) % 9)
+                pool = constants + results[-lookback:]
                 rhs = rng.choice(pool)
             if rhs == lhs and len(pool) > 1:
                 alternatives = [value for value in pool if value != lhs]
@@ -567,7 +605,8 @@ def _generate_random_dag(operation_count: int, seed: int) -> str:
             # Periodically reuse an older producer to increase long-range
             # fanout; otherwise random choice still permits reconvergence.
             if index >= 3 and index % 4 == 0:
-                lhs = results[rng.randrange(max(1, len(results) // 2))]
+                window = results[-min(len(results), 12):]
+                lhs = rng.choice(window)
         results.append(_emit_binary(
             lines, index, _operation_kind(rng, index), lhs, rhs
         ))
@@ -676,48 +715,52 @@ def _generate_recurrence_chain(operation_count: int, seed: int) -> str:
 
 
 def _generate_predicated_diamond(operation_count: int, seed: int) -> str:
-    """Generate seeded reconvergent predicate diamonds.
+    """Generate one shallow predicate diamond followed by live arithmetic.
 
-    A shallow pair of predicated arms feeds one reconvergent join.  Remaining
-    operations extend a serial post-join tail, so size changes graph topology
-    without keeping the predicate live across a long arm or causing explosive
-    control backtracking in the current heuristic mapper.
+    Multiple simultaneous predicates make the reference heuristic's search
+    time highly seed-dependent even below twenty payload operations.  One
+    real control diamond is enough to expose control-path pressure while
+    keeping the formal corpus's mapper-censorship rate bounded.
     """
     rng = random.Random(seed)
     lines = _emit_header("predicated_diamond")
     constants = _emit_constants(lines, 2, seed=seed)
     current = constants[0]
     arithmetic_index = 0
-    # Keep exactly one real reconvergent control diamond.  A previous design
-    # scaled the arm depths and routinely timed out at only 32 operations
-    # because the predicate had to stay live across both arms.
-    predicate = _emit_icmp(
-        lines, "pd_cmp", current,
-        "sgt" if (seed & 1) else "slt",
-        (abs(seed) % 9), "i32", DATA_TYPE
-    )
-    inverted = _emit_not(lines, "pd_not", predicate)
-    # The two arms have distinct source roots for a genuine split/join.
-    then_current = _emit_unary_binary(
-        lines, arithmetic_index,
-        _seeded_operation_kind(rng, arithmetic_index, seed),
-        current, 1 + (abs(seed) % 11), name_prefix="pd"
-    )
-    arithmetic_index += 1
-    else_current = _emit_unary_binary(
-        lines, arithmetic_index,
-        _seeded_operation_kind(rng, arithmetic_index, seed),
-        constants[1], 1 + ((abs(seed) + 1) % 11), name_prefix="pd"
-    )
-    arithmetic_index += 1
-    then_value = _emit_grant_predicate(lines, "pd_then", then_current, predicate)
-    else_value = _emit_grant_predicate(lines, "pd_else", else_current, inverted)
-    current = _emit_binary(
-        lines, arithmetic_index,
-        _seeded_operation_kind(rng, arithmetic_index, seed),
-        then_value, else_value, name_prefix="pd"
-    )
-    arithmetic_index += 1
+    diamond_count = 1
+    for diamond_index in range(diamond_count):
+        predicate = _emit_icmp(
+            lines, f"pd_cmp{diamond_index}", current,
+            "sgt" if ((seed + diamond_index) & 1) else "slt",
+            (abs(seed) + diamond_index) % 9, "i32", DATA_TYPE,
+        )
+        inverted = _emit_not(lines, f"pd_not{diamond_index}_0", predicate)
+        then_current = _emit_unary_binary(
+            lines, arithmetic_index,
+            _seeded_operation_kind(rng, arithmetic_index, seed),
+            current, 1 + ((abs(seed) + diamond_index) % 11),
+            name_prefix="pd",
+        )
+        arithmetic_index += 1
+        else_current = _emit_unary_binary(
+            lines, arithmetic_index,
+            _seeded_operation_kind(rng, arithmetic_index, seed),
+            constants[1], 1 + ((abs(seed) + diamond_index + 1) % 11),
+            name_prefix="pd",
+        )
+        arithmetic_index += 1
+        then_value = _emit_grant_predicate(
+            lines, f"pd_then{diamond_index}", then_current, predicate
+        )
+        else_value = _emit_grant_predicate(
+            lines, f"pd_else{diamond_index}", else_current, inverted
+        )
+        current = _emit_binary(
+            lines, arithmetic_index,
+            _seeded_operation_kind(rng, arithmetic_index, seed),
+            then_value, else_value, name_prefix="pd",
+        )
+        arithmetic_index += 1
 
     for tail in range(operation_count - arithmetic_index):
         current = _emit_unary_binary(
@@ -782,6 +825,58 @@ def _emit_pointer_hop(
     return loaded
 
 
+def _generate_memory_stream(operation_count: int, seed: int) -> str:
+    """Generate independent scalar loads joined by a bounded arithmetic DAG."""
+    rng = random.Random(seed)
+    lines = [
+        "module {",
+        '  func.func @generated_memory_stream(%arg0: !llvm.ptr) '
+        'attributes {accelerator = "neura"} {',
+    ]
+    lane_count = 2 + ((abs(seed) >> 6) % min(23, operation_count))
+    loaded_values: List[str] = []
+    for lane in range(lane_count):
+        index = f"%ms_index{lane}"
+        index_mov = f"%ms_index{lane}_mov"
+        pointer = f"%ms_ptr{lane}"
+        pointer_mov = f"%ms_ptr{lane}_mov"
+        loaded = f"%ms_load{lane}"
+        lines.append(_grant_once_constant(
+            index, (abs(seed) + lane * 17) % 257, "i64", I64_DATA_TYPE
+        ))
+        lines.append(_move(index_mov, index, I64_DATA_TYPE))
+        lines.append(
+            f'    {pointer} = "neura.gep"({index_mov}) '
+            '<{operandSegmentSizes = array<i32: 0, 1>}> '
+            '{lhs_value = "%arg0"} '
+            f': ({I64_DATA_TYPE}) -> {POINTER_DATA_TYPE}'
+        )
+        lines.append(_move(pointer_mov, pointer, POINTER_DATA_TYPE))
+        lines.append(
+            f'    {loaded} = "neura.load"({pointer_mov}) '
+            f': ({POINTER_DATA_TYPE}) -> {DATA_TYPE}'
+        )
+        loaded_values.append(loaded)
+
+    current = loaded_values[0]
+    operation_index = 0
+    for loaded in loaded_values[1:]:
+        current = _emit_binary(
+            lines, operation_index,
+            _seeded_operation_kind(rng, operation_index, seed),
+            current, loaded, name_prefix="ms",
+        )
+        operation_index += 1
+    while operation_index < operation_count:
+        current = _emit_unary_binary(
+            lines, operation_index,
+            _seeded_operation_kind(rng, operation_index, seed),
+            current, 1 + rng.randrange(31), name_prefix="ms",
+        )
+        operation_index += 1
+    return _emit_footer(lines)
+
+
 def _generate_pointer_chase(operation_count: int, seed: int) -> str:
     """Generate a pointer chase with real indirect loads and a loop backedge."""
     rng = random.Random(seed)
@@ -826,9 +921,15 @@ def _generate_pointer_chase(operation_count: int, seed: int) -> str:
     indirect_index = _emit_sext(
         lines, "pc_indirect_index", "%pc_loaded_index", DATA_TYPE, I64_DATA_TYPE
     )
-    current = _emit_pointer_hop(
-        lines, 0, current_pointer, indirect_index, DATA_TYPE
-    )
+    hop_count = 1 + ((abs(seed) >> 5) % 4)
+    current = current_pointer
+    for hop_index in range(hop_count):
+        result_type = (
+            DATA_TYPE if hop_index + 1 == hop_count else POINTER_DATA_TYPE
+        )
+        current = _emit_pointer_hop(
+            lines, hop_index, current, indirect_index, result_type
+        )
     for arithmetic_index in range(operation_count):
         current = _emit_unary_binary(
             lines, arithmetic_index,
@@ -872,10 +973,10 @@ _GENERATORS = {
     "fanout": _generate_fanout,
     "reduction": _generate_reduction,
     "diamond": _generate_diamond,
-    "mixed": _generate_mixed,
     "random_dag": _generate_random_dag,
     "recurrence_chain": _generate_recurrence_chain,
     "predicated_diamond": _generate_predicated_diamond,
+    "memory_stream": _generate_memory_stream,
     "pointer_chase": _generate_pointer_chase,
 }
 
@@ -897,7 +998,7 @@ def generate_motif_mlir(motif: str, operation_count: int, seed: int) -> str:
         raise ValueError("operation_count exceeds the supported motif range")
     text = _GENERATORS[name](operation_count, int(seed))
     # Guard each family contract rather than assuming every op in a lowered
-    # graph is one of the six v1 binary compute nodes. Pointer chasing has one
+    # graph is a binary compute node. Pointer chasing has one
     # extra i64 index increment in its loop-control path; its payload remains
     # exactly operation_count i32 add/mul nodes.
     operation_lines = re.findall(r'"neura\.(?:add|mul)"', text)
@@ -923,6 +1024,9 @@ def generate_motif_mlir(motif: str, operation_count: int, seed: int) -> str:
             raise AssertionError("pointer_chase must contain pointer/load chain")
         if text.count("neura.ctrl_mov") != 1:
             raise AssertionError("pointer_chase must contain one index backedge")
+    elif name == "memory_stream":
+        if text.count('"neura.gep"') < 2 or text.count('"neura.load"') < 2:
+            raise AssertionError("memory_stream must contain multiple load lanes")
     return text
 
 
@@ -957,68 +1061,61 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def canonical_dfg_sha256(text: str) -> str:
     return sha256_text(canonical_dfg_text(text))
 
 
+def default_pinned_architecture() -> Path:
+    return Path(__file__).resolve().parents[1] / PINNED_ARCHITECTURE_RELATIVE_PATH
+
+
 def write_architecture(path: Path, rows: int, columns: int,
-                       variant: str, registers: int = 16) -> None:
-    """Write a deterministic Neura architecture for a motif candidate."""
+                       variant: str, registers: int = PINNED_REGISTERS_PER_TILE,
+                       source: Optional[Path] = None) -> None:
+    """Copy the exact pinned Neura YAML used by every target rectangle.
+
+    Shape is supplied to Neura through the pass options, not by fabricating a
+    second YAML.  Keeping this compatibility function makes that distinction
+    explicit for callers that previously generated per-candidate YAML files.
+    """
     if variant not in DEFAULT_ARCHITECTURE_VARIANTS:
         raise ValueError(f"unknown architecture variant: {variant}")
-    fu_types = json.dumps(list(NEURA_FU_TYPES), separators=(", ", ": "))
-    if variant == "split-domain":
-        # Left tiles are memory/source-domain tiles; right tiles have the full
-        # operation set.  This keeps the split architecture materially
-        # different while retaining a legal placement domain for every v2 op.
-        tile_defaults = json.dumps(
-            ["constant", "mem", "mem_indexed"], separators=(", ", ": ")
-        )
-        first_compute_column = max(0, columns // 2)
-        overrides = "\n".join(
-            "  - tile_x: {x}\n"
-            "    tile_y: {y}\n"
-            "    fu_types: {fu_types}\n"
-            "    num_registers: {registers}\n"
-            "    existence: true".format(
-                x=x, y=y, registers=registers, fu_types=fu_types
-            )
-            for y in range(rows)
-            for x in range(first_compute_column, columns)
-        )
-    else:
-        tile_defaults = fu_types
-        overrides = ""
-    path.write_text("\n".join((
-        "architecture:",
-        '  name: "II Predictor Generated Motif"',
-        '  version: "1.0"',
-        "",
-        "multi_cgra_defaults:",
-        '  base_topology: "mesh"',
-        "  rows: 1",
-        "  columns: 1",
-        "",
-        "per_cgra_defaults:",
-        f"  rows: {rows}",
-        f"  columns: {columns}",
-        "  ctrl_mem_items: 64",
-        '  base_topology: "mesh"',
-        "",
-        "tile_defaults:",
-        f"  num_registers: {registers}",
-        f"  fu_types: {tile_defaults}",
-        "",
-        "link_defaults:",
-        "  latency: 1",
-        "  bandwidth: 32",
-        "",
-        "link_overrides:",
-        "",
-        "tile_overrides:",
-        overrides,
-        "",
-    )))
+    if not (1 <= rows <= PINNED_ARCHITECTURE_ROWS and
+            1 <= columns <= PINNED_ARCHITECTURE_COLUMNS):
+        raise ValueError("target rectangle exceeds the pinned Neura 4x4 array")
+    if registers != PINNED_REGISTERS_PER_TILE:
+        raise ValueError("register count must match the pinned Neura architecture")
+    architecture_source = (source or default_pinned_architecture()).resolve()
+    if sha256_file(architecture_source) != PINNED_ARCHITECTURE_SHA256:
+        raise ValueError("Neura architecture SHA-256 does not match the pinned YAML")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.resolve() != architecture_source:
+        shutil.copyfile(architecture_source, path)
+
+
+def candidate_shapes_for_base(
+    base: MotifBaseSpec, shapes: Sequence[Tuple[int, int]],
+) -> Tuple[Tuple[int, int], ...]:
+    """Return the balanced incomplete shape block for one base DFG."""
+    selected = tuple(dict.fromkeys(shapes))
+    if not selected:
+        raise ValueError("at least one target shape is required")
+    for rows, columns in selected:
+        if not (2 <= rows <= PINNED_ARCHITECTURE_ROWS and
+                2 <= columns <= PINNED_ARCHITECTURE_COLUMNS):
+            raise ValueError("Model 1 target shapes must lie between 2x2 and 4x4")
+    primary = PRIMARY_SHAPE if PRIMARY_SHAPE in selected else max(
+        selected, key=lambda shape: (shape[0] * shape[1], shape[0], shape[1])
+    )
+    secondary = tuple(shape for shape in selected if shape != primary)
+    if not secondary:
+        return (primary,)
+    paired = secondary[base.base_index % len(secondary)]
+    return (primary, paired)
 
 
 def make_candidates(
@@ -1026,7 +1123,8 @@ def make_candidates(
     output_dir: Path,
     shapes: Optional[Sequence[Tuple[int, int]]] = None,
     architecture_variants: Optional[Sequence[str]] = None,
-    registers: int = 16,
+    registers: int = PINNED_REGISTERS_PER_TILE,
+    architecture_source: Optional[Path] = None,
 ) -> Tuple[MotifCandidate, ...]:
     """Materialize source/architecture files and return predeclared candidates.
 
@@ -1036,8 +1134,15 @@ def make_candidates(
     """
     selected_shapes = tuple(shapes or DEFAULT_SHAPES)
     selected_variants = parse_architecture_variants(architecture_variants)
-    if registers <= 0:
-        raise ValueError("registers must be positive")
+    if registers != PINNED_REGISTERS_PER_TILE:
+        raise ValueError("register count must match the pinned Neura architecture")
+    shared_architecture = output_dir / "architecture" / "neura-main-4x4.yaml"
+    write_architecture(
+        shared_architecture, PINNED_ARCHITECTURE_ROWS,
+        PINNED_ARCHITECTURE_COLUMNS, "neura-main", registers,
+        architecture_source,
+    )
+    architecture_sha = sha256_file(shared_architecture)
     result: List[MotifCandidate] = []
     seen_base_hashes: Dict[str, str] = {}
     for base in bases:
@@ -1054,22 +1159,16 @@ def make_candidates(
                 f"{base.lineage} duplicates {prior_base}"
             )
         seen_base_hashes[hash_key] = base.lineage
-        for rows, columns in selected_shapes:
-            if rows < 1 or columns < 1:
-                raise ValueError(f"invalid motif shape: {rows}x{columns}")
+        for rows, columns in candidate_shapes_for_base(base, selected_shapes):
             for variant in selected_variants:
                 source_dir = output_dir / "motifs" / base.motif / base.base_id
                 candidate_dir = source_dir / f"{rows}x{columns}" / variant
                 candidate_dir.mkdir(parents=True, exist_ok=True)
                 source_path = candidate_dir / "input.mlir"
-                architecture_path = candidate_dir / "architecture.yaml"
                 # Every architecture candidate receives byte-identical
                 # input source; the hashes are also stored in the manifest.
                 source_path.write_text(source_text)
-                write_architecture(
-                    architecture_path, rows, columns, variant, registers
-                )
-                architecture_sha = sha256_text(architecture_path.read_text())
+                target_config_id = f"prefix-{rows}x{columns}"
                 candidate_id = (
                     f"{base.lineage}/{rows}x{columns}/{variant}/r{registers}"
                 )
@@ -1087,16 +1186,18 @@ def make_candidates(
                     base_id=base.base_id,
                     base_seed=base.base_seed,
                     root_seed=base.root_seed,
+                    base_index=base.base_index,
                     operation_count=base.operation_count,
                     rows=rows,
                     columns=columns,
                     architecture_variant=variant,
                     registers=registers,
                     source_path=str(source_path),
-                    architecture_path=str(architecture_path),
+                    architecture_path=str(shared_architecture),
                     source_sha256=source_sha,
                     canonical_dfg_sha256=canonical_sha,
                     architecture_sha256=architecture_sha,
+                    target_config_id=target_config_id,
                 ))
     return tuple(result)
 
@@ -1123,7 +1224,7 @@ def make_manifest(
     candidates: Sequence[MotifCandidate], output_dir: Path,
     seed: int, motifs: Sequence[str], shapes: Sequence[Tuple[int, int]],
     architecture_variants: Optional[Sequence[str]] = None,
-    registers: int = 16,
+    registers: int = PINNED_REGISTERS_PER_TILE,
 ) -> Dict[str, object]:
     """Build a pre-mapper manifest with every candidate in ``declared`` state."""
     records = []
@@ -1134,6 +1235,9 @@ def make_manifest(
             Path(candidate.architecture_path).relative_to(output_dir)
         )
         records.append(record)
+    architecture_path = output_dir / "architecture" / "neura-main-4x4.yaml"
+    if sha256_file(architecture_path) != PINNED_ARCHITECTURE_SHA256:
+        raise ValueError("corpus architecture is not the pinned Neura YAML")
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "status": "predeclared",
@@ -1148,6 +1252,19 @@ def make_manifest(
                 parse_architecture_variants(architecture_variants)
             ),
             "registers": int(registers),
+            "candidate_design": SHAPE_DESIGN,
+        },
+        "architecture": {
+            "path": architecture_path.relative_to(output_dir).as_posix(),
+            "sha256": PINNED_ARCHITECTURE_SHA256,
+            "neura_revision": PINNED_NEURA_REVISION,
+            "source_path": PINNED_ARCHITECTURE_RELATIVE_PATH.as_posix(),
+            "rows": PINNED_ARCHITECTURE_ROWS,
+            "columns": PINNED_ARCHITECTURE_COLUMNS,
+            "registers_per_tile": PINNED_REGISTERS_PER_TILE,
+            "ctrl_mem_items": PINNED_CTRL_MEM_ITEMS,
+            "target_shape_design": SHAPE_DESIGN,
+            "valid_tiles": "",
         },
         # All paths in candidate records are relative to the manifest.  Using
         # "." here keeps a manifest reproducible when the corpus is generated
@@ -1213,7 +1330,11 @@ __all__ = [
     "make_base_specs", "make_candidates", "make_manifest",
     "manifest_summary", "parse_architecture_variants", "parse_motif_names",
     "operation_bands_for_motif", "parse_shape", "parse_shapes", "sha256_text",
-    "MOTIF_ALIASES", "NEURA_FU_TYPES",
-    "stratified_operation_count", "update_manifest_candidate",
-    "write_architecture",
+    "MOTIF_ALIASES", "PRIMARY_SHAPE", "SHAPE_DESIGN",
+    "PINNED_ARCHITECTURE_SHA256", "PINNED_NEURA_REVISION",
+    "PINNED_ARCHITECTURE_ROWS", "PINNED_ARCHITECTURE_COLUMNS",
+    "PINNED_REGISTERS_PER_TILE", "PINNED_CTRL_MEM_ITEMS",
+    "PINNED_ARCHITECTURE_RELATIVE_PATH", "candidate_shapes_for_base",
+    "default_pinned_architecture", "sha256_file", "stratified_operation_count",
+    "update_manifest_candidate", "write_architecture",
 ]
