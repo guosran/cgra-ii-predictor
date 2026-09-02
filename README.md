@@ -54,8 +54,11 @@ The primary paper protocol assigns different sources to different roles:
 2. The fixed MachSuite revision is the final real-program test. It is never
    used to select features, Ridge strength, dead zone, generator parameters,
    or frontend support policy.
-3. Training varies array shape and masks, heterogeneous FU placement,
-   memory-tile placement, register capacity, link width/bandwidth, and latency.
+3. The implemented generated stratum varies array shape and homogeneous versus
+   split-domain FU placement. Tile masks, register capacity, memory-tile
+   placement, link width/bandwidth, and latency are separate architecture
+   extensions; they are not claimed as dimensions of the current frozen
+   training protocol.
 4. Mapper configuration varies only when configuration is part of the target;
    otherwise it remains fixed and recorded.
 
