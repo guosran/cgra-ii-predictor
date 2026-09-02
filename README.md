@@ -106,8 +106,10 @@ See schema/example-dataset.json. A minimal sample is:
 ~~~
 
 `lower_bound`, `rec_mii`, and `res_mii` are required contract fields outside
-the feature object. Dataset/model loaders reject them if selected as Ridge
-features.
+the feature object. `rec_mii` and `res_mii` are non-negative integers;
+`lower_bound=max(rec_mii,res_mii)` must be positive, so one component may be
+zero but both may not. Dataset/model loaders reject these fields if selected
+as Ridge features.
 
 Flat Neura experiment reports are accepted as an adapter compatibility format;
 new adapters should emit the nested portable schema.

@@ -83,13 +83,13 @@ def _validate_samples(
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(
                     f"sample {sample.sample_id} metadata.{name} must be a "
-                    "positive integer"
+                    "non-negative integer"
                 )
             numeric = float(value)
-            if not math.isfinite(numeric) or numeric < 1 or not numeric.is_integer():
+            if not math.isfinite(numeric) or numeric < 0 or not numeric.is_integer():
                 raise ValueError(
                     f"sample {sample.sample_id} metadata.{name} must be a "
-                    "positive integer"
+                    "non-negative integer"
                 )
             components[name] = numeric
         expected_bound = max(components.values())
@@ -357,14 +357,16 @@ def predict_compiled_ii(
     features: Mapping[str, float], *, rec_mii: float, res_mii: float,
 ) -> float:
     """Predict compiled II after independently checking the Rec/Res floor."""
+    if isinstance(lower_bound, bool) or not isinstance(lower_bound, (int, float)):
+        raise ValueError("prediction lower bound must be a positive integer")
     lower_bound = float(lower_bound)
     components = {"rec_mii": rec_mii, "res_mii": res_mii}
     for name, raw_value in components.items():
         if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
-            raise ValueError(f"prediction {name} must be a positive integer")
+            raise ValueError(f"prediction {name} must be a non-negative integer")
         value = float(raw_value)
-        if not math.isfinite(value) or value < 1.0 or not value.is_integer():
-            raise ValueError(f"prediction {name} must be a positive integer")
+        if not math.isfinite(value) or value < 0.0 or not value.is_integer():
+            raise ValueError(f"prediction {name} must be a non-negative integer")
         components[name] = value
     expected_bound = max(components.values())
     if (

@@ -38,6 +38,27 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertEqual(parsed["rec_mii"], 4)
         self.assertEqual(set(parsed), set(adapter.COST_FEATURE_NAMES))
 
+    def test_cost_parser_allows_zero_component_with_positive_derived_bound(self):
+        for rec_mii, res_mii in ((0, 5), (5, 0)):
+            with self.subTest(rec_mii=rec_mii, res_mii=res_mii):
+                parsed = adapter.parse_cost_features(
+                    cost_text(rec_mii=rec_mii, res_mii=res_mii)
+                )
+                self.assertEqual(
+                    parsed, {"rec_mii": rec_mii, "res_mii": res_mii}
+                )
+                adapter.add_prediction_features(parsed)
+                self.assertEqual(parsed["baseline_lb"], 5)
+
+        zero_floor = adapter.parse_cost_features(cost_text(rec_mii=0, res_mii=0))
+        self.assertEqual(zero_floor, {"rec_mii": 0, "res_mii": 0})
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            adapter.add_prediction_features(zero_floor)
+
+        self.assertIsNone(
+            adapter.parse_cost_features(cost_text(rec_mii=-1, res_mii=5))
+        )
+
     def test_cost_parser_rejects_label_contamination(self):
         for contamination in (
             "compiled_ii = 7 : i32",

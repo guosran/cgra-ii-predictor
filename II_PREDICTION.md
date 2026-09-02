@@ -113,7 +113,8 @@ For a report container, the loader requires and verifies its canonical model
 SHA-256. It also checks the model type, array dimensions,
 finite parameters, positive scales and Ridge coefficient, and non-negative dead
 zone/interval radius. Prediction rejects missing or non-finite features,
-duplicate sample IDs, labels, non-positive/non-integral Rec/Res components, and
+duplicate sample IDs, labels, negative/non-integral Rec/Res components (zero is
+allowed for either component when the resulting lower bound is positive), and
 any disagreement between `lower_bound`, `proven_lower_bound`, `baseline_lb`,
 and the exact `max(RecMII, ResMII)` contract.
 

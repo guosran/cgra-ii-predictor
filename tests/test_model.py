@@ -108,6 +108,58 @@ class ModelTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inconsistent base_dfg"):
             fit_ridge([inconsistent], ["pressure"], ridge=1.0)
 
+    def test_direct_sample_api_allows_zero_rec_or_res_but_not_zero_floor(self):
+        for rec_mii, res_mii in ((0, 3), (3, 0)):
+            row = Sample(
+                f"zero-{rec_mii}-{res_mii}", "g", 3, 3,
+                {"pressure": 1.0}, {
+                    "rec_mii": rec_mii, "res_mii": res_mii,
+                    "lower_bound_source": "rec_res_max_v1",
+                },
+            )
+            with self.subTest(rec_mii=rec_mii, res_mii=res_mii):
+                fitted = fit_ridge([row], ["pressure"], ridge=1.0)
+                self.assertGreaterEqual(predict_ridge(fitted, row), 3.0)
+
+        zero_floor = Sample(
+            "zero-floor", "g", 0, 1, {"pressure": 1.0}, {
+                "rec_mii": 0, "res_mii": 0,
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            fit_ridge([zero_floor], ["pressure"], ridge=1.0)
+
+        negative_component = Sample(
+            "negative-component", "g", 3, 3, {"pressure": 1.0}, {
+                "rec_mii": -1, "res_mii": 3,
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            fit_ridge([negative_component], ["pressure"], ridge=1.0)
+
+    def test_predict_compiled_ii_allows_zero_rec_or_res(self):
+        fitted = fit_ridge([
+            Sample(
+                "fit", "g", 3, 3, {"pressure": 1.0},
+                {"rec_mii": 0, "res_mii": 3},
+            ),
+        ], ["pressure"], ridge=1.0)
+        for rec_mii, res_mii in ((0, 3), (3, 0)):
+            with self.subTest(rec_mii=rec_mii, res_mii=res_mii):
+                prediction = predict_compiled_ii(
+                    fitted, 3, {"pressure": 1.0},
+                    rec_mii=rec_mii, res_mii=res_mii,
+                )
+                self.assertGreaterEqual(prediction, 3.0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            predict_compiled_ii(
+                fitted, 0, {"pressure": 1.0}, rec_mii=0, res_mii=0,
+            )
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            predict_compiled_ii(
+                fitted, 3, {"pressure": 1.0}, rec_mii=-1, res_mii=3,
+            )
+
     def test_each_group_gets_equal_total_training_weight(self):
         # This is deliberately nontrivial: a feature has predictive power, so
         # changing the effective Ridge penalty would move the prediction.

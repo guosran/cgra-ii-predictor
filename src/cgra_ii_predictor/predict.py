@@ -316,9 +316,9 @@ def parse_prediction_sample(
         component = _agree(
             component_values, f"{source} proven component {component_name}"
         )
-        if component < 1.0 or not component.is_integer():
+        if component < 0.0 or not component.is_integer():
             raise ValueError(
-                f"{source}: {component_name} must be a positive integer"
+                f"{source}: {component_name} must be a non-negative integer"
             )
         components[component_name] = component
         if component > lower_bound:

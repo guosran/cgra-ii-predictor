@@ -208,9 +208,9 @@ def _parse_sample(row: Mapping[str, Any], source: Path) -> Sample:
         value = _agree(
             values, f"sample {sample_id} {name}", source
         )
-        if value < 1.0 or not value.is_integer():
+        if value < 0.0 or not value.is_integer():
             raise ValueError(
-                f"{source}: sample {sample_id} {name} must be a positive integer"
+                f"{source}: sample {sample_id} {name} must be a non-negative integer"
             )
         components[name] = value
     expected_bound = max(components.values())

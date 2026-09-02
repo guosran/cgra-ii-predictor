@@ -18,6 +18,9 @@ predicted_compiled_ii = LB + max(0, predicted_residual)
 
 Every newly collected row records `lower_bound_source=rec_res_max_v1`.
 Explicit `lower_bound` or `baseline_lb` aliases must equal the Rec/Res maximum.
+Each RecMII/ResMII component is a non-negative integer; the derived `LB` must
+remain a positive integer, so `(0,3)` and `(3,0)` are valid while `(0,0)` is
+rejected.
 Portable training and prediction loaders require both integer components and
 reject `LB`, `rec_mii`, or `res_mii` if any model artifact selects them as
 features; this is a global contract, not only a Neura-adapter convention.

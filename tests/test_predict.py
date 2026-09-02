@@ -95,6 +95,45 @@ class PredictionTest(unittest.TestCase):
         self.assertEqual(small["predicted_compiled_ii"], 5.0)
         self.assertTrue(small["dead_zone_applied"])
 
+    def test_prediction_accepts_zero_rec_or_res_but_rejects_zero_floor(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            loaded = load_model_artifact(
+                self._write_report(Path(raw_directory))
+            )
+            for rec_mii, res_mii in ((0, 3), (3, 0)):
+                row = candidate()
+                row.update({
+                    "lower_bound": 3,
+                    "rec_mii": rec_mii,
+                    "res_mii": res_mii,
+                })
+                with self.subTest(rec_mii=rec_mii, res_mii=res_mii):
+                    parsed = parse_prediction_sample(
+                        row, loaded.model["feature_names"], "zero-component"
+                    )
+                    result = predict_sample(loaded, parsed)
+                    self.assertEqual(result["lower_bound"], 3.0)
+                    self.assertEqual(result["rec_mii"], float(rec_mii))
+                    self.assertEqual(result["res_mii"], float(res_mii))
+
+            zero_floor = candidate()
+            zero_floor.update({
+                "lower_bound": 0, "rec_mii": 0, "res_mii": 0,
+            })
+            with self.assertRaisesRegex(ValueError, "positive integer"):
+                parse_prediction_sample(
+                    zero_floor, loaded.model["feature_names"], "zero-floor"
+                )
+
+            negative_component = candidate()
+            negative_component["rec_mii"] = -1
+            with self.assertRaisesRegex(ValueError, "non-negative integer"):
+                parse_prediction_sample(
+                    negative_component,
+                    loaded.model["feature_names"],
+                    "negative-component",
+                )
+
     def test_prediction_input_rejects_labels_and_inconsistent_lower_bounds(self):
         labelled = candidate()
         labelled["compiled_ii"] = 8

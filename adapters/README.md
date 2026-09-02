@@ -27,6 +27,9 @@ The Neura adapter recomputes `baseline_lb = max(rec_mii, res_mii)` and records
 `lower_bound_source=rec_res_max_v1`. An explicitly supplied `baseline_lb` or
 portable `lower_bound` must agree exactly. RouteMII, RegMII, MemMII, and
 `analytical_ii` are absent from the main-based Model 1 record.
+Each RecMII/ResMII component is a non-negative integer, while the derived
+lower bound must be positive; one component may therefore be zero, but not
+both.
 
 For point inference, `--model-report MODEL --predict-fixture NAME=PATH` loads a
 hash-checked residual-Ridge artifact and runs only the analysis-only RecMII/

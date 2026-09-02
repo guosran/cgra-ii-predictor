@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -558,7 +559,7 @@ def parse_cost_features(text: str) -> Optional[Dict[str, object]]:
     if any(value is None for value in required.values()):
         return None
     result = {name: int(value) for name, value in required.items()}
-    if any(value < 1 for value in result.values()):
+    if any(value < 0 for value in result.values()):
         return None
     return result
 
@@ -591,11 +592,33 @@ def parse_checked_mapper_label(
 
 def resolve_rec_res_lower_bound(result: Sample) -> Tuple[int, str]:
     """Return the single authoritative v1 floor: max(RecMII, ResMII)."""
-    bound = max(int(result["rec_mii"]), int(result["res_mii"]))
+    components: Dict[str, int] = {}
+    for name in LOWER_BOUND_COMPONENT_NAMES:
+        raw_value = result.get(name)
+        if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+            raise ValueError(f"{name} must be a non-negative integer")
+        value = float(raw_value)
+        if not math.isfinite(value) or value < 0.0 or not value.is_integer():
+            raise ValueError(f"{name} must be a non-negative integer")
+        components[name] = int(value)
+    bound = max(components.values())
+    if bound < 1:
+        raise ValueError("lower bound must be a positive integer")
     for alias in ("lower_bound", "baseline_lb"):
-        if result.get(alias) is not None and int(result[alias]) != bound:
+        if result.get(alias) is None:
+            continue
+        raw_alias = result[alias]
+        if isinstance(raw_alias, bool) or not isinstance(raw_alias, (int, float)):
+            raise ValueError(f"{alias} must be a positive integer")
+        alias_value = float(raw_alias)
+        if (
+            not math.isfinite(alias_value) or alias_value < 1.0 or
+            not alias_value.is_integer()
+        ):
+            raise ValueError(f"{alias} must be a positive integer")
+        if int(alias_value) != bound:
             raise ValueError(
-                f"{alias}={result[alias]} disagrees with "
+                f"{alias}={raw_alias} disagrees with "
                 f"max(rec_mii,res_mii)={bound}"
             )
     return bound, "rec_res_max_v1"

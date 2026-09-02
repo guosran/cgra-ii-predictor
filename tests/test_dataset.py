@@ -235,6 +235,55 @@ class DatasetTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     load_dataset(path)
 
+    def test_zero_rec_or_res_is_allowed_but_zero_lower_bound_is_rejected(self):
+        for rec_mii, res_mii in ((0, 3), (3, 0)):
+            raw = {
+                "feature_names": ["x"],
+                "samples": [{
+                    "sample_id": f"zero-{rec_mii}-{res_mii}",
+                    "group": "g", "lower_bound": 3, "compiled_ii": 3,
+                    "features": {"x": 1},
+                    "rec_mii": rec_mii, "res_mii": res_mii,
+                    "lower_bound_source": "rec_res_max_v1",
+                }],
+            }
+            with self.subTest(rec_mii=rec_mii, res_mii=res_mii), \
+                    tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "zero-component.json"
+                path.write_text(json.dumps(raw))
+                sample = load_dataset(path).samples[0]
+                self.assertEqual(sample.metadata["rec_mii"], rec_mii)
+                self.assertEqual(sample.metadata["res_mii"], res_mii)
+
+        raw = {
+            "feature_names": ["x"],
+            "samples": [{
+                "sample_id": "zero-bound", "group": "g",
+                "lower_bound": 0, "compiled_ii": 1, "features": {"x": 1},
+                "rec_mii": 0, "res_mii": 0,
+            }],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "zero-bound.json"
+            path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, "lower_bound.*positive integer"):
+                load_dataset(path)
+
+    def test_negative_rec_or_res_is_rejected_as_non_negative_contract(self):
+        raw = {
+            "feature_names": ["x"],
+            "samples": [{
+                "sample_id": "negative-component", "group": "g",
+                "lower_bound": 3, "compiled_ii": 3, "features": {"x": 1},
+                "rec_mii": -1, "res_mii": 3,
+            }],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "negative-component.json"
+            path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, "non-negative integer"):
+                load_dataset(path)
+
     def test_bound_and_components_cannot_be_selected_as_features(self):
         for name in ("lower_bound", "baseline_lb", "rec_mii", "res_mii"):
             raw = {

@@ -15,8 +15,9 @@ y_i = II_i - b_i
 
 All input features are computed before mapping. The primary feature contract
 also excludes `b_i`, `RecMII_i`, and `ResMII_i`; the floor is applied once and
-is not relearned by Ridge. Each row must carry both integer components, and
-the loader verifies `b_i = max(RecMII_i, ResMII_i)` before fitting. Model
+is not relearned by Ridge. Each row must carry both non-negative integer
+components, and the loader verifies positive `b_i = max(RecMII_i, ResMII_i)`
+before fitting. Model
 artifacts naming any of these contract fields as features are rejected.
 Mapper output, search time, kernel name, and
 benchmark name are not features. Four IDs have different jobs:
