@@ -59,8 +59,12 @@ EVALUATION_SCHEMA = "machsuite-frozen-evaluation-v1"
 FROZEN_MODEL_STATUS = "frozen_before_machsuite_reveal"
 SMOKE_MODEL_STATUS = "smoke_only_not_for_frozen_evaluation"
 FROZEN_RIDGE_CANDIDATES = (0.1, 0.3, 1.0, 3.0, 10.0, 30.0)
-FROZEN_DEAD_ZONE_CANDIDATES = (0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
+FROZEN_DEAD_ZONE_CANDIDATES = (
+    0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0,
+)
 FROZEN_INTERVAL_QUANTILE = 0.9
+FROZEN_TREE_DEPTH = 0
+FROZEN_TREE_MIN_SAMPLES = 3
 FROZEN_MOTIFS = tuple(neura_motifs.DEFAULT_MOTIFS)
 FROZEN_MOTIF_SHAPES = tuple(
     f"{rows}x{columns}" for rows, columns in neura_motifs.DEFAULT_SHAPES
@@ -904,6 +908,12 @@ def validate_generated_training_report(
         FROZEN_INTERVAL_QUANTILE
     ):
         raise ValueError("training interval quantile differs from the frozen protocol")
+    if int(config.get("tree_depth", -1)) != FROZEN_TREE_DEPTH:
+        raise ValueError("training tree diagnostic depth differs from the frozen protocol")
+    if int(config.get("tree_min_samples", -1)) != FROZEN_TREE_MIN_SAMPLES:
+        raise ValueError(
+            "training tree diagnostic minimum differs from the frozen protocol"
+        )
     if tuple(config.get("motifs", ())) != FROZEN_MOTIFS:
         raise ValueError("training motifs differ from the frozen protocol")
     if tuple(config.get("motif_shapes", ())) != FROZEN_MOTIF_SHAPES:
@@ -1057,6 +1067,17 @@ def validate_generated_training_report(
     verified_improvement = neura_experiment.generated_nested_improvement_gate(
         verified_nested
     )
+    verified_generator_holdout = (
+        neura_experiment.nested_ridge_metadata_holdout(
+            training_samples, "generator_family",
+            FROZEN_RIDGE_CANDIDATES, FROZEN_DEAD_ZONE_CANDIDATES,
+        )
+    )
+    verified_family_transfer = (
+        neura_experiment.generated_family_transfer_gate(
+            verified_generator_holdout
+        )
+    )
     reported_model = report.get("trained_full_model")
     model_design_full_rank = bool(
         isinstance(reported_model, Mapping) and
@@ -1068,11 +1089,11 @@ def validate_generated_training_report(
         verified_nested is not None and bool(verified_nested.get("rows")) and
         verified_improvement.get("passed") is True and
         model_design_full_rank and
-        isinstance(generator_holdout, Mapping) and
-        generator_holdout.get("status") == "ok" and
-        int(generator_holdout.get("group_count", -1)) == len(
+        verified_generator_holdout.get("status") == "ok" and
+        int(verified_generator_holdout.get("group_count", -1)) == len(
             neura_motifs.DEFAULT_MOTIFS
         ) and
+        verified_family_transfer.get("passed") is True and
         report.get("selected_model") == "ridge" and
         requested_per_family == FROZEN_REQUESTED_BASES_PER_FAMILY and
         coverage.get("passed") is True and
@@ -1090,6 +1111,15 @@ def validate_generated_training_report(
         raise ValueError(
             "training candidate gate Ridge improvement disagrees with "
             "independently recomputed holdout"
+        )
+    if candidate_gate.get("generator_family_transfer") != verified_family_transfer:
+        raise ValueError(
+            "training candidate gate generator-family transfer disagrees "
+            "with independently recomputed holdout"
+        )
+    if generator_holdout != verified_generator_holdout:
+        raise ValueError(
+            "training generator-family holdout disagrees with recomputation"
         )
     if not isinstance(nested, Mapping):
         raise ValueError("training nested generated-lineage holdout is missing")

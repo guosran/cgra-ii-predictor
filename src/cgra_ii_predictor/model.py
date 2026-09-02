@@ -336,7 +336,8 @@ def _require_finite_array(array: np.ndarray, name: str) -> np.ndarray:
 
 
 def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
-              ridge: float, residual_dead_zone: float = 0.0) -> Model:
+              ridge: float, residual_dead_zone: float = 0.0, *,
+              include_training_diagnostics: bool = True) -> Model:
     if not samples:
         raise ValueError("cannot fit an empty sample set")
     ridge = _validated_control(ridge, "ridge", strictly_positive=True)
@@ -383,22 +384,33 @@ def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
             _require_finite_array(rhs, "normal-equation right-hand side")
             weights = np.linalg.solve(normal_matrix, rhs)
             _require_finite_array(weights, "weights")
-            singular_values = np.linalg.svd(design, compute_uv=False)
-            _require_finite_array(singular_values, "design singular values")
-            design_rank = int(np.linalg.matrix_rank(design))
-            condition_number = (
-                float(singular_values[0] / singular_values[-1])
-                if singular_values[-1] > 0.0 else None
-            )
-            feature_support = {
-                name: {
-                    "minimum": float(np.min(x[:, index])),
-                    "p01": float(np.quantile(x[:, index], 0.01)),
-                    "p99": float(np.quantile(x[:, index], 0.99)),
-                    "maximum": float(np.max(x[:, index])),
+            diagnostics: Model = {}
+            if include_training_diagnostics:
+                singular_values = np.linalg.svd(design, compute_uv=False)
+                _require_finite_array(singular_values, "design singular values")
+                tolerance = (
+                    singular_values[0] * max(design.shape) *
+                    np.finfo(singular_values.dtype).eps
+                )
+                design_rank = int(np.sum(singular_values > tolerance))
+                condition_number = (
+                    float(singular_values[0] / singular_values[-1])
+                    if singular_values[-1] > 0.0 else None
+                )
+                diagnostics = {
+                    "training_feature_support": {
+                        name: {
+                            "minimum": float(np.min(x[:, index])),
+                            "p01": float(np.quantile(x[:, index], 0.01)),
+                            "p99": float(np.quantile(x[:, index], 0.99)),
+                            "maximum": float(np.max(x[:, index])),
+                        }
+                        for index, name in enumerate(feature_names)
+                    },
+                    "training_design_rank": design_rank,
+                    "training_design_column_count": int(design.shape[1]),
+                    "training_design_condition_number": condition_number,
                 }
-                for index, name in enumerate(feature_names)
-            }
     except FloatingPointError as error:
         raise ValueError(
             "Ridge fit overflowed; fitted statistics must be finite"
@@ -418,7 +430,7 @@ def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
     _require_finite_array(weights, "weights")
     if not math.isfinite(float(sample_weights.sum())):
         raise ValueError("fitted training weight sum must be finite")
-    return {
+    model: Model = {
         "model_type": "residual_ridge",
         "feature_names": list(feature_names),
         "mean": mean.tolist(),
@@ -448,11 +460,9 @@ def fit_ridge(samples: Sequence[Sample], feature_names: Sequence[str],
             )
             for sample in samples
         }),
-        "training_feature_support": feature_support,
-        "training_design_rank": design_rank,
-        "training_design_column_count": int(design.shape[1]),
-        "training_design_condition_number": condition_number,
     }
+    model.update(diagnostics)
+    return model
 
 
 def raw_ridge_residual_from_features(
@@ -890,7 +900,7 @@ def select_ridge_hyperparameters(
     folds = _validation_group_folds(selection_samples)
     best: Tuple[float, float, float, float, float] = None  # type: ignore[assignment]
     for ridge in ridge_candidates:
-        raw: List[Tuple[Sample, Model]] = []
+        raw: List[Tuple[Sample, float]] = []
         for held_out_groups in folds:
             held_out = set(held_out_groups)
             train = [
@@ -901,18 +911,44 @@ def select_ridge_hyperparameters(
                 sample for sample in selection_samples
                 if sample.group in held_out
             ]
-            model = fit_ridge(train, feature_names, ridge)
-            raw.extend((sample, model) for sample in test)
+            model = fit_ridge(
+                train, feature_names, ridge,
+                include_training_diagnostics=False,
+            )
+            raw.extend(
+                (sample, raw_ridge_residual(model, sample))
+                for sample in test
+            )
         for dead_zone in dead_zone_candidates:
-            rows: List[Prediction] = []
-            for sample, uncalibrated in raw:
-                model = dict(uncalibrated)
-                model["residual_dead_zone"] = dead_zone
-                rows.extend(prediction_rows(model, [sample]))
+            group_errors: Dict[str, List[float]] = defaultdict(list)
+            stratum_groups: Dict[str, set[str]] = defaultdict(set)
+            all_errors: List[float] = []
+            for sample, raw_residual in raw:
+                residual = max(0.0, raw_residual)
+                if residual < dead_zone:
+                    residual = 0.0
+                error = abs(
+                    sample.lower_bound + residual - sample.compiled_ii
+                )
+                all_errors.append(error)
+                group_errors[sample.group].append(error)
+                stratum = str(sample.metadata.get(
+                    "training_stratum", "__all__"
+                ))
+                stratum_groups[stratum].add(sample.group)
+            group_maes = {
+                group: sum(errors) / len(errors)
+                for group, errors in group_errors.items()
+            }
+            macro = sum(group_maes.values()) / len(group_maes)
+            stratified_macro = sum(
+                sum(group_maes[group] for group in groups) / len(groups)
+                for groups in stratum_groups.values()
+            ) / len(stratum_groups)
             score = (
-                stratified_macro_group_mae(rows, "prediction"),
-                macro_group_mae(rows, "prediction"),
-                mae(rows, "prediction"),
+                stratified_macro,
+                macro,
+                sum(all_errors) / len(all_errors),
                 ridge,
                 dead_zone,
             )
@@ -943,7 +979,10 @@ def nested_group_holdout(
         ridge, dead_zone = select_ridge_hyperparameters(
             train, feature_names, ridge_candidates, dead_zone_candidates
         )
-        model = fit_ridge(train, feature_names, ridge, dead_zone)
+        model = fit_ridge(
+            train, feature_names, ridge, dead_zone,
+            include_training_diagnostics=False,
+        )
         rows.extend(prediction_rows(model, test))
         for group in held_out_groups:
             chosen[group] = {

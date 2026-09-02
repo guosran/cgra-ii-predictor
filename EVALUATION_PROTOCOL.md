@@ -79,6 +79,8 @@ Before a model can be frozen, its generated nested-base-lineage macro MAE must
 be strictly below the RecMII/ResMII-floor macro MAE. This is a pre-MachSuite
 utility gate, not evidence of real-program generalization. The random-row
 diagnostic and MachSuite data cannot satisfy it.
+The separate leave-one-generator-family-out macro MAE must not exceed the
+floor. A tie is conservative fallback and is not called an improvement.
 
 All reports produced by this command are marked `exploratory`, with labels
 available at evaluation time and `frozen_test=false`.
@@ -120,9 +122,10 @@ label-provenance record.
 
 The repository now contains the pinned inventory and executable three-stage
 workflow. The label-free compatibility preflight has 11/19 ready and 8/19
-lowering-censored candidates. No final generated-only model has yet been
-frozen and no MachSuite labels have been revealed, so there is still no frozen
-accuracy claim.
+lowering-censored candidates. The formal generated-only report meets the scale,
+coverage, full-rank, nested-improvement, and generator-family non-degradation
+freeze gates. No MachSuite prediction seal or mapper labels have been produced,
+so there is still no frozen accuracy claim.
 
 The local seal is tamper-evident, not a trusted timestamp: all files could in
 principle be regenerated after labels were seen. Publish the seal hash to Git,

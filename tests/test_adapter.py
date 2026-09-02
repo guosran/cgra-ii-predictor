@@ -27,7 +27,10 @@ class NeuraAdapterTest(unittest.TestCase):
             {"task": "k", "sample": "k-3x3", "shape": "3x3",
              "tile_count": 9, "predicted_compiled_ii": 5.0},
             {"task": "k", "sample": "k-4x3", "shape": "4x3",
-             "tile_count": 12, "predicted_compiled_ii": 6.0},
+             "tile_count": 12, "predicted_compiled_ii": 3.0,
+             "feature_support": {
+                 "outside_observed_range": ["routing_cut_pressure"]
+             }},
             {"task": "k", "sample": "k-4x4", "shape": "4x4",
              "tile_count": 16, "predicted_compiled_ii": 4.0},
         ]
@@ -37,6 +40,9 @@ class NeuraAdapterTest(unittest.TestCase):
         )
         self.assertEqual(summary["throughput_first_shape"], "4x4")
         self.assertEqual(summary["mapper_verification_order"][0], "k-4x4")
+        self.assertEqual(
+            summary["unsupported_out_of_range_candidate_ids"], ["k-4x3"]
+        )
 
     def test_neura_root_prefers_environment_then_initialized_submodule(self):
         with tempfile.TemporaryDirectory() as directory:

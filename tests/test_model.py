@@ -63,6 +63,13 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(model["training_design_column_count"], 3)
         for row in self.samples:
             self.assertGreaterEqual(predict_ridge(model, row), row.lower_bound)
+
+        fold_model = fit_ridge(
+            self.samples, ["pressure", "depth"], ridge=1.0,
+            include_training_diagnostics=False,
+        )
+        self.assertNotIn("training_feature_support", fold_model)
+        self.assertEqual(fold_model["weights"], model["weights"])
         with self.assertRaisesRegex(ValueError, "must equal max"):
             predict_compiled_ii(
                 model, 5, self.samples[0].features,

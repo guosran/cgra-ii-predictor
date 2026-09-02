@@ -117,6 +117,12 @@ FEATURE_NAMES = (
     "routing_edge_pressure",
     "routing_cut_pressure",
     "register_pressure",
+    "semantic_branch_density",
+    "semantic_cut_fraction",
+    "multi_input_density",
+    "memory_op_density",
+    "pointer_path_fraction",
+    "memory_path_fraction",
     "split_domain",
 )
 
@@ -126,23 +132,17 @@ FEATURE_NAMES = (
 # features.  The Ridge model sees only pre-mapping graph structure and raw
 # architecture topology and predicts the residual above that floor.
 MODEL_FEATURE_NAMES = (
-    "semantic_edges",
     "semantic_depth",
     "semantic_width",
-    "semantic_max_fanout",
-    "semantic_branch_nodes",
-    "semantic_cutwidth",
-    "live_value_peak",
-    "multi_input_nodes",
-    "memory_ops",
-    "phis",
-    "predicates",
-    "pointer_path",
-    "memory_path",
-    "control_path",
+    "sources",
+    "semantic_branch_density",
+    "semantic_cut_fraction",
+    "multi_input_density",
+    "memory_op_density",
+    "pointer_path_fraction",
+    "memory_path_fraction",
     "compute_fu_peak_pressure",
     "memory_fu_pressure",
-    "routing_edge_pressure",
     "routing_cut_pressure",
     "register_pressure",
 )
@@ -2207,6 +2207,22 @@ def graph_features_from_neura(
             result["semantic_cutwidth"] / bisection_links
         ),
         "register_pressure": result["live_value_peak"] / total_registers,
+        "semantic_branch_density": (
+            result["semantic_branch_nodes"] / max(1, result["semantic_edges"])
+        ),
+        "semantic_cut_fraction": (
+            result["semantic_cutwidth"] / max(1, result["semantic_edges"])
+        ),
+        "multi_input_density": (
+            result["multi_input_nodes"] / max(1, result["semantic_edges"])
+        ),
+        "memory_op_density": result["memory_ops"] / max(1, result["nodes"]),
+        "pointer_path_fraction": (
+            result["pointer_path"] / max(1, result["semantic_depth"])
+        ),
+        "memory_path_fraction": (
+            result["memory_path"] / max(1, result["semantic_depth"])
+        ),
     })
     return result
 
@@ -2470,8 +2486,18 @@ def shape_selection_summary(
             grouped.setdefault(task, []).append(prediction)
     summaries: List[Dict[str, object]] = []
     for task, candidates in grouped.items():
+        supported = [
+            candidate for candidate in candidates
+            if not (
+                isinstance(candidate.get("feature_support"), Mapping) and
+                candidate["feature_support"].get("outside_observed_range")
+            )
+        ]
+        unsupported = [
+            candidate for candidate in candidates if candidate not in supported
+        ]
         ordered = sorted(
-            candidates,
+            supported,
             key=lambda row: (
                 float(row["predicted_compiled_ii"]),
                 int(row["tile_count"]),
@@ -2479,7 +2505,7 @@ def shape_selection_summary(
             ),
         )
         frontier = []
-        for candidate in candidates:
+        for candidate in supported:
             area = int(candidate["tile_count"])
             ii = float(candidate["predicted_compiled_ii"])
             dominated = any(
@@ -2489,7 +2515,7 @@ def shape_selection_summary(
                     int(other["tile_count"]) < area or
                     float(other["predicted_compiled_ii"]) < ii
                 )
-                for other in candidates if other is not candidate
+                for other in supported if other is not candidate
             )
             if not dominated:
                 frontier.append(candidate)
@@ -2502,10 +2528,18 @@ def shape_selection_summary(
             "objective": "minimize_predicted_ii_and_active_tile_count",
             "pareto_candidate_ids": [row["sample"] for row in frontier],
             "pareto_shapes": [row["shape"] for row in frontier],
-            "throughput_first_candidate_id": ordered[0]["sample"],
-            "throughput_first_shape": ordered[0]["shape"],
+            "throughput_first_candidate_id": (
+                ordered[0]["sample"] if ordered else None
+            ),
+            "throughput_first_shape": ordered[0]["shape"] if ordered else None,
             "mapper_verification_order": [row["sample"] for row in ordered],
-            "selection_status": "prediction_ranking_requires_mapper_verification",
+            "unsupported_out_of_range_candidate_ids": [
+                row["sample"] for row in unsupported
+            ],
+            "selection_status": (
+                "prediction_ranking_requires_mapper_verification"
+                if ordered else "no_candidate_within_training_feature_range"
+            ),
         })
     return summaries
 
@@ -2835,6 +2869,54 @@ def generated_nested_improvement_gate(
         "absolute_improvement": improvement,
         "relative_improvement": relative,
         "passed": bool(valid and ridge_value < baseline_value),
+        "machsuite_labels_used": False,
+    }
+
+
+def generated_family_transfer_gate(
+    metadata_holdout: Optional[Mapping[str, object]],
+) -> Dict[str, object]:
+    """Require conservative non-degradation on an unseen motif family.
+
+    A family deliberately represents a distinct topology mechanism, so strict
+    improvement is not identifiable when the only family exhibiting a given
+    residual pattern is itself held out.  The stronger same-population lineage
+    gate above remains strict; this extrapolation gate prevents Ridge from
+    being worse than falling back to the Rec/Res floor.
+    """
+    evaluation = (
+        metadata_holdout.get("evaluation")
+        if isinstance(metadata_holdout, Mapping) else None
+    )
+    baseline = (
+        evaluation.get("baseline_macro_family_mae")
+        if isinstance(evaluation, Mapping) else None
+    )
+    ridge = (
+        evaluation.get("ridge_macro_family_mae")
+        if isinstance(evaluation, Mapping) else None
+    )
+    valid = all(
+        isinstance(value, (int, float)) and not isinstance(value, bool) and
+        math.isfinite(float(value)) and float(value) >= 0.0
+        for value in (baseline, ridge)
+    )
+    baseline_value = float(baseline) if valid else None
+    ridge_value = float(ridge) if valid else None
+    tolerance = 1e-12
+    return {
+        "status": "ok" if valid else "unavailable",
+        "source": "leave_one_generator_family_out",
+        "metric": "macro_mean_absolute_error",
+        "rule": "ridge_macro_mae <= rec_res_lower_bound_macro_mae",
+        "baseline_macro_mae": baseline_value,
+        "ridge_macro_mae": ridge_value,
+        "absolute_improvement": (
+            baseline_value - ridge_value if valid else None
+        ),
+        "passed": bool(
+            valid and ridge_value <= baseline_value + tolerance
+        ),
         "machsuite_labels_used": False,
     }
 
@@ -3269,6 +3351,24 @@ def motif_coverage_summary(
             if declared_base_cells.get((family, canonical), set()) ==
             expected_cells_for_index(declared_base_indices[(family, canonical)])
         }
+        complete_cell_counts = {
+            cell: len(cell_bases[(family, cell)].intersection(complete))
+            for cell in cells
+        }
+        minimum_complete_cell_counts = {
+            cell: (
+                math.ceil(
+                    len(declared_family_cells[(family, cell)]) *
+                    minimum_complete_bases_per_family / requested
+                )
+                if requested is not None and requested > 0 else 0
+            )
+            for cell in cells
+        }
+        cell_coverage_passed = all(
+            complete_cell_counts[cell] >= minimum_complete_cell_counts[cell]
+            for cell in cells
+        )
         all_successful_bases.update(base_map)
         family_records[family] = {
             "successful_distinct_base_dfg_count": len(base_map),
@@ -3284,6 +3384,11 @@ def motif_coverage_summary(
             "shape_variant_successful_candidate_counts": {
                 cell: cell_candidate_counts[(family, cell)] for cell in cells
             },
+            "shape_variant_complete_base_counts": complete_cell_counts,
+            "shape_variant_minimum_complete_counts": (
+                minimum_complete_cell_counts
+            ),
+            "shape_variant_coverage_passed": cell_coverage_passed,
             "missing_shape_variant_cells": {
                 canonical: [
                     cell for cell in sorted(declared_base_cells.get(
@@ -3305,6 +3410,7 @@ def motif_coverage_summary(
             ),
             "passed": (
                 len(complete) >= minimum_complete_bases_per_family and
+                cell_coverage_passed and
                 (requested is None or (
                     requested > 0 and len(complete) <= requested and
                     len(complete) / requested >= (
@@ -3651,7 +3757,8 @@ def parse_args() -> argparse.Namespace:
               "nested family-holdout selector."),
     )
     parser.add_argument(
-        "--residual-dead-zone-candidates", default="0,0.25,0.5,0.75,1,1.5,2",
+        "--residual-dead-zone-candidates",
+        default="0,0.25,0.5,0.75,1,1.5,2,2.5,3",
         help=("Comma-separated non-negative residual thresholds considered "
               "only by the nested family-holdout selector."),
     )
@@ -4650,6 +4757,8 @@ def main() -> int:
             "ridge_candidates": ridge_candidates,
             "residual_dead_zone_candidates": dead_zone_candidates,
             "interval_empirical_quantile": interval_quantile,
+            "tree_depth": args.tree_depth,
+            "tree_min_samples": args.tree_min_samples,
             "motif_samples_per_family": motif_count,
             "motif_jobs": args.motif_jobs,
             "motif_resume": args.motif_resume,
@@ -4736,6 +4845,9 @@ def main() -> int:
     generated_improvement = generated_nested_improvement_gate(
         nested_ridge_holdout
     )
+    generator_family_transfer = generated_family_transfer_gate(
+        metadata_holdouts["generator_family"]
+    )
     model_design_full_rank = bool(
         isinstance(trained_full_model, Mapping) and
         trained_full_model.get("training_design_rank") ==
@@ -4747,6 +4859,7 @@ def main() -> int:
         model_design_full_rank and
         nested_ridge_holdout is not None and
         generator_family_holdout_available and
+        generator_family_transfer["passed"] is True and
         generated_coverage["passed"] is True and
         generated_improvement["passed"] is True
     )
@@ -4845,8 +4958,10 @@ def main() -> int:
                 "at least 200 complete distinct base DFGs per generator family",
                 "both declared shape cells for every complete base",
                 "balanced global coverage of all 2x2-through-4x4 rectangles",
+                "per-family per-shape complete rate at the 200/250 threshold",
                 "nested generated-base lineage model selection",
                 "whole-generator-family holdout requested and available",
+                "unseen-generator-family Ridge macro MAE no worse than LB",
                 "nested generated-lineage Ridge macro MAE strictly below LB",
                 "full-rank intercept-plus-feature training design",
                 "structure-only model features disjoint from Rec/Res floor",
@@ -4864,6 +4979,7 @@ def main() -> int:
             ),
             "coverage": generated_coverage,
             "generated_nested_improvement": generated_improvement,
+            "generator_family_transfer": generator_family_transfer,
             "model_design_full_rank": model_design_full_rank,
             "model_design_rank": (
                 trained_full_model.get("training_design_rank")

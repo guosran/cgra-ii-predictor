@@ -233,6 +233,14 @@ def generated_report(
         model, interval_rows, machsuite_frozen.FROZEN_INTERVAL_QUANTILE
     )
     improvement = neura_experiment.generated_nested_improvement_gate(nested)
+    generator_holdout = neura_experiment.nested_ridge_metadata_holdout(
+        training_samples, "generator_family",
+        machsuite_frozen.FROZEN_RIDGE_CANDIDATES,
+        machsuite_frozen.FROZEN_DEAD_ZONE_CANDIDATES,
+    )
+    family_transfer = neura_experiment.generated_family_transfer_gate(
+        generator_holdout
+    )
     coverage = machsuite_frozen.generated_training_coverage(
         samples, requested_bases_per_family=requested_per_family,
         declared_candidates=json.loads(manifest_path.read_text())["candidates"],
@@ -240,6 +248,7 @@ def generated_report(
     ready = bool(
         coverage["passed"] and
         improvement["passed"] and
+        family_transfer["passed"] and
         model["training_design_rank"] ==
         model["training_design_column_count"] ==
         len(neura_experiment.MODEL_FEATURE_NAMES) + 1 and
@@ -285,6 +294,8 @@ def generated_report(
                 "interval_empirical_quantile": (
                     machsuite_frozen.FROZEN_INTERVAL_QUANTILE
                 ),
+                "tree_depth": machsuite_frozen.FROZEN_TREE_DEPTH,
+                "tree_min_samples": machsuite_frozen.FROZEN_TREE_MIN_SAMPLES,
                 "motif_samples_per_family": requested_per_family,
                 "motifs": list(machsuite_frozen.FROZEN_MOTIFS),
                 "motif_shapes": list(
@@ -321,6 +332,7 @@ def generated_report(
             ),
             "coverage": coverage,
             "generated_nested_improvement": improvement,
+            "generator_family_transfer": family_transfer,
             "model_design_full_rank": (
                 model["training_design_rank"] ==
                 model["training_design_column_count"] ==
@@ -334,10 +346,7 @@ def generated_report(
         "selected_model": "ridge",
         "nested_ridge_family_holdout": nested,
         "nested_ridge_metadata_holdouts": {
-            "generator_family": {
-                "status": "ok",
-                "group_count": len(set(motifs)),
-            }
+            "generator_family": generator_holdout,
         },
         "motif_corpus": generated_corpus,
         "samples": training_samples,

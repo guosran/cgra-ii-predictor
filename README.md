@@ -169,6 +169,7 @@ python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
   --metadata-holdout-key generator_family \
   --motif-jobs 12 --motif-checkpoint-every 32 \
+  --tree-depth 0 \
   --timeout 60 \
   --output-dir /path/to/random-training
 ~~~
@@ -184,8 +185,10 @@ succeed in both cells enter validation or fitting; partial successes remain
 auditable but excluded. Checkpoints are atomic, manifest records remain in
 candidate-declaration order, and only the main coordinator updates the
 manifest. `--samples` is retained as a legacy narrow random-DAG generator and
-is not automatically mixed into this
-motif corpus.  See [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
+is not automatically mixed into this motif corpus. `--tree-depth 0` keeps only
+a constant-residual tree diagnostic; the frozen model class is predeclared
+Ridge, so an exhaustive threshold tree is not needed at formal scale. See
+[CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
 
 To resume that collection after an interruption, use the same output directory
@@ -196,7 +199,8 @@ python3 adapters/neura_experiment.py \
   --output-dir /path/to/random-training \
   --motif-resume \
   --metadata-holdout-key generator_family \
-  --motif-jobs 4 --motif-checkpoint-every 32 \
+  --motif-jobs 12 --motif-checkpoint-every 32 \
+  --tree-depth 0 \
   --timeout 60
 ~~~
 
@@ -250,6 +254,7 @@ python3 adapters/neura_experiment.py \
   --motif-samples-per-family 250 \
   --metadata-holdout-key generator_family \
   --motif-jobs 12 --motif-checkpoint-every 32 \
+  --tree-depth 0 \
   --timeout 60 \
   --output-dir /path/to/random-training
 
@@ -284,7 +289,7 @@ python3 adapters/machsuite_frozen.py reveal \
 The formal contract predeclares exactly 250 bases in each of nine families:
 2,250 bases and 4,500 paired shape candidates. At least 200 complete bases per
 family must remain, giving at least 1,800 fitted lineages and 3,600 rows.
-The 19-feature design plus intercept must also be full rank before freezing.
+The 13-feature design plus intercept must also be full rank before freezing.
 `--allow-small-smoke` can exercise serialization on a tiny corpus, but marks
 the artifact smoke-only and `predict` refuses it for frozen MachSuite.
 `freeze-model` also re-generates each source, verifies all source,

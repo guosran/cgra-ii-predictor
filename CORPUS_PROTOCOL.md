@@ -253,6 +253,8 @@ balanced over the other eight 2x2-through-4x4 shapes. It is fit-eligible only if
 both cells succeed. The gate requires at least 200 complete bases in every
 family, or 1,800 lineages and 3,600 training rows. Partial successes remain
 visible in `labelled_samples`; every failure remains in the manifest.
+Each family/shape cell must also preserve the same 80% complete fraction:
+25 or 26 complete bases for secondary cells declared 31 or 32 times.
 
 This paired complete-case design makes shape effects identifiable but selects
 for graphs that the current mapper completes on both candidates. Report
@@ -262,7 +264,7 @@ graphs. The old `--samples` option remains a legacy narrow random-DAG generator
 and is outside the frozen corpus.
 
 The frozen-model command additionally requires nested base-lineage selection,
-a whole-generator-family holdout, and strictly lower generated nested-lineage
-macro MAE for Ridge than for the Rec/Res floor. A small override produces an
+a whole-generator-family holdout that does not degrade the Rec/Res floor, and
+strictly lower generated nested-lineage macro MAE than that floor. A small override produces an
 artifact that the frozen MachSuite predictor refuses. A large row count from
 one template does not substitute for distinct canonical DFGs or lineages.

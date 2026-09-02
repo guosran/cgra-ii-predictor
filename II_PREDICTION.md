@@ -19,6 +19,23 @@ Prediction needs exactly two kinds of numeric facts:
    `lower_bound`, `proven_lower_bound`, `rec_mii`, and `res_mii`. Model and
    dataset loaders reject artifacts that try to select any of them.
 
+Model 1 freezes 13 structure and structure/resource-interaction features:
+
+~~~text
+semantic_depth, semantic_width, sources, semantic_branch_density,
+semantic_cut_fraction, multi_input_density, memory_op_density,
+pointer_path_fraction, memory_path_fraction, compute_fu_peak_pressure,
+memory_fu_pressure, routing_cut_pressure, register_pressure
+~~~
+
+The pressure and density ratios use active tiles, memory-capable boundary tiles,
+directed mesh links, bisection links, and physical registers from the pinned
+Neura YAML. They are descriptive features, not extra lower-bound terms.
+Raw graph-size counts that caused each label-free MachSuite task to exceed the
+training range on at least one feature are deliberately excluded; depth, width,
+sources, normalized topology densities, and resource pressures retain the
+relevant structure.
+
 `compiled_ii` is a training/evaluation label. It is forbidden at the sample,
 feature, and metadata levels of the standalone prediction-input schema and is
 never used during inference. A full historical training report may contain
@@ -141,7 +158,6 @@ analysis-only RecMII/ResMII pass plus static feature extraction, and predict:
 python3 adapters/neura_experiment.py \
   --model-report /path/to/current-model.json \
   --predict-fixture kernel=/path/to/lowered-kernel.mlir \
-  --predict-shape 4x4 \
   --output-dir /tmp/kernel-ii-prediction
 ~~~
 
@@ -160,6 +176,39 @@ In this mode:
   any revision or dirty-producer warning;
 - failure to produce every requested prediction is reported as incomplete and
   returns a nonzero process status.
+
+## Per-task target-shape selection
+
+Without `--predict-shape`, the adapter evaluates all nine prefix rectangles
+`R x C` with `R,C in {2,3,4}`. Every candidate uses the same byte-exact Neura
+4x4 YAML; both the Rec/Res analysis and later mapper verification receive the
+same existing `x-tiles=C y-tiles=R` override. Non-rectangular `valid-tiles`
+masks are not used because that path is not reliable in the pinned Neura
+revision.
+
+For each task, the report contains:
+
+1. one continuous compiled-II estimate per rectangle;
+2. the nondominated `(active tile count, predicted II)` Pareto candidates;
+3. the throughput-first candidate, breaking an II tie toward fewer tiles;
+4. a prediction-ranked order for verification with the unchanged Neura mapper.
+
+There is intentionally no universal single “best” shape. Throughput-first work
+chooses the lowest predicted II; an area-constrained caller chooses the lowest
+II point within its tile budget; an area-first caller starts at the smallest
+Pareto point. A prediction ranks mapper attempts but never proves feasibility.
+The transposed shapes may receive the same estimate when their Rec/Res facts
+and pressure features match, which is consistent with the x/y symmetry of the
+pinned mesh and boundary-memory layout; the mapper order remains the final
+tie-break experiment.
+
+The final fitted artifact stores each feature's observed min, 1st percentile,
+99th percentile, and max. Values outside the central 98% are reported as tail
+diagnostics; values outside the observed min/max produce a hard OOD warning.
+This is a feature-wise support check, not proof of multivariate in-distribution
+generalization.
+Hard-OOD shape candidates remain in the prediction audit record but are
+excluded from the automatic Pareto frontier and mapper-verification order.
 
 Historical Model 1 artifacts use an earlier feature contract and are not valid
 for the primary frozen MachSuite workflow. A final artifact must be trained on

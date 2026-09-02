@@ -1,6 +1,6 @@
 # Model 1 status
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 Model 1 is an offline predictor of the `compiled_ii` produced by one recorded
 Neura heuristic mapper. It neither changes the mapper nor proves that its point
@@ -42,26 +42,20 @@ commit in this work.
 
 The primary Ridge model does not receive `LB`, `rec_mii`, or `res_mii` as a
 feature. The floor is applied exactly once after Ridge predicts the remaining
-mapper gap. The 19 primary features are all available before mapping:
+mapper gap. The 13 primary features are all available before mapping:
 
 ```text
-semantic_edges
 semantic_depth
 semantic_width
-semantic_max_fanout
-semantic_branch_nodes
-semantic_cutwidth
-live_value_peak
-multi_input_nodes
-memory_ops
-phis
-predicates
-pointer_path
-memory_path
-control_path
+sources
+semantic_branch_density
+semantic_cut_fraction
+multi_input_density
+memory_op_density
+pointer_path_fraction
+memory_path_fraction
 compute_fu_peak_pressure
 memory_fu_pressure
-routing_edge_pressure
 routing_cut_pressure
 register_pressure
 ```
@@ -70,6 +64,13 @@ This separation avoids label leakage, double counting, and the interpretability
 problem of claiming an analytical term both as a theorem and as a learned
 coefficient. Cost-model diagnostics may be evaluated as generated-training
 ablations, but a MachSuite result may not be used to select them.
+Raw graph-size counts were deliberately not kept in the fitted vector: a
+label-free MachSuite preflight showed that they extrapolated beyond the
+generated range. The retained densities, path fractions, and resource
+pressures keep all 11 preflight-ready 4x4 DFGs inside every univariate training
+min/max. This is only a support diagnostic, not an accuracy result; those
+covariates were visible during design, so the protocol is label-blind rather
+than covariate-blind.
 
 ## Ridge training
 
@@ -114,6 +115,9 @@ shape in balanced round-robin order, giving 2,250 bases and 4,500 candidates.
 A base contributes its paired rows only when both attempts succeed. At least
 200 complete bases per family are required, hence at least 1,800 fitted
 lineages and 3,600 rows.
+Each family/shape cell must separately retain 80% of its declarations (25 or
+26 complete bases for secondary cells), preventing aggregate coverage from
+hiding an unsupported target size.
 Successful rows from incomplete lineages remain in `labelled_samples`, and all
 attempts remain in the manifest denominator. This complete-case rule avoids an
 unbalanced architecture grid but conditions training on DFGs that map across
@@ -130,9 +134,21 @@ mapper verification. It does not declare a predicted candidate feasible.
 The same direct, clean-checkout run must use the predeclared Ridge/dead-zone
 grid and whole-generator-family holdout. The generated nested-lineage Ridge
 macro MAE must strictly improve on the Rec/Res-only baseline or no final model
-can be frozen, and the 19 features plus intercept must be full rank. A small
-override produces only a smoke artifact that frozen
-`predict` rejects. No large training run or final frozen model is claimed yet.
+can be frozen; whole-generator-family Ridge may tie but not degrade the floor,
+and the 13 features plus intercept must be full rank. A small override produces
+only a smoke artifact that frozen `predict` rejects.
+
+The completed formal run predeclared 2,250 distinct bases and 4,500 candidates.
+It retained 4,482 successful labels and 18 mapper-censored attempts; 2,232
+complete paired lineages (4,464 rows) entered selection and the final fit. Every
+family and family/shape coverage cell passed its 80% threshold. The selected
+model is Ridge with `lambda=3` and residual dead zone `0.75`; its intercept plus
+13-feature design is full rank 14/14 with condition number 48.01. In nested
+unseen-base-lineage validation, macro MAE fell from 0.17249 for the Rec/Res
+floor to 0.13030 for Ridge, a 24.46% relative reduction. Leave-one-generator-
+family-out macro MAE tied the floor at 0.17393. That tie passes the declared
+non-degradation gate but is not evidence that the residual transfers to an
+unseen topology family.
 
 Freezing verifies the pinned clean Neura checkout, mapper-binary hash,
 deterministically regenerated source, mapped-artifact hash and embedded
@@ -212,14 +228,12 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 
 ## Remaining work before a paper result
 
-1. Collect the predeclared large `motif-v3` generated corpus, retaining every
-   censored candidate and complete-case exclusion.
-2. Run nested generated-lineage and whole-generator-family selection once and
-   freeze the resulting model artifact.
-3. Run MachSuite `predict`, publish the seal, then—and only then—run `reveal`.
-4. Report accuracy over scored candidates and coverage over all 19 declarations,
+1. Run MachSuite `predict` with the generated-only frozen artifact and publish
+   or externally timestamp the resulting seal.
+2. Only after publication, run `reveal` and report accuracy over scored
+   candidates and coverage over all 19 declarations,
    with every mapper timeout/failure retained as censored.
-5. Treat any frontend fix, model change, feature change, or generator change
+3. Treat any frontend fix, model change, feature change, or generator change
    after reveal as a new protocol version, not a patch to the frozen result.
 
 ## Verification snapshot
@@ -230,11 +244,11 @@ At this update:
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
-generated v3 shape pilot: 162 declared, 154 labels; every supported rectangle exercised
-v3 design matrix: rank 20/21 before dropping the exactly aliased `gep_ops` input, then rank 20/20 with 19 features plus intercept
-predicated-v3 feasibility pilot: 48/48 candidates mapped after bounding control topology
-terminal resume with a nonexistent compiler path: identical sample/model hashes
-small-corpus scale gate: correctly rejected for a final frozen model
+formal generated corpus: 2250 bases, 4500 declared candidates, 4482 labels, 18 mapper-censored
+complete paired training set: 2232 lineages, 4464 rows; all family/shape coverage cells passed
+selected model: residual Ridge, lambda=3, dead-zone=0.75, design rank 14/14, condition 48.01
+nested unseen-lineage macro MAE: LB 0.17249, Ridge 0.13030 (24.46% lower)
+leave-one-generator-family-out macro MAE: LB 0.17393, Ridge 0.17393 (tie, not improvement)
 MachSuite mapper labels revealed: 0
-predictor unit tests: 125 passed after parallel/resume integration and final audit
+predictor unit tests: 127 passed
 ```

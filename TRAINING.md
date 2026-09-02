@@ -44,6 +44,8 @@ both cells have successful labels. Partial successes remain in the audit
 report and manifest. The paired design estimates within-DFG shape effects at
 one quarter of a nine-shape Cartesian scan, while completion fractions disclose
 the remaining selection toward mapper-complete graphs.
+Every family/shape cell must independently retain the same 80% complete rate
+as the global 200-of-250 base gate (25 or 26 of each 31/32 secondary blocks).
 
 ## Weighting
 
@@ -135,8 +137,13 @@ recomputed outer nested-lineage Ridge macro MAE must be strictly less than the
 corresponding prediction `max(RecMII, ResMII)`. Equality or degradation leaves
 the artifact smoke-only. This gate uses neither random-row diagnostics nor
 MachSuite labels and does not by itself establish cross-suite generalization.
-The fitted 19-feature matrix plus intercept must be full rank; a redundant
+The independently recomputed leave-one-generator-family-out macro MAE must
+also be no worse than the Rec/Res floor; equality is reported as conservative
+fallback, not as evidence of topology-transfer improvement.
+The fitted 13-feature matrix plus intercept must be full rank; a redundant
 feature therefore fails the gate instead of being hidden by Ridge regularization.
+Formal runs set `tree_depth=0`: the tree is only a constant-residual reporting
+baseline, while Ridge is the frozen and independently reproduced model class.
 
 ## Required reporting
 
