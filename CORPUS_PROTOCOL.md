@@ -42,8 +42,9 @@ ranking query may not span leakage lineages.
 The paper protocol has two roles with a hard boundary:
 
 1. **Generated random-DAG and motif training/development.** Connected random
-   DAGs provide broad topology variation; deterministic compute motifs provide
-   controlled mechanism coverage. Shapes and FU variants at one explicitly
+   DAGs provide broad topology variation; structured motifs provide controlled
+   compute, recurrence, predication, and pointer/memory-path coverage. Shapes
+   and FU variants at one explicitly
    selected register capacity, plus any future mask/register variants and
    mapper attempts of one base DFG, remain one lineage.
 2. **MachSuite frozen test.** The complete 19-variant inventory is fixed before
@@ -86,24 +87,34 @@ to this adapter. The MachSuite inventory is now pinned and executable; its
 label-free preflight records 11/19 ready variants and 8/19 lowering-censored
 variants. All 19 remain in the reported denominator.
 
+This allocation is inspired by LISA's use of generated weakly connected DFGs
+for training followed by real applications for evaluation. It is not a LISA
+reproduction: LISA learns node/edge mapping guidance with a GNN, whereas Model
+1 learns one mapper's final-II residual with Ridge. The present MachSuite
+preflight status and label-free structural covariates were visible during
+protocol hardening; no MachSuite mapper labels were accessed. The correct claim
+is therefore label-blind, not covariate-blind.
+
 ## Generated motif corpus
 
-The current implementation in `adapters/neura_motifs.py` emits already-lowered
-compute DFGs for six families:
+The current `motif-v2` implementation in `adapters/neura_motifs.py` emits
+already-lowered DFGs for nine families:
 
 ```text
-chain, fanout, reduction, diamond, mixed, random_dag
+chain, fanout, reduction, diamond, mixed, random_dag,
+recurrence_chain, predicated_diamond, pointer_chase
 ```
 
 `chain` exercises dependence depth, `fanout` exercises broadcast pressure,
 `reduction` is a binary reduction tree, `diamond` is split/join
 reconvergence, `mixed` combines independent inputs, fanout, and reconvergence,
 and `random_dag` samples operation kinds and dependency edges while guaranteeing
-weak connectivity and acyclicity. They use only constant, data-movement, add,
-and multiply operations. They do **not** claim coverage of memory or control
-flow.
-Memory/recurrence and control-heavy coverage must come from the frontend
-generator and real suites (or a separately versioned generator family).
+weak connectivity and acyclicity. `recurrence_chain` emits a real
+reserve/phi/arithmetic/control backedge, `predicated_diamond` emits predicate
+generation, complementary grants and reconvergence, and `pointer_chase` emits
+argument-backed and indirect GEP/load paths plus a loop backedge. These are
+lowered structural generators, not source-level workload semantics; real-suite
+evaluation remains necessary.
 
 Every invocation has an explicit root `--seed`.  A base is identified by
 `(generator_version, motif, root_seed, base_index)` and its lineage is:
@@ -119,15 +130,15 @@ all current shape/FU variants of that base at the selected register capacity.
 `generator_family` can leave out one motif family, and a holdout by `lineage`
 can leave out one base DFG.
 
-Operation counts are sampled cyclically from the current explicit bands
-`8--15`, `16--31`, and `32--48`. The operation count is part of the source
-generator input and is checked against the actual number of emitted binary
-compute operations. Changing only a loop trip count, launch count, or benchmark
-input size or constant literal is **not** a new DFG and must not receive a new
-lineage. Canonical hashes normalize constant literals. A new DFG must change
-the labelled operation/dependency graph (and receive a new base seed or source
-hash); generated canonical collisions are deterministically resampled and
-still rejected at materialization.
+Operation counts are stratified over `8--15`, `16--31`, and `32--48` for most
+families; the formal recurrence bands end at 32 to keep the mapper-feasible
+corpus from being dominated by very large RecMII. Larger direct-generator
+limits are explicit stress tests and are not silently included in the frozen
+distribution. Operation count is checked against emitted arithmetic structure.
+Changing only a loop trip count, launch count, input size, or constant literal
+is **not** a new DFG. Canonical hashes normalize constant literals; canonical
+collisions are deterministically resampled and rejected across families by the
+coverage contract.
 
 Shapes and architectural variants are attempts on the same source DFG, not
 new source groups.  A future expanded corpus should vary at least array shape,
@@ -204,24 +215,22 @@ weight equal to the number of lineages. See `TRAINING.md` for the exact formula.
 
 ## Recommended scale and current boundary
 
-For a final study, target roughly **8 independent motif/generator families ×
-200--300 base DFGs × 4--6 architectural attempts**, plus the separately
-reserved MachSuite test. This is a recommendation, not evidence currently
-available in this checkout. The present code implements six compute motif/
-random-DAG families, three default shapes, and two deterministic architecture
-variants;
-it defaults to zero motif samples and does not run a large collection unless
-`--motif-samples-per-family N` is explicitly supplied.  Its old `--samples`
-option remains a legacy narrow random-DAG generator and is not automatically
-mixed into the motif corpus.
+The frozen study fixes **nine families × 250 requested bases × six candidates**
+(three shapes times two FU layouts): 2,250 predeclared base DFGs and 13,500
+attempts. A base is fit-eligible only if all six cells succeed. The gate requires
+at least 200 complete bases in every family, or 1,800 lineages and 10,800
+training rows. Partial successes remain visible in `labelled_samples`; every
+failure remains in the manifest.
 
-The frozen-model command fails closed below 1,000 distinct generated base DFGs
-or six generator families and also requires the training report's whole-
-generator-family holdout gate. A small smoke override produces an artifact
-that the frozen MachSuite predictor refuses.
+This complete-case design makes architecture comparisons balanced but selects
+for graphs that the current mapper completes on all six candidates. Report
+requested, successful, complete, and censored counts per family and failure
+stage; do not describe the fitted subset as an unbiased sample of all generated
+graphs. The old `--samples` option remains a legacy narrow random-DAG generator
+and is outside the frozen corpus.
 
-Before claiming the recommended scale, add independently versioned memory,
-recurrence, and control generators, validate their lowering success, collect
-source/DFG provenance, and retain the untouched MachSuite test. A large
-number of rows from one template does not substitute for independent base
-DFGs or source lineages.
+The frozen-model command additionally requires nested base-lineage selection,
+a whole-generator-family holdout, and strictly lower generated nested-lineage
+macro MAE for Ridge than for the Rec/Res floor. A small override produces an
+artifact that the frozen MachSuite predictor refuses. A large row count from
+one template does not substitute for distinct canonical DFGs or lineages.

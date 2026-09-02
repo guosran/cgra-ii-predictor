@@ -83,27 +83,36 @@ lineage.  The same rule applies to `bicg`, `fft`, `fir`, `histogram`, `mvt`,
 
 ## Generated training corpus
 
-The implemented compute stratum contains six independently named families:
+The implemented `motif-v2` stratum contains nine independently named
+structural families:
 
 ```text
-chain, fanout, reduction, diamond, mixed, random_dag
+chain, fanout, reduction, diamond, mixed, random_dag,
+recurrence_chain, predicated_diamond, pointer_chase
 ```
 
-For a paper-scale run, use 200--300 base DFGs per family and 4--6 architecture
-candidates per base.  Add separately versioned memory, recurrence, and
-control/predication generators before calling the resulting distribution
-general.  A useful generation grid varies:
+The fixed paper protocol requests 250 base DFGs per family and six architecture
+candidates per base, requiring at least 200 complete bases in every family.
+The recurrence, predication, and pointer-chase families add real lowered
+mechanisms but do not make the generated distribution equivalent to real
+programs. The generation grid varies:
 
 - actual graph size, with explicit operation-count bands;
 - depth/width, fanout, reconvergence, and reduction arity;
 - operation kinds and compatibility domains;
-- memory dependence and recurrence structure in the future generators;
+- recurrence, predication, pointer/load paths, and compute topology;
 - architecture shape, valid-tile mask, FU distribution, register capacity,
   and links as candidates of the same base DFG.
 
 Every generated base has a distinct canonical labelled-graph hash.  Exact
 canonical collisions are rejected.  A large row count from one fixed topology
 with different constants is not a large DFG corpus.
+
+Only bases with one successful label in all six shape/FU-layout cells enter
+CV and fitting. Partial successes and failures remain in the predeclared
+denominator. This balances per-base comparisons but selects for graphs the
+current mapper completes everywhere, so completion fractions are part of the
+reported result.
 
 ## What counts as a new DFG
 

@@ -166,3 +166,10 @@ for the primary frozen MachSuite workflow. A final artifact must be trained on
 generated DFGs with `rec_res_max_v1`, use the predeclared structure-only
 feature list, and be sealed before MachSuite mapper labels are revealed. These
 limitations affect confidence in a prediction; they do not change the formula.
+
+The frozen container is `compiled-ii-model-artifact-v2`. It carries the exact
+sorted set of canonical DFG hashes used to fit the model, its count, and a set
+digest. The generic loader retains v1 compatibility for non-frozen use, but the
+MachSuite `predict` path accepts only v2 and rejects any ready test DFG whose
+canonical hash occurs in that training set. `reveal` repeats the overlap check
+before it can invoke the mapper.

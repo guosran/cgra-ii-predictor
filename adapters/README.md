@@ -59,8 +59,9 @@ the hashed `rec_res_mii_info` artifact produced in the same direct run.
 ## Deterministic motif corpus
 
 The opt-in `--motif-samples-per-family N` mode uses
-`neura_motifs.py` to generate six lowered compute families: `chain`,
-`fanout`, `reduction`, `diamond`, `mixed`, and `random_dag`.  Repeat `--motif-shape
+`neura_motifs.py` to generate nine lowered families: `chain`, `fanout`,
+`reduction`, `diamond`, `mixed`, `random_dag`, `recurrence_chain`,
+`predicated_diamond`, and `pointer_chase`. Repeat `--motif-shape
 ROWSxCOLS` (default `3x3`, `3x4`, `4x4`) and select families with repeated or
 comma-separated `--motif`/`--motifs` options.  `--motif-architecture-variant`
 selects the deterministic homogeneous and split-domain attempts.
@@ -76,10 +77,13 @@ point to cost/mapped artifacts; failed or timed-out candidates remain
 censored and have no numeric label.  For generator-family holdout use
 `--metadata-holdout-key generator_family`.
 
-The generated families contain compute graph structure only.  They do not
-claim memory/control coverage; retain the existing C/frontend strata and
-official benchmark suites for those domains.  The full paper protocol is in
-`../CORPUS_PROTOCOL.md`.
+The three v2 additions contain real lowered recurrence, predicated-control,
+and pointer/load structure, but they remain structural generators rather than
+real workload semantics. The formal protocol requests 250 bases per family
+and admits a base to fitting only after all three shapes and both architecture
+variants succeed; partial labels stay auditable outside the fit. Official
+benchmark suites remain necessary for real-program evidence. The full paper
+protocol is in `../CORPUS_PROTOCOL.md`.
 
 ## Frozen MachSuite adapter
 
@@ -87,7 +91,8 @@ official benchmark suites for those domains.  The full paper protocol is in
 `../benchmarks/machsuite-v1.json`. `preflight` compiles, extracts, imports,
 lowers, and runs only analysis-only RecMII/ResMII; `predict` accepts only a generated-only
 model sealed by `freeze-model`; `predict` re-derives every feature from the
-recorded artifacts, and `reveal` verifies all hashes before it can run the
+recorded artifacts, rejects any canonical DFG shared with the exact v2
+training-hash set, and `reveal` verifies all hashes again before it can run the
 heuristic mapper. Mutated preflight bytes are rejected, and unsupported
 variants remain censored in the declared-suite denominator. Publish or
 timestamp the seal externally before reveal when chronology must be proved.

@@ -48,12 +48,15 @@ A generality claim must cover a distribution of triples:
 
 The primary paper protocol assigns different sources to different roles:
 
-1. Training and every model/hyperparameter decision use generated DFGs only:
-   chain, fanout, reduction, diamond, mixed, and random-DAG families. Generated
-   base graphs, not individual rows, are the split unit.
-2. The fixed MachSuite revision is the final real-program test. It is never
-   used to select features, Ridge strength, dead zone, generator parameters,
-   or frontend support policy.
+1. Training and every fitted-model/hyperparameter decision use generated DFGs
+   only. `motif-v2` contains chain, fanout, reduction, diamond, mixed,
+   random-DAG, recurrence-chain, predicated-diamond, and pointer-chase
+   families. Generated base graphs, not individual rows, are the split unit.
+2. The fixed MachSuite revision is the final real-program test. No MachSuite
+   mapper label has been accessed while designing or fitting Model 1. Its
+   label-free preflight status and covariates have been inspected, so the
+   current protocol is label-blind, not covariate-blind; that limitation is
+   stated rather than presented as a stronger statistical-blindness claim.
 3. The implemented generated stratum varies array shape and homogeneous versus
    split-domain FU placement. Tile masks, register capacity, memory-tile
    placement, link width/bandwidth, and latency are separate architecture
@@ -158,20 +161,23 @@ git submodule update --init third_party/neura third_party/machsuite
 python3 adapters/neura_experiment.py --help
 ~~~
 
-To explicitly collect the deterministic compute-motif stratum (the default
-is zero, so ordinary invocations do not run it):
+To collect the fixed generated-training stratum (the default is zero, so
+ordinary invocations do not run it):
 
 ~~~sh
 python3 adapters/neura_experiment.py \
-  --motif-samples-per-family 200 \
-  --motif chain,fanout,reduction,diamond,mixed,random_dag \
-  --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4
+  --motif-samples-per-family 250 \
+  --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
+  --metadata-holdout-key generator_family \
+  --timeout 60
 ~~~
 
 This first materializes every source/architecture candidate and atomically
 writes `corpus-manifest.json` before invoking the mapper.  A base DFG's shape
 and architecture variants share one lineage and source/canonical hash; mapper
-timeouts remain censored manifest entries.  `--samples` is retained as a
+timeouts remain censored manifest entries. Only bases that succeed in all six
+shape/layout cells enter validation or fitting; partial successes remain
+auditable but excluded. `--samples` is retained as a
 legacy narrow random-DAG generator and is not automatically mixed into this
 motif corpus.  See [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
@@ -204,11 +210,10 @@ observation's weight.
 ~~~sh
 # Train/select only on generated motif and random-DFG data.
 python3 adapters/neura_experiment.py \
-  --motif-samples-per-family 200 \
-  --motif chain,fanout,reduction,diamond,mixed,random_dag \
+  --motif-samples-per-family 250 \
   --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
-  --timeout 120 \
+  --timeout 60 \
   --output-dir /path/to/random-training
 
 # Remove training rows and freeze the selected generated-only model.
@@ -239,14 +244,17 @@ python3 adapters/machsuite_frozen.py reveal \
   --output-dir /path/to/machsuite-revealed
 ~~~
 
-`freeze-model` defaults to a predeclared minimum of 1,000 distinct generated
-base DFGs across all six generator families. `--allow-small-smoke` can exercise
-serialization on a tiny corpus, but marks the artifact smoke-only and
-`predict` refuses to use it for a frozen MachSuite run.
-It also re-generates each source from its seed, verifies source/architecture/
-mapped-artifact hashes and labels, reproduces nested hyperparameter selection
-and the final Ridge fit, and accepts only the direct default-shape/two-variant
-training protocol shown above.
+The formal contract predeclares exactly 250 bases in each of nine families:
+2,250 bases and 13,500 shape/layout candidates. At least 200 complete bases per
+family must remain, giving at least 1,800 fitted lineages and 10,800 rows.
+`--allow-small-smoke` can exercise serialization on a tiny corpus, but marks
+the artifact smoke-only and `predict` refuses it for frozen MachSuite.
+`freeze-model` also re-generates each source, verifies all source,
+architecture, Rec/Res and mapped artifacts, independently reproduces the
+nested selection and final Ridge fit, and requires generated nested-lineage
+macro MAE to be strictly below the raw Rec/Res-floor MAE. The v2 artifact
+stores the exact sorted training canonical-hash set; `predict` and `reveal`
+reject any hash shared with a ready MachSuite DFG.
 
 With the pinned Neura/LLVM toolchain, the label-free preflight currently makes
 11/19 variants ready and records 8/19 as lowering-censored. This is a frozen
@@ -260,9 +268,9 @@ only inside an explicit `ranking_query_id` (one exact base DFG) whose candidate
 IIs vary. A leakage lineage is never silently treated as a ranking query. The
 legacy corpus lacks these identities and cannot support a ranking claim.
 
-LISA motivates a later graph- and mapping-aware Model 2, not replacing this
-model with a GNN immediately. LISA predicts node/edge labels to guide a mapper,
-retraining per accelerator with a much larger generated graph corpus; it does
-not directly predict final compiled II. More complex graph models should be
-considered only after enough independent source and architecture families exist
-for the holdouts described above.
+LISA motivates the generated-graph-training/real-program-test split and a
+later graph- and mapping-aware Model 2; this is inspiration, not a reproduction.
+LISA predicts node/edge guidance labels with a GNN and does not directly
+predict final compiled II. More complex graph models should be considered only
+after the linear baseline has enough independent source and architecture
+families for the holdouts described above.

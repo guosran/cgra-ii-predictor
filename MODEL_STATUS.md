@@ -92,32 +92,36 @@ are in `TRAINING.md` and `II_PREDICTION.md`.
 ## Training corpus decision
 
 All primary fit and selection data are generated DFGs. The implemented
-generator contains six families:
+`motif-v2` generator contains nine families:
 
 ```text
-chain, fanout, reduction, diamond, mixed, random_dag
+chain, fanout, reduction, diamond, mixed, random_dag,
+recurrence_chain, predicated_diamond, pointer_chase
 ```
 
 It varies real operation count, dependency edges, depth/width, fanout,
-reconvergence, and architecture candidates. All shapes/FU variants of one base
-DFG share one leakage lineage and canonical DFG identity. A manifest is written
-before mapper invocation; failures and timeouts are censored rather than
-fabricated as numeric II labels.
+reconvergence, recurrence cycles, predicated control, pointer/load paths, and
+architecture candidates. All shapes/FU variants of one base DFG share one
+leakage lineage and canonical DFG identity. A manifest is written before any
+mapper invocation; failures and timeouts are censored rather than fabricated
+as numeric II labels.
 
-The current generators are compute-focused. Memory, recurrence, pointer, and
-control generator families are still needed before making a broad distribution
-claim. The recommended paper-scale collection is roughly 200--300 base DFGs
-per independent generator family and 4--6 architecture candidates per base.
-`freeze-model` enforces at least 1,000 distinct base DFGs across all six current
-families by default. A small override produces a smoke-only artifact that the
-frozen `predict` phase rejects. No large training run or final frozen model is
-claimed yet.
+The frozen protocol requests exactly 250 bases per family and attempts three
+shapes (`3x3/3x4/4x4`) under homogeneous and split-domain FU placement. This
+predeclares 2,250 bases and 13,500 candidates. A base contributes its six rows
+to CV/fitting only when all six attempts succeed. At least 200 complete bases
+per family are required, hence at least 1,800 fitted lineages and 10,800 rows.
+Successful rows from incomplete lineages remain in `labelled_samples`, and all
+attempts remain in the manifest denominator. This complete-case rule avoids an
+unbalanced architecture grid but conditions training on DFGs that map across
+all six candidates; per-family completion fractions and failure stages must be
+reported as a possible selection bias.
 
-For the frozen protocol it also requires one direct, clean-checkout run with
-at least 200 requested bases per family, shapes `3x3/3x4/4x4`, both
-homogeneous and split-domain architectures, the predeclared Ridge/dead-zone
-grid, and a whole-generator-family holdout. Raising the scale threshold is
-allowed; lowering it can only produce a smoke artifact.
+The same direct, clean-checkout run must use the predeclared Ridge/dead-zone
+grid and whole-generator-family holdout. The generated nested-lineage Ridge
+macro MAE must strictly improve on the Rec/Res-only baseline or no final model
+can be frozen. A small override produces only a smoke artifact that frozen
+`predict` rejects. No large training run or final frozen model is claimed yet.
 
 Freezing verifies the pinned clean Neura checkout, mapper-binary hash,
 deterministically regenerated source, mapped-artifact hash and embedded
@@ -126,6 +130,11 @@ deterministically regenerated source, mapped-artifact hash and embedded
 to match exactly before reproducing the selected Ridge model. It does not rerun
 every expensive training mapping a second time; the archived analysis/mapped
 artifacts plus their provenance are the training-label evidence.
+The frozen container is now v2: it records the exact sorted set of canonical
+training DFG hashes and its digest. Both prediction sealing and label reveal
+reject overlap between that set and every ready MachSuite DFG. Generic v1
+loading remains available for historical/non-frozen use, but v1 cannot enter
+the frozen MachSuite path.
 
 ## Frozen MachSuite test
 
@@ -171,7 +180,10 @@ The censored cases expose real frontend gaps (`xor`, calls, `uitofp`, `umin`,
 `ashr`, lifetime intrinsics, and one control-flow assertion). Therefore a future
 paper must say “MachSuite compatible-subset accuracy, 11/19 preflight-ready,”
 not “full MachSuite coverage.” No MachSuite mapper labels were revealed during
-this implementation and there is no final accuracy number yet.
+this implementation and there is no final accuracy number yet. The label-free
+preflight outcomes and structural covariates were visible while the protocol
+was hardened, so this is accurately described as label-blind rather than fully
+covariate-blind.
 
 ## Historical evidence
 
@@ -189,8 +201,8 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 
 ## Remaining work before a paper result
 
-1. Expand generated memory, recurrence, pointer, and predicated-control
-   families, then collect the predeclared large generated corpus.
+1. Collect the predeclared large `motif-v2` generated corpus, retaining every
+   censored candidate and complete-case exclusion.
 2. Run nested generated-lineage and whole-generator-family selection once and
    freeze the resulting model artifact.
 3. Run MachSuite `predict`, publish the seal, then—and only then—run `reveal`.
@@ -207,8 +219,9 @@ At this update:
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
-generated training smoke: 12 declared, 12 labels, 0 mapper-censored; Ridge fit completed
+generated v2 smoke: 54 declared, 54 labels, 0 mapper-censored; Ridge fit completed
+v2 smoke nested MAE: LB 0.42593, Ridge 0.42502 (pipeline check, not paper evidence)
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
-predictor unit tests: 87 passed
+predictor unit tests: 114 passed before parallel/resume integration
 ```

@@ -36,6 +36,14 @@ predictions came from different outer-fold models. Rows sharing the same
 observation identity under the active model projection are collapsed;
 contradictory rows for the same scoped candidate are rejected.
 
+For the frozen generated corpus, one base DFG is observed under exactly six
+predeclared architecture cells: three shapes times homogeneous/split-domain
+FU placement. A lineage enters this document's weighting, CV, and fit only if
+all six unique cells have successful labels. Partial successful rows remain in
+the audit report and manifest but are not observations for training. This
+keeps candidate grids balanced while introducing a disclosed complete-case
+selection toward graphs mappable on every cell.
+
 ## Weighting
 
 Rows are not independent merely because a base DFG has many shapes. Let `G` be
@@ -121,10 +129,17 @@ does not make evaluation blind. A paper claim still requires the frozen
 MachSuite manifest whose labels did not influence features, model class,
 hyperparameters, or generators.
 
+The final-freeze utility gate is also generated-only: the independently
+recomputed outer nested-lineage Ridge macro MAE must be strictly less than the
+corresponding prediction `max(RecMII, ResMII)`. Equality or degradation leaves
+the artifact smoke-only. This gate uses neither random-row diagnostics nor
+MachSuite labels and does not by itself establish cross-suite generalization.
+
 ## Required reporting
 
 Report generated training/validation by base and generator family; distinct
 base-DFG/lineage/candidate counts; mapper successes and censored attempts;
+requested and complete six-cell lineages plus complete-case exclusions;
 grouped split protocol; selected hyperparameters; negative raw-residual rate;
 and frozen MachSuite results over both scored and all 19 declared variants.
 Architecture ranking is reported

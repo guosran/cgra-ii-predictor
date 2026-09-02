@@ -67,6 +67,18 @@ manifest must be written
 atomically before mapper execution and must retain every timeout/nonzero exit
 as a censored candidate.
 
+The frozen grid has six cells per base (`3x3`, `3x4`, and `4x4`, each with
+homogeneous and split-domain FU placement). Only a lineage with exactly one
+successful row in every cell enters any fit or holdout. Successful rows from
+partial lineages stay in the labelled audit record, and all attempts stay in
+the manifest denominator. Completion rates are reported because this
+complete-case rule conditions the fitted population on mapper success.
+
+Before a model can be frozen, its generated nested-base-lineage macro MAE must
+be strictly below the RecMII/ResMII-floor macro MAE. This is a pre-MachSuite
+utility gate, not evidence of real-program generalization. The random-row
+diagnostic and MachSuite data cannot satisfy it.
+
 All reports produced by this command are marked `exploratory`, with labels
 available at evaluation time and `frozen_test=false`.
 
@@ -92,6 +104,12 @@ A frozen claim requires a separate workflow, not a command-line status flag:
    mapper. Failures/timeouts remain censored and labels are written separately.
 7. Report all predeclared metrics and every exclusion. Do not select a new
    feature set, model class, or threshold from the frozen results.
+
+The current implementation inspected label-free MachSuite preflight outcomes
+and covariates while hardening frontend and corpus contracts. No MachSuite
+mapper II was accessed, so the honest description is label-blind but
+covariate-visible. A stronger future study would publish the full generator
+and feature protocol before even inspecting those covariates.
 
 `freeze-model` validates archived training labels against deterministic source,
 mapped-artifact, clean Neura revision, and mapper-binary hashes and reproduces
@@ -122,6 +140,7 @@ mapping-derived auxiliary labels—such as scheduling priority, spatial and
 temporal distance, or routing pressure—and test whether they improve the
 unchanged mapper. A GNN is justified only after there are enough independent
 graphs and architecture domains for lineage, suite, and architecture holdouts.
-The present 54-row corpus has 15 declared kernel names but at most 12 possible
-lineages under the conservative alias audit. It is not sufficient evidence for
-that step.
+The current `motif-v2` smoke has 54/54 successful candidates (one complete
+six-cell base in each of nine families). Its nested MAE is 0.42593 for the
+Rec/Res floor and 0.42502 for Ridge. This verifies the pipeline only; one base
+per family is not evidence for a model or for a GNN.
