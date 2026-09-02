@@ -8,11 +8,11 @@ base_seed, operation count)`` and then paired with several architectural
 candidates.  Shape and architectural variation never changes the base DFG,
 which makes it possible to group all variants under one leakage-safe lineage.
 
-Only compute motifs are generated here.  Memory and control coverage remains
-owned by the existing C/frontend generator and by real benchmark fixtures.
-The emitted IR is already in the lowered Neura dataflow dialect and uses only
-constant, data_mov, add, and mul operations, so the analysis-only Rec/Res pass
-and heuristic mapper can consume it directly.
+The emitted IR is already in the lowered Neura dataflow dialect.  The original
+six families remain compute-only compatibility motifs; v2 additionally emits
+recurrence, predicated-control, and pointer-chasing DFGs directly.  No C
+frontend or compiler lowering is involved, so each structural edge is visible
+to the analysis-only Rec/Res pass and heuristic mapper.
 """
 
 from __future__ import annotations
@@ -28,11 +28,15 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
-GENERATOR_VERSION = "motif-v1"
-MANIFEST_SCHEMA_VERSION = "cgra-ii-motif-corpus-v1"
+GENERATOR_VERSION = "motif-v2"
+MANIFEST_SCHEMA_VERSION = "cgra-ii-motif-corpus-v2"
 DATA_TYPE = "!neura.data<i32, i1>"
+I64_DATA_TYPE = "!neura.data<i64, i1>"
+PREDICATE_DATA_TYPE = "!neura.data<i1, i1>"
+POINTER_DATA_TYPE = "!neura.data<!llvm.ptr, i1>"
 DEFAULT_MOTIFS = (
     "chain", "fanout", "reduction", "diamond", "mixed", "random_dag",
+    "recurrence_chain", "predicated_diamond", "pointer_chase",
 )
 MOTIF_ALIASES = {
     "broadcast": "fanout",
@@ -44,13 +48,54 @@ MOTIF_ALIASES = {
     "multi_input": "mixed",
     "random": "random_dag",
     "random-dag": "random_dag",
+    "recurrence": "recurrence_chain",
+    "loop": "recurrence_chain",
+    "predicated": "predicated_diamond",
+    "control": "predicated_diamond",
+    "pointer": "pointer_chase",
+    "pointer-chase": "pointer_chase",
 }
 DEFAULT_SHAPES = ((3, 3), (3, 4), (4, 4))
 # Three strata make the operation-count distribution explicit and reproducible.
 # The lower edge is deliberately above the tiny legacy examples: these are
 # intended to exercise graph pressure while still being practical smoke tests.
 OPERATION_BANDS = ((8, 15), (16, 31), (32, 48))
+# v1 callers use OPERATION_BANDS directly, so retain it as the compatibility
+# contract for the six original compute motifs.  v2's direct-lowered motifs
+# use family-specific bands.  The frozen corpus stays in the tens-of-operations
+# regime used by LISA and by mapper-feasible Neura examples; larger direct API
+# limits remain available for explicitly declared stress experiments.
+FAMILY_OPERATION_BANDS = {
+    "chain": OPERATION_BANDS,
+    "fanout": OPERATION_BANDS,
+    "reduction": OPERATION_BANDS,
+    "diamond": OPERATION_BANDS,
+    "mixed": OPERATION_BANDS,
+    "random_dag": OPERATION_BANDS,
+    # Corpus generation tops recurrence cycles out at 32 so the size tiers
+    # cover RecMII without making every large sample dominated by one loop.
+    # The direct API still accepts 33--48 for compatibility (see below).
+    "recurrence_chain": ((8, 15), (16, 23), (24, 32)),
+    "predicated_diamond": OPERATION_BANDS,
+    "pointer_chase": OPERATION_BANDS,
+}
+DIRECT_OPERATION_LIMITS = {
+    "random_dag": 160,
+    "recurrence_chain": 48,
+    "predicated_diamond": 128,
+    "pointer_chase": 128,
+}
 DEFAULT_ARCHITECTURE_VARIANTS = ("homogeneous", "split-domain")
+
+# These are the FU classes present in Neura's main architecture.yaml.  The
+# generated architecture enables memory classes on every homogeneous tile and
+# on the compute half of a split-domain mesh, so all v2 operations have a
+# legal placement domain.
+NEURA_FU_TYPES = (
+    "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel",
+    "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control",
+    "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed",
+)
 
 
 @dataclass(frozen=True)
@@ -188,11 +233,28 @@ def parse_architecture_variants(values: Optional[Sequence[str]]) -> Tuple[str, .
     return result
 
 
-def stratified_operation_count(base_index: int, base_seed: int) -> int:
-    """Choose an operation count from each band in a cyclic stratification."""
+def operation_bands_for_motif(motif: str) -> Tuple[Tuple[int, int], ...]:
+    """Return the size bands for one canonical motif family."""
+    name = MOTIF_ALIASES.get(motif.strip().lower(), motif.strip().lower())
+    try:
+        return FAMILY_OPERATION_BANDS[name]
+    except KeyError as error:
+        raise ValueError(f"unknown motif: {motif}") from error
+
+
+def stratified_operation_count(
+    base_index: int, base_seed: int, motif: Optional[str] = None,
+) -> int:
+    """Choose an operation count from each family-specific size band.
+
+    The optional ``motif`` argument preserves the v1 two-argument API.  With
+    no motif, the historical 8--48 bands are used; ``make_base_specs`` passes
+    the family explicitly so v2 corpora include large structural examples.
+    """
     if base_index < 0:
         raise ValueError("base_index must be non-negative")
-    band_low, band_high = OPERATION_BANDS[base_index % len(OPERATION_BANDS)]
+    bands = OPERATION_BANDS if motif is None else operation_bands_for_motif(motif)
+    band_low, band_high = bands[base_index % len(bands)]
     rng = random.Random(base_seed)
     return rng.randint(band_low, band_high)
 
@@ -226,7 +288,7 @@ def make_base_specs(
             for _ in range(10000):
                 base_seed = family_rng.randrange(1 << 63)
                 operation_count = stratified_operation_count(
-                    base_index, base_seed
+                    base_index, base_seed, motif
                 )
                 canonical = canonical_dfg_sha256(generate_motif_mlir(
                     motif, operation_count, base_seed
@@ -249,26 +311,52 @@ def make_base_specs(
     return tuple(result)
 
 
-def _constant(value: str, number: int) -> str:
+def _constant(value: str, number: int, scalar_type: str = "i32",
+              data_type: Optional[str] = None) -> str:
+    result_type = data_type or f"!neura.data<{scalar_type}, i1>"
     return (
         f'    {value} = "neura.constant"() '
-        f'<{{value = {number} : i32}}> : () -> {DATA_TYPE}'
+        f'<{{value = {number} : {scalar_type}}}> : () -> {result_type}'
     )
 
 
-def _move(result: str, operand: str) -> str:
+def _grant_once_constant(value: str, number: int, scalar_type: str = "i64",
+                         data_type: Optional[str] = None) -> str:
+    result_type = data_type or f"!neura.data<{scalar_type}, i1>"
+    return (
+        f'    {value} = "neura.grant_once"() '
+        f'<{{constant_value = {number} : {scalar_type}}}> '
+        f': () -> {result_type}'
+    )
+
+
+def _move(result: str, operand: str, data_type: str = DATA_TYPE) -> str:
     return (
         f'    {result} = "neura.data_mov"({operand}) '
-        f': ({DATA_TYPE}) -> {DATA_TYPE}'
+        f': ({data_type}) -> {data_type}'
     )
 
 
-def _binary(result: str, operation: str, lhs: str, rhs: str) -> str:
+def _binary(result: str, operation: str, lhs: str, rhs: str,
+            data_type: str = DATA_TYPE) -> str:
     if operation not in ("add", "mul"):
         raise ValueError(f"unsupported generated compute operation: {operation}")
     return (
         f'    {result} = "neura.{operation}"({lhs}, {rhs}) '
-        f': ({DATA_TYPE}, {DATA_TYPE}) -> {DATA_TYPE}'
+        f': ({data_type}, {data_type}) -> {data_type}'
+    )
+
+
+def _unary_binary(result: str, operation: str, operand: str,
+                  rhs_value: int, scalar_type: str = "i32",
+                  data_type: str = DATA_TYPE) -> str:
+    """Emit a lowered arithmetic op with an immediate second operand."""
+    if operation not in ("add", "mul"):
+        raise ValueError(f"unsupported generated compute operation: {operation}")
+    return (
+        f'    {result} = "neura.{operation}"({operand}) '
+        f'{{rhs_value = {rhs_value} : {scalar_type}}} '
+        f': ({data_type}) -> {data_type}'
     )
 
 
@@ -280,14 +368,31 @@ def _operation_kind(rng: random.Random, index: int) -> str:
 
 def _emit_binary(
     lines: List[str], operation_index: int, operation: str,
-    lhs: str, rhs: str,
+    lhs: str, rhs: str, data_type: str = DATA_TYPE,
+    name_prefix: str = "",
 ) -> str:
-    lhs_move = f"%m{operation_index}a"
-    rhs_move = f"%m{operation_index}b"
-    result = f"%v{operation_index}"
-    lines.append(_move(lhs_move, lhs))
-    lines.append(_move(rhs_move, rhs))
-    lines.append(_binary(result, operation, lhs_move, rhs_move))
+    prefix = f"{name_prefix}" if name_prefix else ""
+    lhs_move = f"%{prefix}m{operation_index}a"
+    rhs_move = f"%{prefix}m{operation_index}b"
+    result = f"%{prefix}v{operation_index}"
+    lines.append(_move(lhs_move, lhs, data_type))
+    lines.append(_move(rhs_move, rhs, data_type))
+    lines.append(_binary(result, operation, lhs_move, rhs_move, data_type))
+    return result
+
+
+def _emit_unary_binary(
+    lines: List[str], operation_index: int, operation: str, operand: str,
+    rhs_value: int, scalar_type: str = "i32", data_type: str = DATA_TYPE,
+    name_prefix: str = "",
+) -> str:
+    prefix = f"{name_prefix}" if name_prefix else ""
+    moved = f"%{prefix}m{operation_index}"
+    result = f"%{prefix}v{operation_index}"
+    lines.append(_move(moved, operand, data_type))
+    lines.append(_unary_binary(
+        result, operation, moved, rhs_value, scalar_type, data_type
+    ))
     return result
 
 
@@ -469,6 +574,299 @@ def _generate_random_dag(operation_count: int, seed: int) -> str:
     return _emit_footer(lines)
 
 
+def _seeded_operation_kind(rng: random.Random, index: int, seed: int) -> str:
+    """Choose an op kind while making the seed affect the first edge."""
+    if index == 0:
+        return "add" if seed % 2 == 0 else "mul"
+    return _operation_kind(rng, index)
+
+
+def _emit_icmp(
+    lines: List[str], name: str, operand: str, cmp_type: str,
+    rhs_value: int, scalar_type: str = "i32",
+    data_type: str = DATA_TYPE,
+) -> str:
+    moved = f"%{name}_mov"
+    result = f"%{name}"
+    lines.append(_move(moved, operand, data_type))
+    lines.append(
+        f'    {result} = "neura.icmp"({moved}) '
+        f'<{{cmpType = "{cmp_type}"}}> '
+        f'{{rhs_value = {rhs_value} : {scalar_type}}} '
+        f': ({data_type}) -> {PREDICATE_DATA_TYPE}'
+    )
+    return result
+
+
+def _emit_not(lines: List[str], name: str, operand: str) -> str:
+    moved = f"%{name}_mov"
+    result = f"%{name}"
+    lines.append(_move(moved, operand, PREDICATE_DATA_TYPE))
+    lines.append(
+        f'    {result} = "neura.not"({moved}) '
+        f': ({PREDICATE_DATA_TYPE}) -> {PREDICATE_DATA_TYPE}'
+    )
+    return result
+
+
+def _emit_sext(lines: List[str], name: str, operand: str,
+               input_type: str = DATA_TYPE,
+               output_type: str = I64_DATA_TYPE) -> str:
+    moved = f"%{name}_mov"
+    result = f"%{name}"
+    lines.append(_move(moved, operand, input_type))
+    lines.append(
+        f"    {result} = neura.sext {moved} : "
+        f"{input_type} -> {output_type}"
+    )
+    return result
+
+
+def _emit_grant_predicate(
+    lines: List[str], name: str, value: str, predicate: str,
+    data_type: str = DATA_TYPE,
+) -> str:
+    value_mov = f"%{name}_value_mov"
+    predicate_mov = f"%{name}_pred_mov"
+    result = f"%{name}"
+    lines.append(_move(value_mov, value, data_type))
+    lines.append(_move(predicate_mov, predicate, PREDICATE_DATA_TYPE))
+    lines.append(
+        f"    {result} = neura.grant_predicate {value_mov}, "
+        f"{predicate_mov} : {data_type}, {PREDICATE_DATA_TYPE} -> {data_type}"
+    )
+    return result
+
+
+def _generate_recurrence_chain(operation_count: int, seed: int) -> str:
+    """Generate a true reserve/phi/arithmetic/ctrl backedge recurrence.
+
+    The requested operation count is exactly the number of arithmetic nodes in
+    the recurrence cycle.  Each arithmetic input and the backedge is
+    explicitly materialized with ``data_mov`` so the generated graph follows
+    the same dataflow contract as hand-written Neura IR.
+    """
+    rng = random.Random(seed)
+    lines = _emit_header("recurrence_chain")
+    init = _constant("%rc_init", (abs(seed) % 17) + 3)
+    lines.append(init)
+    lines.append("    %rc_reserved = neura.reserve : !neura.data<i32, i1>")
+    lines.append(_move("%rc_init_mov", "%rc_init"))
+    lines.append(
+        "    %rc_state = neura.phi_start %rc_init_mov, %rc_reserved "
+        ": !neura.data<i32, i1>, !neura.data<i32, i1> "
+        "-> !neura.data<i32, i1>"
+    )
+    current = "%rc_state"
+    for index in range(operation_count):
+        operation = _seeded_operation_kind(rng, index, seed)
+        # Keep immediates deterministic but deliberately irrelevant to the
+        # canonical topology hash.  The op sequence is the structural seed
+        # variation that matters for model training.
+        rhs_value = 1 + ((abs(seed) + 3 * index) % 11)
+        current = _emit_unary_binary(
+            lines, index, operation, current, rhs_value, name_prefix="rc"
+        )
+    lines.append(_move("%rc_back_mov", current))
+    lines.append(
+        "    neura.ctrl_mov %rc_back_mov -> %rc_reserved : "
+        "!neura.data<i32, i1> !neura.data<i32, i1>"
+    )
+    return _emit_footer(lines)
+
+
+def _generate_predicated_diamond(operation_count: int, seed: int) -> str:
+    """Generate seeded reconvergent predicate diamonds.
+
+    A shallow pair of predicated arms feeds one reconvergent join.  Remaining
+    operations extend a serial post-join tail, so size changes graph topology
+    without keeping the predicate live across a long arm or causing explosive
+    control backtracking in the current heuristic mapper.
+    """
+    rng = random.Random(seed)
+    lines = _emit_header("predicated_diamond")
+    constants = _emit_constants(lines, 2, seed=seed)
+    current = constants[0]
+    arithmetic_index = 0
+    # Keep exactly one real reconvergent control diamond.  A previous design
+    # scaled the arm depths and routinely timed out at only 32 operations
+    # because the predicate had to stay live across both arms.
+    predicate = _emit_icmp(
+        lines, "pd_cmp", current,
+        "sgt" if (seed & 1) else "slt",
+        (abs(seed) % 9), "i32", DATA_TYPE
+    )
+    inverted = _emit_not(lines, "pd_not", predicate)
+    # The two arms have distinct source roots for a genuine split/join.
+    then_current = _emit_unary_binary(
+        lines, arithmetic_index,
+        _seeded_operation_kind(rng, arithmetic_index, seed),
+        current, 1 + (abs(seed) % 11), name_prefix="pd"
+    )
+    arithmetic_index += 1
+    else_current = _emit_unary_binary(
+        lines, arithmetic_index,
+        _seeded_operation_kind(rng, arithmetic_index, seed),
+        constants[1], 1 + ((abs(seed) + 1) % 11), name_prefix="pd"
+    )
+    arithmetic_index += 1
+    then_value = _emit_grant_predicate(lines, "pd_then", then_current, predicate)
+    else_value = _emit_grant_predicate(lines, "pd_else", else_current, inverted)
+    current = _emit_binary(
+        lines, arithmetic_index,
+        _seeded_operation_kind(rng, arithmetic_index, seed),
+        then_value, else_value, name_prefix="pd"
+    )
+    arithmetic_index += 1
+
+    for tail in range(operation_count - arithmetic_index):
+        current = _emit_unary_binary(
+            lines, arithmetic_index,
+            _seeded_operation_kind(rng, arithmetic_index, seed),
+            current, 1 + ((abs(seed) + tail + 7) % 11),
+            name_prefix="pd"
+        )
+        arithmetic_index += 1
+    if arithmetic_index != operation_count:
+        raise AssertionError(
+            "predicated diamond did not emit requested operation count"
+        )
+    return _emit_footer(lines)
+
+
+def _emit_pointer_root(
+    lines: List[str], index_value: str, base_arg: str,
+) -> str:
+    """Start a serial pointer chase with an argument-backed pointer load."""
+    index_mov = "%pc_root_index_mov"
+    base = "%pc_root_base"
+    base_mov = "%pc_root_base_mov"
+    loaded_ptr = "%pc_root_loaded_ptr"
+    lines.append(_move(index_mov, index_value, I64_DATA_TYPE))
+    lines.append(
+        f'    {base} = "neura.gep"({index_mov}) '
+        '<{operandSegmentSizes = array<i32: 0, 1>}> '
+        f'{{lhs_value = "{base_arg}"}} '
+        f': ({I64_DATA_TYPE}) -> {POINTER_DATA_TYPE}'
+    )
+    lines.append(_move(base_mov, base, POINTER_DATA_TYPE))
+    lines.append(
+        f'    {loaded_ptr} = "neura.load"({base_mov}) '
+        f': ({POINTER_DATA_TYPE}) -> {POINTER_DATA_TYPE}'
+    )
+    return loaded_ptr
+
+
+def _emit_pointer_hop(
+    lines: List[str], hop_index: int, base_pointer: str, index_value: str,
+    result_type: str,
+) -> str:
+    """Follow one loaded pointer through an indirect GEP and load."""
+    base_mov = f"%pc_hop{hop_index}_base_mov"
+    index_mov = f"%pc_hop{hop_index}_index_mov"
+    element_ptr = f"%pc_hop{hop_index}_element_ptr"
+    element_ptr_mov = f"%pc_hop{hop_index}_element_ptr_mov"
+    loaded = f"%pc_hop{hop_index}_loaded"
+    lines.append(_move(base_mov, base_pointer, POINTER_DATA_TYPE))
+    lines.append(_move(index_mov, index_value, I64_DATA_TYPE))
+    lines.append(
+        f'    {element_ptr} = "neura.gep"({base_mov}, {index_mov}) '
+        '<{operandSegmentSizes = array<i32: 1, 1>}> '
+        f': ({POINTER_DATA_TYPE}, {I64_DATA_TYPE}) -> {POINTER_DATA_TYPE}'
+    )
+    lines.append(_move(element_ptr_mov, element_ptr, POINTER_DATA_TYPE))
+    lines.append(
+        f'    {loaded} = "neura.load"({element_ptr_mov}) '
+        f': ({POINTER_DATA_TYPE}) -> {result_type}'
+    )
+    return loaded
+
+
+def _generate_pointer_chase(operation_count: int, seed: int) -> str:
+    """Generate a pointer chase with real indirect loads and a loop backedge."""
+    rng = random.Random(seed)
+    lines = [
+        "module {",
+        '  func.func @generated_pointer_chase(%arg0: !llvm.ptr, '
+        '%arg1: !llvm.ptr, %arg2: !llvm.ptr) '
+        'attributes {accelerator = "neura"} {',
+    ]
+    lines.append(_grant_once_constant("%pc_init", 0, "i64", I64_DATA_TYPE))
+    lines.append("    %pc_reserved = neura.reserve : !neura.data<i64, i1>")
+    lines.append(_move("%pc_init_mov", "%pc_init", I64_DATA_TYPE))
+    lines.append(
+        "    %pc_index = neura.phi_start %pc_init_mov, %pc_reserved "
+        f": {I64_DATA_TYPE}, {I64_DATA_TYPE} -> {I64_DATA_TYPE}"
+    )
+
+    # Follow the known-good direct pointer fixture: one argument-backed GEP
+    # loads a pointer, a second argument-backed GEP supplies a scalar index,
+    # and the loaded pointer feeds an indirect GEP/load.  Keeping this
+    # critical two-input GEP shape intact is important for the current
+    # heuristic mapper; operation-count scaling is carried by the live
+    # arithmetic chain below rather than by disconnected memory branches.
+    current_pointer = _emit_pointer_root(lines, "%pc_index", "%arg1")
+    # Derive the indirect-GEP index from a second, scalar load path.  This is
+    # the same legal pattern used by Neura's checked pointer fixture and avoids
+    # asking the mapper to route two independent uses of the loop phi into an
+    # indirect GEP at the same scheduling level.
+    lines.append(_move("%pc_index_base_index_mov", "%pc_index", I64_DATA_TYPE))
+    index_base_arg = "%arg2" if (seed & 2) else "%arg0"
+    lines.append(
+        '    %pc_index_base = "neura.gep"(%pc_index_base_index_mov) '
+        '<{operandSegmentSizes = array<i32: 0, 1>}> '
+        f'{{lhs_value = "{index_base_arg}"}} '
+        f': ({I64_DATA_TYPE}) -> {POINTER_DATA_TYPE}'
+    )
+    lines.append(_move("%pc_index_base_mov", "%pc_index_base", POINTER_DATA_TYPE))
+    lines.append(
+        f'    %pc_loaded_index = "neura.load"(%pc_index_base_mov) '
+        f': ({POINTER_DATA_TYPE}) -> {DATA_TYPE}'
+    )
+    indirect_index = _emit_sext(
+        lines, "pc_indirect_index", "%pc_loaded_index", DATA_TYPE, I64_DATA_TYPE
+    )
+    current = _emit_pointer_hop(
+        lines, 0, current_pointer, indirect_index, DATA_TYPE
+    )
+    for arithmetic_index in range(operation_count):
+        current = _emit_unary_binary(
+            lines, arithmetic_index,
+            _seeded_operation_kind(rng, arithmetic_index, seed),
+            current, 1 + ((abs(seed) + arithmetic_index * 5) % 13),
+            name_prefix="pc"
+        )
+
+    # The terminal payload value is intentionally left as a sink, matching the
+    # existing compute motifs.  Reusing the loop index for a late output GEP
+    # would keep it live across the whole payload chain and makes Neura's
+    # heuristic mapper repeatedly reject the candidate at the register-window
+    # boundary.  The pointer/load/arithmetic path is already one weakly
+    # connected component rooted at the loop index.
+    # Keep the loop-index arithmetic names separate from payload arithmetic and
+    # close the real recurrence with the frontend's predicate/ctrl_mov shape.
+    lines.append(_move("%pc_next_index_input", "%pc_index", I64_DATA_TYPE))
+    lines.append(
+        f'    %pc_next_index = "neura.add"(%pc_next_index_input) '
+        f'{{rhs_value = 1 : i64}} : ({I64_DATA_TYPE}) -> {I64_DATA_TYPE}'
+    )
+    lines.append(_move("%pc_next_index_mov", "%pc_next_index", I64_DATA_TYPE))
+    _emit_icmp(
+        lines, "pc_limit_cmp", "%pc_next_index", "eq",
+        16 + (abs(seed) % 17), "i64", I64_DATA_TYPE
+    )
+    _emit_not(lines, "pc_continue", "%pc_limit_cmp")
+    _emit_grant_predicate(
+        lines, "pc_index_grant", "%pc_next_index", "%pc_continue",
+        I64_DATA_TYPE
+    )
+    lines.append(
+        "    neura.ctrl_mov %pc_index_grant -> %pc_reserved : "
+        f"{I64_DATA_TYPE} {I64_DATA_TYPE}"
+    )
+    return _emit_footer(lines)
+
+
 _GENERATORS = {
     "chain": _generate_chain,
     "fanout": _generate_fanout,
@@ -476,26 +874,55 @@ _GENERATORS = {
     "diamond": _generate_diamond,
     "mixed": _generate_mixed,
     "random_dag": _generate_random_dag,
+    "recurrence_chain": _generate_recurrence_chain,
+    "predicated_diamond": _generate_predicated_diamond,
+    "pointer_chase": _generate_pointer_chase,
 }
 
 
 def generate_motif_mlir(motif: str, operation_count: int, seed: int) -> str:
-    """Generate one deterministic lowered Neura compute DFG."""
+    """Generate one deterministic lowered Neura DFG for a motif family."""
     name = MOTIF_ALIASES.get(motif.strip().lower(), motif.strip().lower())
     if name not in _GENERATORS:
         raise ValueError(f"unknown motif: {motif}")
-    if operation_count < OPERATION_BANDS[0][0]:
+    bands = operation_bands_for_motif(name)
+    minimum = min(low for low, _ in bands)
+    maximum = max(high for _, high in bands)
+    # Direct stress experiments may opt into larger graphs without silently
+    # changing the frozen, mapper-feasible corpus distribution above.
+    maximum = max(maximum, DIRECT_OPERATION_LIMITS.get(name, maximum))
+    if operation_count < minimum:
         raise ValueError("operation_count is below the supported motif range")
-    if operation_count > OPERATION_BANDS[-1][1]:
+    if operation_count > maximum:
         raise ValueError("operation_count exceeds the supported motif range")
     text = _GENERATORS[name](operation_count, int(seed))
-    # Guard the key contract here instead of relying on a regex in tests.
+    # Guard each family contract rather than assuming every op in a lowered
+    # graph is one of the six v1 binary compute nodes. Pointer chasing has one
+    # extra i64 index increment in its loop-control path; its payload remains
+    # exactly operation_count i32 add/mul nodes.
     operation_lines = re.findall(r'"neura\.(?:add|mul)"', text)
-    if len(operation_lines) != operation_count:
+    expected = operation_count + int(name == "pointer_chase")
+    if len(operation_lines) != expected:
         raise AssertionError(
             f"{name} emitted {len(operation_lines)} operations, expected "
-            f"{operation_count}"
+            f"{expected}"
         )
+    if name == "recurrence_chain":
+        if text.count("neura.reserve") != 1 or text.count("neura.phi_start") != 1:
+            raise AssertionError("recurrence_chain must contain one reserve/phi")
+        if text.count("neura.ctrl_mov") != 1:
+            raise AssertionError("recurrence_chain must contain one backedge")
+    elif name == "predicated_diamond":
+        if not (text.count("neura.icmp") and text.count("neura.not") and
+                text.count("neura.grant_predicate")):
+            raise AssertionError("predicated_diamond is missing predicate arms")
+        if text.count('"neura.add"') + text.count('"neura.mul"') != operation_count:
+            raise AssertionError("predicated_diamond payload count mismatch")
+    elif name == "pointer_chase":
+        if text.count('"neura.gep"') < 2 or text.count('"neura.load"') < 2:
+            raise AssertionError("pointer_chase must contain pointer/load chain")
+        if text.count("neura.ctrl_mov") != 1:
+            raise AssertionError("pointer_chase must contain one index backedge")
     return text
 
 
@@ -517,6 +944,11 @@ def canonical_dfg_text(text: str) -> str:
         normalized = re.sub(
             r"\bvalue = -?\d+ : i32\b", "value = 0 : i32", normalized
         )
+        normalized = re.sub(
+            r"\b(rhs_value|constant_value) = (-?\d+) : (i32|i64)\b",
+            r"\1 = 0 : \3",
+            normalized,
+        )
         canonical_lines.append(normalized)
     return "\n".join(canonical_lines) + "\n"
 
@@ -534,22 +966,28 @@ def write_architecture(path: Path, rows: int, columns: int,
     """Write a deterministic Neura architecture for a motif candidate."""
     if variant not in DEFAULT_ARCHITECTURE_VARIANTS:
         raise ValueError(f"unknown architecture variant: {variant}")
+    fu_types = json.dumps(list(NEURA_FU_TYPES), separators=(", ", ": "))
     if variant == "split-domain":
-        # Keep the memory FU classes available so this architecture family can
-        # later host memory motifs. The current compute nodes do not use them.
-        tile_defaults = '["constant", "mem", "mem_indexed"]'
+        # Left tiles are memory/source-domain tiles; right tiles have the full
+        # operation set.  This keeps the split architecture materially
+        # different while retaining a legal placement domain for every v2 op.
+        tile_defaults = json.dumps(
+            ["constant", "mem", "mem_indexed"], separators=(", ", ": ")
+        )
         first_compute_column = max(0, columns // 2)
         overrides = "\n".join(
             "  - tile_x: {x}\n"
             "    tile_y: {y}\n"
-            '    fu_types: ["add", "mul", "mem", "mem_indexed"]\n'
+            "    fu_types: {fu_types}\n"
             "    num_registers: {registers}\n"
-            "    existence: true".format(x=x, y=y, registers=registers)
+            "    existence: true".format(
+                x=x, y=y, registers=registers, fu_types=fu_types
+            )
             for y in range(rows)
             for x in range(first_compute_column, columns)
         )
     else:
-        tile_defaults = '["constant", "add", "mul", "mem", "mem_indexed"]'
+        tile_defaults = fu_types
         overrides = ""
     path.write_text("\n".join((
         "architecture:",
@@ -761,12 +1199,15 @@ def update_manifest_candidate(
 
 __all__ = [
     "DEFAULT_ARCHITECTURE_VARIANTS", "DEFAULT_MOTIFS", "DEFAULT_SHAPES",
-    "GENERATOR_VERSION", "MANIFEST_SCHEMA_VERSION", "MotifBaseSpec",
+    "DIRECT_OPERATION_LIMITS", "FAMILY_OPERATION_BANDS", "GENERATOR_VERSION",
+    "MANIFEST_SCHEMA_VERSION",
+    "MotifBaseSpec",
     "MotifCandidate", "OPERATION_BANDS", "atomic_write_json",
     "canonical_dfg_sha256", "canonical_dfg_text", "generate_motif_mlir",
     "make_base_specs", "make_candidates", "make_manifest",
     "manifest_summary", "parse_architecture_variants", "parse_motif_names",
-    "parse_shape", "parse_shapes", "sha256_text", "MOTIF_ALIASES",
+    "operation_bands_for_motif", "parse_shape", "parse_shapes", "sha256_text",
+    "MOTIF_ALIASES", "NEURA_FU_TYPES",
     "stratified_operation_count", "update_manifest_candidate",
     "write_architecture",
 ]

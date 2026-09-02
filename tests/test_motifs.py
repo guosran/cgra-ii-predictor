@@ -82,7 +82,10 @@ class MotifCorpusTest(unittest.TestCase):
         )
 
     def test_motifs_have_binary_and_multi_input_graphs(self):
-        for motif in neura_motifs.DEFAULT_MOTIFS:
+        legacy_motifs = {
+            "chain", "fanout", "reduction", "diamond", "mixed", "random_dag",
+        }
+        for motif in legacy_motifs:
             text = neura_motifs.generate_motif_mlir(motif, 16, 9)
             binary = re.findall(
                 r'"neura\.(?:add|mul)"\(%[^,]+, %[^)]+\)', text
@@ -96,6 +99,81 @@ class MotifCorpusTest(unittest.TestCase):
         self.assertGreaterEqual(fanout.count("%c0"), 3)
         diamond = neura_motifs.generate_motif_mlir("diamond", 16, 9)
         self.assertGreaterEqual(diamond.count("%c0"), 3)
+
+    def test_v2_families_have_structural_contracts(self):
+        recurrence = neura_motifs.generate_motif_mlir(
+            "recurrence_chain", 16, 9
+        )
+        self.assertEqual(recurrence.count('"neura.add"') +
+                         recurrence.count('"neura.mul"'), 16)
+        self.assertEqual(recurrence.count("neura.reserve"), 1)
+        self.assertEqual(recurrence.count("neura.phi_start"), 1)
+        self.assertEqual(recurrence.count("neura.ctrl_mov"), 1)
+        self.assertGreater(
+            len(re.findall(r'"neura\.(?:add|mul)"', recurrence)), 1
+        )
+
+        control = neura_motifs.generate_motif_mlir(
+            "predicated_diamond", 16, 9
+        )
+        self.assertGreater(control.count('"neura.icmp"'), 0)
+        self.assertGreater(control.count('"neura.not"'), 0)
+        self.assertGreater(control.count("neura.grant_predicate"), 0)
+        self.assertEqual(
+            control.count('"neura.add"') + control.count('"neura.mul"'), 16
+        )
+        # A complete diamond has two arm computations and one join.
+        self.assertGreaterEqual(control.count("grant_predicate"), 2)
+
+        pointer = neura_motifs.generate_motif_mlir("pointer_chase", 16, 9)
+        self.assertIn("!llvm.ptr", pointer)
+        self.assertGreaterEqual(pointer.count('"neura.gep"'), 2)
+        self.assertGreaterEqual(pointer.count('"neura.load"'), 2)
+        self.assertGreaterEqual(pointer.count('"neura.load"'),
+                                pointer.count('"neura.gep"') - 1)
+        self.assertEqual(pointer.count("neura.ctrl_mov"), 1)
+
+    def test_v2_operation_count_changes_topology_not_literals(self):
+        for motif in ("recurrence_chain", "predicated_diamond", "pointer_chase"):
+            small = neura_motifs.generate_motif_mlir(motif, 8, 10)
+            large = neura_motifs.generate_motif_mlir(motif, 16, 10)
+            self.assertNotEqual(
+                neura_motifs.canonical_dfg_sha256(small),
+                neura_motifs.canonical_dfg_sha256(large),
+                motif,
+            )
+            self.assertNotEqual(
+                len(re.findall(r'(?m)^\s*(?:%[^=]+ = )?"?neura\.', small)),
+                len(re.findall(r'(?m)^\s*(?:%[^=]+ = )?"?neura\.', large)),
+                motif,
+            )
+
+    def test_v2_frozen_bands_are_mapper_feasible_with_explicit_stress_limits(self):
+        self.assertEqual(neura_motifs.DEFAULT_MOTIFS[-3:], (
+            "recurrence_chain", "predicated_diamond", "pointer_chase",
+        ))
+        self.assertLessEqual(
+            max(high for _, high in neura_motifs.operation_bands_for_motif(
+                "random_dag"
+            )), 48
+        )
+        self.assertLessEqual(
+            max(high for _, high in neura_motifs.operation_bands_for_motif(
+                "recurrence_chain"
+            )), 32
+        )
+        for motif in ("random_dag", "predicated_diamond", "pointer_chase"):
+            self.assertGreaterEqual(
+                neura_motifs.DIRECT_OPERATION_LIMITS[motif], 128
+            )
+        for motif in ("random_dag", "predicated_diamond", "pointer_chase"):
+            specs = neura_motifs.make_base_specs(3, seed=17, motifs=(motif,))
+            self.assertEqual(len(specs), 3)
+            self.assertGreater(len(set(spec.operation_count for spec in specs)), 1)
+        large = neura_motifs.generate_motif_mlir("random_dag", 128, 23)
+        self.assertEqual(
+            large.count('"neura.add"') + large.count('"neura.mul"'), 128
+        )
 
     def test_random_dag_changes_edges_and_remains_connected(self):
         first = neura_motifs.generate_motif_mlir("random_dag", 24, 101)
@@ -136,6 +214,15 @@ class MotifCorpusTest(unittest.TestCase):
         self.assertEqual(
             neura_motifs.canonical_dfg_sha256(original),
             neura_motifs.canonical_dfg_sha256(changed),
+        )
+        recurrence = neura_motifs.generate_motif_mlir("recurrence_chain", 8, 77)
+        changed_recurrence = re.sub(
+            r"rhs_value = \d+ : i32", "rhs_value = 987654321 : i32",
+            recurrence,
+        )
+        self.assertEqual(
+            neura_motifs.canonical_dfg_sha256(recurrence),
+            neura_motifs.canonical_dfg_sha256(changed_recurrence),
         )
 
     def test_stratification_changes_real_operation_count(self):
