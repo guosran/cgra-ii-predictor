@@ -95,6 +95,21 @@ class MotifCollectionTest(unittest.TestCase):
                     opt, candidate, 5, mismatched_invocation
                 )
 
+    def test_changed_predeclared_input_is_protocol_error_before_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opt, _manifest_path, prepared = self.fresh_corpus(root)
+            candidate = prepared[1][0]
+            Path(candidate.source_path).write_text("module {}\n")
+            invocation = mock.Mock(
+                side_effect=AssertionError("compiler must not be invoked")
+            )
+            with self.assertRaisesRegex(ValueError, "input hash changed"):
+                adapter.collect_motif_candidate(
+                    opt, candidate, 5, invocation
+                )
+            invocation.assert_not_called()
+
     def test_parallel_collection_is_bounded_and_emitted_in_candidate_order(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1042,9 +1042,8 @@ def collect_motif_candidate(
         file_sha256(source) != candidate.source_sha256 or
         file_sha256(architecture) != candidate.architecture_sha256
     ):
-        return MotifCollectionResult(
-            candidate.candidate_id, "censored", "preflight",
-            "predeclared-input-hash-mismatch", invocations=tuple(calls),
+        raise ValueError(
+            f"candidate {candidate.candidate_id} predeclared input hash changed"
         )
 
     analysis_command = (
@@ -1091,15 +1090,9 @@ def collect_motif_candidate(
             candidate.candidate_id, "censored", "label-parse",
             "compiled_ii-unavailable", invocations=tuple(calls),
         )
-    try:
-        sample = _motif_sample_from_artifacts(
-            candidate, values, int(compiled_ii), cost, mapped
-        )
-    except OSError:
-        return MotifCollectionResult(
-            candidate.candidate_id, "censored", "feature-parse",
-            "feature-extraction-failed", invocations=tuple(calls),
-        )
+    sample = _motif_sample_from_artifacts(
+        candidate, values, int(compiled_ii), cost, mapped
+    )
     return MotifCollectionResult(
         candidate.candidate_id, "success", "mapper", sample=sample,
         invocations=tuple(calls),
@@ -1610,31 +1603,32 @@ class MotifCollectionCoordinator:
         record = self._record_for(outcome.candidate_id)
         if outcome.status not in {"success", "censored"}:
             raise RuntimeError(f"worker returned invalid status: {outcome.status}")
-        record["status"] = outcome.status
-        record["stage"] = outcome.stage
-        record["failure"] = outcome.failure
+        success_updates: Dict[str, object] = {}
         if outcome.status == "success":
             if outcome.sample is None:
                 raise RuntimeError("successful worker result lacks sample")
             candidate = self.candidates[self._ordinal[outcome.candidate_id]]
             cost = Path(candidate.source_path).parent / "cost.mlir"
             mapped = Path(candidate.source_path).parent / "mapped.mlir"
-            record.update({
+            cost_sha256 = file_sha256(cost)
+            mapped_sha256 = file_sha256(mapped)
+            if cost_sha256 is None or mapped_sha256 is None:
+                raise RuntimeError(
+                    "successful worker result lacks hashed cost/mapped artifacts"
+                )
+            success_updates = {
                 "sample_id": outcome.candidate_id,
                 "compiled_ii": int(outcome.sample["compiled_ii"]),
                 "lower_bound": int(outcome.sample["baseline_lb"]),
                 "cost_artifact_path": _relative_to_manifest(
                     self.manifest_path.parent, cost
                 ),
-                "cost_artifact_sha256": file_sha256(cost),
+                "cost_artifact_sha256": cost_sha256,
                 "mapped_artifact_path": _relative_to_manifest(
                     self.manifest_path.parent, mapped
                 ),
-                "mapped_artifact_sha256": file_sha256(mapped),
-            })
-            self.cached_samples[outcome.candidate_id] = outcome.sample
-        else:
-            _clear_transient_manifest_fields(record)
+                "mapped_artifact_sha256": mapped_sha256,
+            }
         self._failure_events[outcome.candidate_id] = [
             {
                 **invocation_result.failure_record(),
@@ -1643,6 +1637,14 @@ class MotifCollectionCoordinator:
             for invocation_result in outcome.invocations
             if not invocation_result.ok
         ]
+        record["status"] = outcome.status
+        record["stage"] = outcome.stage
+        record["failure"] = outcome.failure
+        if outcome.status == "success":
+            record.update(success_updates)
+            self.cached_samples[outcome.candidate_id] = outcome.sample
+        else:
+            _clear_transient_manifest_fields(record)
         record["invocation_failures"] = list(
             self._failure_events[outcome.candidate_id]
         )
@@ -3305,7 +3307,7 @@ def parse_args() -> argparse.Namespace:
         "--motif", dest="motif", action="append", default=[],
         metavar="NAME[,NAME...]",
         help=("Compute motif family to generate; repeat or use commas. "
-              "Defaults to chain,fanout,reduction,diamond,mixed,random_dag."),
+              "Defaults to all nine motif-v2 families."),
     )
     parser.add_argument(
         "--motifs", dest="motifs_alias", action="append", default=[],
