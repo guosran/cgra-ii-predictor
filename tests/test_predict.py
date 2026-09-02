@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -42,6 +43,34 @@ def candidate(x=2.0):
             "mapper_id": "neura-heuristic",
             "mapper_revision": "revision-a",
             "mapper_config": "mapping-strategy=heuristic",
+        },
+    }
+
+
+def frozen_v2_artifact(model_value, hashes):
+    hashes = sorted(hashes)
+    return {
+        "schema_version": "compiled-ii-model-artifact-v2",
+        "target": "compiled_ii_from_neura_heuristic_mapper",
+        "artifact_status": "frozen_before_machsuite_reveal",
+        "lower_bound_contract": {
+            "name": "rec_res_max_v1",
+            "formula": "max(rec_mii,res_mii)",
+            "training_lower_bound_sources": ["rec_res_max_v1"],
+            "components_are_model_features": False,
+        },
+        "trained_full_model": model_value,
+        "trained_full_model_sha256": canonical_model_sha256(model_value),
+        "provenance": {
+            "training_distinct_base_dfg_count": len(hashes),
+            "training_canonical_dfg_identity": {
+                "scheme": "canonical_dfg_sha256_v1",
+                "canonical_dfg_sha256s": hashes,
+                "distinct_count": len(hashes),
+                "set_sha256": hashlib.sha256(json.dumps(
+                    hashes, sort_keys=True, separators=(",", ":")
+                ).encode()).hexdigest(),
+            },
         },
     }
 
@@ -228,6 +257,54 @@ class PredictionTest(unittest.TestCase):
             path.write_text(json.dumps(raw))
             with self.assertRaisesRegex(ValueError, "unsupported compiled-II"):
                 load_model_artifact(path)
+
+    def test_v2_loader_validates_exact_training_canonical_identity_set(self):
+        hashes = [hashlib.sha256(value.encode()).hexdigest() for value in (
+            "training-a", "training-b",
+        )]
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = Path(raw_directory)
+            path = directory / "frozen-v2.json"
+            artifact = frozen_v2_artifact(model(), hashes)
+            path.write_text(json.dumps(artifact))
+            loaded = load_model_artifact(path)
+            self.assertEqual(loaded.container, "compiled-ii-model-artifact-v2")
+            self.assertEqual(
+                loaded.provenance["training_canonical_dfg_identity"]
+                ["canonical_dfg_sha256s"], sorted(hashes)
+            )
+            for mutation in ("unsorted", "duplicate", "bad-hash", "bad-count", "bad-digest", "bad-existing-count"):
+                mutated = json.loads(json.dumps(artifact))
+                identity = mutated["provenance"]["training_canonical_dfg_identity"]
+                if mutation == "unsorted":
+                    identity["canonical_dfg_sha256s"] = list(
+                        reversed(sorted(hashes))
+                    )
+                elif mutation == "duplicate":
+                    identity["canonical_dfg_sha256s"] = [hashes[0], hashes[0]]
+                    identity["distinct_count"] = 2
+                elif mutation == "bad-hash":
+                    identity["canonical_dfg_sha256s"][0] = "BAD"
+                elif mutation == "bad-count":
+                    identity["distinct_count"] = 99
+                elif mutation == "bad-digest":
+                    identity["set_sha256"] = "0" * 64
+                else:
+                    mutated["provenance"]["training_distinct_base_dfg_count"] = 99
+                path.write_text(json.dumps(mutated))
+                with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                    load_model_artifact(path)
+
+    def test_generic_loader_keeps_reading_v1_container(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            path = self._write_report(Path(raw_directory))
+            raw = json.loads(path.read_text())
+            raw["schema_version"] = "compiled-ii-model-artifact-v1"
+            raw["artifact_status"] = "frozen_before_machsuite_reveal"
+            raw["target"] = "compiled_ii_from_neura_heuristic_mapper"
+            path.write_text(json.dumps(raw))
+            loaded = load_model_artifact(path)
+        self.assertEqual(loaded.container, "compiled-ii-model-artifact-v1")
 
     def test_non_finite_prediction_result_is_rejected(self):
         extreme = model()

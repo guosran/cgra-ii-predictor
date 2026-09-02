@@ -128,6 +128,20 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertEqual(implicit["baseline_lb"], 5)
         self.assertEqual(implicit["lower_bound_source"], "rec_res_max_v1")
 
+        proven = adapter.parse_cost_features(cost_text())
+        proven.update({"proven_lower_bound": 5, "compiled_ii": 8})
+        adapter.add_prediction_features(proven)
+        self.assertEqual(proven["baseline_lb"], 5)
+
+        conflicting = adapter.parse_cost_features(cost_text())
+        conflicting.update({
+            "lower_bound": 5,
+            "proven_lower_bound": 6,
+            "compiled_ii": 8,
+        })
+        with self.assertRaisesRegex(ValueError, "proven_lower_bound.*disagrees"):
+            adapter.add_prediction_features(conflicting)
+
     def test_primary_model_features_exclude_bound_and_components(self):
         forbidden = {"baseline_lb", *adapter.LOWER_BOUND_COMPONENT_NAMES}
         self.assertTrue(forbidden.isdisjoint(adapter.MODEL_FEATURE_NAMES))
@@ -239,6 +253,20 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertEqual(row["architecture_sha256"], "architecture-digest")
         self.assertEqual(row["mapper_revision"], "revision")
         self.assertEqual(row["rec_res_evidence"], "imported_report_unverified")
+
+    def test_portable_input_normalization_accepts_proven_bound_alias(self):
+        raw = {
+            "sample_id": "suite/kernel/4x4",
+            "group": "suite/kernel",
+            "proven_lower_bound": 6,
+            "compiled_ii": 8,
+            "features": {"rec_mii": 4, "res_mii": 6},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            report_path.write_text("{}")
+            row = adapter.normalize_input_sample(raw, report_path, "digest")
+        self.assertEqual(row["baseline_lb"], 6)
 
     def test_candidate_identity_includes_source_dfg_hash(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,4 +1,5 @@
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +26,36 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def frozen_artifact(model_value, training_hashes, schema=None):
+    schema = schema or machsuite_frozen.FROZEN_MODEL_SCHEMA
+    provenance = {
+        "neura": {
+            "revision": machsuite_frozen.FROZEN_NEURA_REVISION,
+            "dirty": False,
+        },
+    }
+    if schema == machsuite_frozen.FROZEN_MODEL_SCHEMA:
+        hashes = sorted(set(training_hashes))
+        provenance.update({
+            "training_distinct_base_dfg_count": len(hashes),
+            "training_canonical_dfg_identity": {
+                "scheme": "canonical_dfg_sha256_v1",
+                "canonical_dfg_sha256s": hashes,
+                "distinct_count": len(hashes),
+                "set_sha256": machsuite_frozen.canonical_json_sha256(hashes),
+            },
+        })
+    return {
+        "schema_version": schema,
+        "target": "compiled_ii_from_neura_heuristic_mapper",
+        "artifact_status": machsuite_frozen.FROZEN_MODEL_STATUS,
+        "lower_bound_contract": dict(machsuite_frozen.LOWER_BOUND_CONTRACT),
+        "trained_full_model": model_value,
+        "trained_full_model_sha256": canonical_model_sha256(model_value),
+        "provenance": provenance,
+    }
+
+
 def cost_text(rec_mii=1, res_mii=2):
     values = {
         "rec_mii": rec_mii,
@@ -36,12 +67,18 @@ def cost_text(rec_mii=1, res_mii=2):
     return f"rec_res_mii_info = {{{attributes}}}"
 
 
-def generated_sample(root, motif, base_index, compiled_ii=3):
-    base_seed = 1000 + base_index
+def generated_sample(
+    root, motif, base_index, shape="4x4", variant="homogeneous",
+    compiled_ii=3,
+):
+    base_seed = 1000 + base_index + 100 * list(neura_motifs.DEFAULT_MOTIFS).index(motif)
     operation_count = 8 + (base_index % 7)
     base_id = f"base-{base_index:04d}-rp7"
-    lineage = f"generated/motif-v1/{motif}/{base_id}"
-    candidate_dir = root / f"generated-{base_index:04d}"
+    lineage = f"generated/{neura_motifs.GENERATOR_VERSION}/{motif}/{base_id}"
+    rows, columns = neura_motifs.parse_shape(shape)
+    candidate_dir = root / (
+        f"generated-{motif}-{base_index:04d}-{shape}-{variant}"
+    )
     candidate_dir.mkdir()
     source = candidate_dir / "input.mlir"
     architecture = candidate_dir / "architecture.yaml"
@@ -52,7 +89,7 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
     )
     source.write_text(source_text)
     neura_motifs.write_architecture(
-        architecture, 4, 4, "homogeneous", 16
+        architecture, rows, columns, variant, 16
     )
     cost.write_text(cost_text())
     mapped.write_text(
@@ -63,17 +100,19 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
     source_sha = machsuite_frozen.raw_sha256(source)
     canonical = neura_motifs.canonical_dfg_sha256(source_text)
     architecture_sha = machsuite_frozen.raw_sha256(architecture)
-    graph = neura_experiment.graph_features_from_neura(source_text, 4, 4)
+    graph = neura_experiment.graph_features_from_neura(
+        source_text, rows, columns
+    )
     graph.update({
         "rec_mii": 1, "res_mii": 2, "baseline_lb": 2,
         "compiled_ii": compiled_ii,
     })
     graph.update({
-        "index": f"{lineage}/4x4/homogeneous/r16",
-        "candidate_id": f"{lineage}/4x4/homogeneous/r16",
+        "index": f"{lineage}/{shape}/{variant}/r16",
+        "candidate_id": f"{lineage}/{shape}/{variant}/r16",
         "training_stratum": "generated",
         "source_kind": "generated",
-        "source_family": f"generated/motif-v1/{motif}",
+        "source_family": f"generated/{neura_motifs.GENERATOR_VERSION}/{motif}",
         "family": lineage,
         "leakage_lineage_id": lineage,
         "declared_leakage_lineage_id": lineage,
@@ -83,20 +122,20 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
         "ranking_query_id": canonical,
         "generator_family": f"generated/motif/{motif}",
         "generator_type": "generated/motif",
-        "generator_version": "motif-v1",
+        "generator_version": neura_motifs.GENERATOR_VERSION,
         "motif": motif,
         "base_id": base_id,
         "base_seed": base_seed,
         "operation_count": operation_count,
-        "rows": 4,
-        "tiles": 16,
+        "rows": rows,
+        "tiles": rows * columns,
         "registers": 16,
         "source_path": str(source),
         "source_sha256": source_sha,
         "architecture_path": str(architecture),
         "architecture_sha256": architecture_sha,
-        "architecture_variant": "homogeneous",
-        "architecture_id": f"{architecture_sha}:homogeneous",
+        "architecture_variant": variant,
+        "architecture_id": f"{architecture_sha}:{variant}",
         "mapped_artifact_path": str(mapped),
         "mapped_artifact_sha256": machsuite_frozen.raw_sha256(mapped),
         "lower_bound_source": "rec_res_max_v1",
@@ -107,40 +146,76 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
         "cost_artifact_path": str(cost),
         "cost_artifact_sha256": machsuite_frozen.raw_sha256(cost),
     })
+    graph["split_domain"] = int(variant == "split-domain")
     return graph
 
 
-def generated_report(root, motifs, requested_per_family=200):
+def generated_report(
+    root, motifs=None, requested_per_family=None, base_count=1,
+    shapes=None, variants=None,
+):
+    motifs = tuple(motifs or neura_motifs.DEFAULT_MOTIFS)
+    if requested_per_family is None:
+        requested_per_family = machsuite_frozen.FROZEN_REQUESTED_BASES_PER_FAMILY
+    shapes = tuple(shapes or machsuite_frozen.FROZEN_MOTIF_SHAPES)
+    variants = tuple(variants or machsuite_frozen.FROZEN_ARCHITECTURE_VARIANTS)
     training_opt = root / "mlir-neura-opt"
     training_opt.write_text("test mapper binary\n")
-    samples = [
-        generated_sample(root, motif, index)
-        for index, motif in enumerate(motifs)
-    ]
+    samples = []
+    for motif in motifs:
+        for base_index in range(base_count):
+            for shape in shapes:
+                for variant in variants:
+                    samples.append(generated_sample(
+                        root, motif, base_index, shape, variant
+                    ))
+    manifest_path = root / "corpus-manifest.json"
+    write_json(manifest_path, {
+        "schema_version": neura_motifs.MANIFEST_SCHEMA_VERSION,
+        "status": "complete",
+        "candidates": [{
+            "generator_family": sample["generator_family"],
+            "base_dfg_id": sample["base_dfg_id"],
+            "canonical_dfg_sha256": sample["canonical_dfg_sha256"],
+            "rows": sample["rows"],
+            "columns": sample["tiles"] // sample["rows"],
+            "architecture_variant": sample["architecture_variant"],
+            "status": "success",
+        } for sample in samples],
+    })
+    required_cells = machsuite_frozen.required_shape_variant_cells()
+    training_samples, training_selection = (
+        neura_experiment.complete_generated_training_subset(
+            samples, required_cells
+        )
+    )
     selected_ridge, selected_dead_zone = (
         neura_experiment.select_ridge_hyperparameters(
-            samples, machsuite_frozen.FROZEN_RIDGE_CANDIDATES,
+            training_samples, machsuite_frozen.FROZEN_RIDGE_CANDIDATES,
             machsuite_frozen.FROZEN_DEAD_ZONE_CANDIDATES,
         )
     )
     model = neura_experiment.fit_ridge(
-        samples, selected_ridge, selected_dead_zone
+        training_samples, selected_ridge, selected_dead_zone
     )
     interval_rows = [{
-        "family": samples[0]["family"],
-        "prediction": float(samples[0]["compiled_ii"]),
-        "compiled_ii": float(samples[0]["compiled_ii"]),
-    }]
+        "family": sample["family"],
+        "prediction": float(sample["compiled_ii"]),
+        "compiled_ii": float(sample["compiled_ii"]),
+    } for sample in training_samples]
     neura_experiment.calibrate_unseen_family_interval(
         model, interval_rows, machsuite_frozen.FROZEN_INTERVAL_QUANTILE
     )
-    ready = (
-        len({sample["base_dfg_id"] for sample in samples}) >=
-        machsuite_frozen.DEFAULT_MINIMUM_BASE_DFGS and
-        {sample["generator_family"] for sample in samples} == {
-            f"generated/motif/{motif}"
-            for motif in neura_motifs.DEFAULT_MOTIFS
-        }
+    coverage = machsuite_frozen.generated_training_coverage(
+        samples, requested_bases_per_family=requested_per_family,
+        declared_candidates=json.loads(manifest_path.read_text())["candidates"],
+    )
+    ready = bool(
+        coverage["passed"] and
+        requested_per_family == machsuite_frozen.FROZEN_REQUESTED_BASES_PER_FAMILY
+    )
+    generated_corpus = neura_experiment.motif_corpus_summary(
+        samples, manifest_path
     )
     revision = neura_experiment.git_provenance(
         machsuite_frozen.PROJECT_ROOT
@@ -192,17 +267,43 @@ def generated_report(root, motifs, requested_per_family=200):
             },
         },
         "candidate_gate": {
+            "required_generator_families": list(
+                machsuite_frozen.required_generator_families()
+            ),
+            "required_shape_variant_cells": list(
+                machsuite_frozen.required_shape_variant_cells()
+            ),
+            "minimum_complete_bases_per_family": (
+                machsuite_frozen.FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY
+            ),
+            "minimum_total_complete_bases": (
+                machsuite_frozen.FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY *
+                len(machsuite_frozen.FROZEN_MOTIFS)
+            ),
+            "requested_bases_per_family": requested_per_family,
+            "requested_total_bases": (
+                requested_per_family * len(machsuite_frozen.FROZEN_MOTIFS)
+            ),
+            "minimum_complete_fraction": (
+                machsuite_frozen.FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY /
+                requested_per_family
+            ),
+            "coverage": coverage,
+            "training_selection": training_selection,
             "overall_ready_for_machsuite_freeze": ready,
         },
         "selected_model": "ridge",
         "nested_ridge_family_holdout": {"rows": interval_rows},
         "nested_ridge_metadata_holdouts": {
             "generator_family": {
-                "status": "ok" if ready else "unavailable",
+                "status": "ok",
                 "group_count": len(set(motifs)),
             }
         },
-        "samples": samples,
+        "motif_corpus": generated_corpus,
+        "samples": training_samples,
+        "labelled_samples": samples,
+        "training_selection": training_selection,
     }
 
 
@@ -369,9 +470,9 @@ class MachSuiteFrozenTest(unittest.TestCase):
                 machsuite_frozen.PROJECT_ROOT
             )["revision"]
             with patch.object(
-                machsuite_frozen, "DEFAULT_MINIMUM_BASE_DFGS", 6
+                machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 1
             ), patch.object(
-                machsuite_frozen, "DEFAULT_MINIMUM_GENERATOR_FAMILIES", 6
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 1
             ), patch.object(
                 machsuite_frozen, "require_clean_revision",
                 return_value={"revision": revision, "dirty": False},
@@ -382,7 +483,10 @@ class MachSuiteFrozenTest(unittest.TestCase):
                 write_json(report_path, report)
                 artifact = machsuite_frozen.freeze_random_training_model(
                     report_path, output_path, minimum_base_dfgs=6,
-                    minimum_generator_families=6,
+                    minimum_generator_families=len(
+                        machsuite_frozen.FROZEN_MOTIFS
+                    ),
+                    minimum_complete_bases_per_family=1,
                 )
             self.assertTrue(output_path.is_file())
             self.assertEqual(
@@ -438,6 +542,117 @@ class MachSuiteFrozenTest(unittest.TestCase):
                 ["small_smoke_override"]
             )
 
+    def test_unbalanced_generator_family_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = generated_report(root)
+            report["samples"] = [
+                sample for sample in report["samples"]
+                if sample["generator_family"] != "generated/motif/chain"
+            ]
+            report_path = root / "training-report.json"
+            write_json(report_path, report)
+            revision = report["provenance"]["predictor_repository"]["revision"]
+            with patch.object(
+                machsuite_frozen, "require_clean_revision",
+                return_value={"revision": revision, "dirty": False},
+            ), self.assertRaisesRegex(ValueError, "candidate gate|families"):
+                machsuite_frozen.freeze_random_training_model(
+                    report_path, root / "frozen.json", allow_small_smoke=True
+                )
+
+    def test_missing_shape_variant_cell_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(
+                machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 1
+            ), patch.object(
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 1
+            ):
+                report = generated_report(root)
+                report["samples"] = [
+                    sample for sample in report["samples"]
+                    if not (
+                        sample["generator_family"] == "generated/motif/chain" and
+                        sample["architecture_variant"] == "split-domain" and
+                        sample["rows"] == 3 and sample["tiles"] == 9
+                    )
+                ]
+                report_path = root / "training-report.json"
+                write_json(report_path, report)
+                revision = report["provenance"]["predictor_repository"]["revision"]
+                with patch.object(
+                    machsuite_frozen, "require_clean_revision",
+                    return_value={"revision": revision, "dirty": False},
+                ), self.assertRaisesRegex(ValueError, "coverage|candidate gate"):
+                    machsuite_frozen.freeze_random_training_model(
+                        report_path, root / "frozen.json", allow_small_smoke=True
+                    )
+
+    def test_successful_cell_must_be_predeclared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(
+                machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 1
+            ), patch.object(
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 1
+            ):
+                report = generated_report(root)
+                manifest_path = Path(
+                    report["motif_corpus"]["manifest_path"]
+                )
+                manifest = json.loads(manifest_path.read_text())
+                manifest["candidates"] = [
+                    candidate for candidate in manifest["candidates"]
+                    if not (
+                        candidate["generator_family"] == "generated/motif/chain" and
+                        candidate["architecture_variant"] == "homogeneous" and
+                        candidate["rows"] == 3 and candidate["columns"] == 3
+                    )
+                ]
+                write_json(manifest_path, manifest)
+                report["motif_corpus"]["manifest_sha256"] = (
+                    machsuite_frozen.raw_sha256(manifest_path)
+                )
+                report_path = root / "training-report.json"
+                write_json(report_path, report)
+                revision = report["provenance"]["predictor_repository"]["revision"]
+                with patch.object(
+                    machsuite_frozen, "require_clean_revision",
+                    return_value={"revision": revision, "dirty": False},
+                ), self.assertRaisesRegex(ValueError, "candidate gate|predeclared"):
+                    machsuite_frozen.freeze_random_training_model(
+                        report_path, root / "frozen.json", allow_small_smoke=True
+                    )
+
+    def test_declared_denominator_rejects_low_success_fraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(
+                machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 2
+            ), patch.object(
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 3
+            ):
+                # The manifest declares three bases per family, but only one
+                # complete base is successfully labelled.
+                report = generated_report(
+                    root, requested_per_family=3, base_count=3
+                )
+                report["samples"] = [
+                    sample for sample in report["samples"]
+                    if sample["base_id"].endswith("0000-rp7")
+                ]
+                report_path = root / "training-report.json"
+                write_json(report_path, report)
+                revision = report["provenance"]["predictor_repository"]["revision"]
+                with patch.object(
+                    machsuite_frozen, "require_clean_revision",
+                    return_value={"revision": revision, "dirty": False},
+                ), self.assertRaisesRegex(ValueError, "candidate gate|scale"):
+                    machsuite_frozen.freeze_random_training_model(
+                        report_path, root / "frozen.json", allow_small_smoke=True
+                    )
+
     def test_freeze_model_rejects_real_or_machsuite_training(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -464,20 +679,10 @@ class MachSuiteFrozenTest(unittest.TestCase):
             prediction_path = root / "predictions.json"
             seal_path = root / "seal.json"
             model = primary_model()
-            artifact = {
-                "schema_version": machsuite_frozen.FROZEN_MODEL_SCHEMA,
-                "target": "compiled_ii_from_neura_heuristic_mapper",
-                "artifact_status": machsuite_frozen.FROZEN_MODEL_STATUS,
-                "lower_bound_contract": dict(machsuite_frozen.LOWER_BOUND_CONTRACT),
-                "trained_full_model": model,
-                "trained_full_model_sha256": canonical_model_sha256(model),
-                "provenance": {
-                    "neura": {
-                        "revision": machsuite_frozen.FROZEN_NEURA_REVISION,
-                        "dirty": False,
-                    }
-                },
-            }
+            # Keep the training identity disjoint from the preflight DFG.
+            artifact = frozen_artifact(
+                model, [hashlib.sha256(b"training-only").hexdigest()]
+            )
             write_json(model_path, artifact)
             preflight, _ = frozen_preflight(root)
             write_json(preflight_path, preflight)
@@ -494,6 +699,82 @@ class MachSuiteFrozenTest(unittest.TestCase):
             self.assertEqual(
                 seal["prediction_sha256"], machsuite_frozen.raw_sha256(prediction_path)
             )
+
+    def test_training_test_overlap_is_rejected_before_prediction_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_path = root / "model.json"
+            preflight_path = root / "preflight.json"
+            prediction_path = root / "predictions.json"
+            seal_path = root / "seal.json"
+            preflight, _ = frozen_preflight(root)
+            write_json(preflight_path, preflight)
+            test_hash = preflight["samples"][0]["metadata"][
+                "canonical_dfg_sha256"
+            ]
+            write_json(model_path, frozen_artifact(primary_model(), [test_hash]))
+            with self.assertRaisesRegex(ValueError, "overlap"):
+                machsuite_frozen.freeze_predictions(
+                    preflight_path, model_path, prediction_path, seal_path
+                )
+            self.assertFalse(prediction_path.exists())
+            self.assertFalse(seal_path.exists())
+
+    def test_v1_model_is_generic_readable_but_frozen_workflow_rejects_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_path = root / "model.json"
+            preflight_path = root / "preflight.json"
+            prediction_path = root / "predictions.json"
+            seal_path = root / "seal.json"
+            write_json(model_path, frozen_artifact(
+                primary_model(), [hashlib.sha256(b"training-only").hexdigest()],
+                schema=machsuite_frozen.LEGACY_FROZEN_MODEL_SCHEMA,
+            ))
+            preflight, _ = frozen_preflight(root)
+            write_json(preflight_path, preflight)
+            loaded = machsuite_frozen.load_model_artifact(model_path)
+            self.assertEqual(
+                loaded.container, machsuite_frozen.LEGACY_FROZEN_MODEL_SCHEMA
+            )
+            with self.assertRaisesRegex(ValueError, "v2|frozen artifact"):
+                machsuite_frozen.freeze_predictions(
+                    preflight_path, model_path, prediction_path, seal_path
+                )
+            self.assertFalse(prediction_path.exists())
+
+    def test_reveal_rechecks_training_test_overlap_before_mapper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preflight_path = root / "preflight.json"
+            model_path = root / "model.json"
+            prediction_path = root / "predictions.json"
+            seal_path = root / "seal.json"
+            preflight, architecture = frozen_preflight(root)
+            write_json(preflight_path, preflight)
+            disjoint = hashlib.sha256(b"training-only").hexdigest()
+            write_json(model_path, frozen_artifact(primary_model(), [disjoint]))
+            machsuite_frozen.freeze_predictions(
+                preflight_path, model_path, prediction_path, seal_path
+            )
+            test_hash = preflight["samples"][0]["metadata"][
+                "canonical_dfg_sha256"
+            ]
+            write_json(model_path, frozen_artifact(primary_model(), [test_hash]))
+            with self.assertRaisesRegex(ValueError, "overlap"):
+                machsuite_frozen.reveal_labels(
+                    manifest_path=preflight_path,
+                    model_path=model_path,
+                    prediction_path=prediction_path,
+                    seal_path=seal_path,
+                    suite_root=root,
+                    neura_root=root,
+                    architecture=architecture,
+                    opt=root / "opt",
+                    output_dir=root / "reveal",
+                    timeout=1,
+                )
+            self.assertFalse((root / "reveal").exists())
 
     def test_fixed_inventory_cannot_be_shrunk(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -564,20 +845,9 @@ class MachSuiteFrozenTest(unittest.TestCase):
             prediction_path = root / "predictions.json"
             seal_path = root / "seal.json"
             model = primary_model()
-            write_json(model_path, {
-                "schema_version": machsuite_frozen.FROZEN_MODEL_SCHEMA,
-                "target": "compiled_ii_from_neura_heuristic_mapper",
-                "artifact_status": machsuite_frozen.FROZEN_MODEL_STATUS,
-                "lower_bound_contract": dict(machsuite_frozen.LOWER_BOUND_CONTRACT),
-                "trained_full_model": model,
-                "trained_full_model_sha256": canonical_model_sha256(model),
-                "provenance": {
-                    "neura": {
-                        "revision": machsuite_frozen.FROZEN_NEURA_REVISION,
-                        "dirty": False,
-                    }
-                },
-            })
+            write_json(model_path, frozen_artifact(
+                model, [hashlib.sha256(b"training-only").hexdigest()]
+            ))
             manifest, _ = frozen_preflight(root)
             write_json(manifest_path, manifest)
             predictions, seal = machsuite_frozen.freeze_predictions(
@@ -611,20 +881,9 @@ class MachSuiteFrozenTest(unittest.TestCase):
             predictions = root / "predictions.json"
             seal = root / "seal.json"
             model_value = primary_model()
-            write_json(model, {
-                "schema_version": machsuite_frozen.FROZEN_MODEL_SCHEMA,
-                "target": "compiled_ii_from_neura_heuristic_mapper",
-                "artifact_status": machsuite_frozen.FROZEN_MODEL_STATUS,
-                "lower_bound_contract": dict(machsuite_frozen.LOWER_BOUND_CONTRACT),
-                "trained_full_model": model_value,
-                "trained_full_model_sha256": canonical_model_sha256(model_value),
-                "provenance": {
-                    "neura": {
-                        "revision": machsuite_frozen.FROZEN_NEURA_REVISION,
-                        "dirty": False,
-                    }
-                },
-            })
+            write_json(model, frozen_artifact(
+                model_value, [hashlib.sha256(b"training-only").hexdigest()]
+            ))
             preflight_value, architecture = frozen_preflight(root)
             write_json(preflight, preflight_value)
             machsuite_frozen.freeze_predictions(

@@ -45,25 +45,37 @@ from cgra_ii_predictor.predict import (  # noqa: E402
     canonical_model_sha256,
     load_model_artifact,
     load_prediction_samples,
+    training_canonical_dfg_hashes,
 )
 
 
 PREFLIGHT_SCHEMA = "machsuite-frozen-preflight-v1"
-FROZEN_MODEL_SCHEMA = "compiled-ii-model-artifact-v1"
+FROZEN_MODEL_SCHEMA = "compiled-ii-model-artifact-v2"
+LEGACY_FROZEN_MODEL_SCHEMA = "compiled-ii-model-artifact-v1"
 PREDICTION_SEAL_SCHEMA = "machsuite-prediction-seal-v1"
 REVEALED_LABEL_SCHEMA = "machsuite-revealed-labels-v1"
 EVALUATION_SCHEMA = "machsuite-frozen-evaluation-v1"
 FROZEN_MODEL_STATUS = "frozen_before_machsuite_reveal"
 SMOKE_MODEL_STATUS = "smoke_only_not_for_frozen_evaluation"
-DEFAULT_MINIMUM_BASE_DFGS = 1000
-DEFAULT_MINIMUM_GENERATOR_FAMILIES = 6
 FROZEN_RIDGE_CANDIDATES = (0.1, 0.3, 1.0, 3.0, 10.0, 30.0)
 FROZEN_DEAD_ZONE_CANDIDATES = (0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 FROZEN_INTERVAL_QUANTILE = 0.9
 FROZEN_MOTIFS = tuple(neura_motifs.DEFAULT_MOTIFS)
-FROZEN_MOTIF_SHAPES = ("3x3", "3x4", "4x4")
-FROZEN_ARCHITECTURE_VARIANTS = ("homogeneous", "split-domain")
-FROZEN_MINIMUM_SAMPLES_PER_FAMILY = 200
+FROZEN_MOTIF_SHAPES = tuple(
+    f"{rows}x{columns}" for rows, columns in neura_motifs.DEFAULT_SHAPES
+)
+FROZEN_ARCHITECTURE_VARIANTS = tuple(
+    neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS
+)
+FROZEN_REQUESTED_BASES_PER_FAMILY = 250
+FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY = 200
+# Compatibility alias for callers of the pre-hardening helper.  New
+# contracts must use the requested/complete names above explicitly.
+FROZEN_MINIMUM_SAMPLES_PER_FAMILY = FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY
+DEFAULT_MINIMUM_GENERATOR_FAMILIES = len(FROZEN_MOTIFS)
+DEFAULT_MINIMUM_BASE_DFGS = (
+    FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY * len(FROZEN_MOTIFS)
+)
 FROZEN_SUITE_NAME = "MachSuite"
 FROZEN_SUITE_REPOSITORY = "https://github.com/breagen/MachSuite.git"
 FROZEN_SUITE_REVISION = "6236e593012cb86b0d2f08d9fb9ba0411ff989b4"
@@ -80,6 +92,20 @@ PREDICTION_RECORD_FEATURE_NAMES = tuple(
     name for name in neura_experiment.FEATURE_NAMES
     if name not in {"baseline_lb", "rec_mii", "res_mii"}
 )
+
+
+def required_generator_families() -> Tuple[str, ...]:
+    """Return the frozen family population derived from DEFAULT_MOTIFS."""
+    return tuple(f"generated/motif/{motif}" for motif in FROZEN_MOTIFS)
+
+
+def required_shape_variant_cells() -> Tuple[str, ...]:
+    """Return the frozen Cartesian shape/architecture coverage cells."""
+    return tuple(
+        f"{shape}/{variant}"
+        for shape in FROZEN_MOTIF_SHAPES
+        for variant in FROZEN_ARCHITECTURE_VARIANTS
+    )
 
 
 @dataclass(frozen=True)
@@ -607,6 +633,59 @@ def validate_frozen_manifest(
         raise ValueError("preflight summary does not match candidate states")
 
 
+def generated_training_coverage(
+    samples: Sequence[Mapping[str, Any]],
+    minimum_complete_bases_per_family: Optional[int] = None,
+    requested_bases_per_family: Optional[int] = None,
+    declared_candidates: Optional[Sequence[Mapping[str, Any]]] = None,
+) -> Mapping[str, Any]:
+    """Recompute the generated corpus gate from successful labelled rows."""
+    minimum = (
+        FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY
+        if minimum_complete_bases_per_family is None
+        else int(minimum_complete_bases_per_family)
+    )
+    return neura_experiment.motif_coverage_summary(
+        samples,
+        required_generator_families(),
+        FROZEN_MOTIF_SHAPES,
+        FROZEN_ARCHITECTURE_VARIANTS,
+        minimum,
+        requested_bases_per_family,
+        declared_candidates,
+    )
+
+
+def _ready_manifest_canonical_dfgs(
+    manifest: Mapping[str, Any],
+) -> frozenset[str]:
+    """Extract canonical DFG hashes from the already validated test inputs."""
+    hashes = set()
+    for sample in manifest.get("samples", []):
+        if not isinstance(sample, Mapping):
+            continue
+        metadata = sample.get("metadata")
+        if isinstance(metadata, Mapping):
+            value = metadata.get("canonical_dfg_sha256")
+            if isinstance(value, str):
+                hashes.add(value)
+    return frozenset(hashes)
+
+
+def _reject_training_test_overlap(
+    manifest: Mapping[str, Any], loaded: Any,
+) -> None:
+    """Fail before prediction/reveal if a canonical DFG crosses the split."""
+    training = set(training_canonical_dfg_hashes(loaded))
+    testing = set(_ready_manifest_canonical_dfgs(manifest))
+    overlap = sorted(training.intersection(testing))
+    if overlap:
+        raise ValueError(
+            "training/test canonical DFG overlap is forbidden: "
+            f"{len(overlap)} identity(s), first={overlap[0]}"
+        )
+
+
 def _validated_generated_sample(
     sample: Mapping[str, Any], index: int, neura_revision: str,
 ) -> Tuple[str, str]:
@@ -643,11 +722,31 @@ def _validated_generated_sample(
     try:
         base_seed = int(sample["base_seed"])
         operation_count = int(sample["operation_count"])
-        rows = int(sample["rows"])
-        columns = max(1, int(sample["tiles"]) // rows)
+        raw_rows = sample["rows"]
+        raw_tiles = sample["tiles"]
+        if (
+            isinstance(raw_rows, bool) or not isinstance(raw_rows, int) or
+            isinstance(raw_tiles, bool) or not isinstance(raw_tiles, int)
+        ):
+            raise ValueError("rows and tiles must be integers")
+        rows = raw_rows
+        tiles = raw_tiles
+        if rows <= 0 or tiles <= 0 or tiles % rows != 0:
+            raise ValueError("rows and tiles must define a positive shape")
+        columns = tiles // rows
         registers = int(sample["registers"])
     except (KeyError, TypeError, ValueError, ZeroDivisionError) as error:
         raise ValueError(f"{label}: invalid generator parameters") from error
+    shape = f"{rows}x{columns}"
+    if shape not in FROZEN_MOTIF_SHAPES:
+        raise ValueError(f"{label}: motif shape {shape} is not frozen")
+    if sample.get("shape") not in (None, shape):
+        raise ValueError(f"{label}: shape identity changed")
+    architecture_variant = sample.get("architecture_variant")
+    if architecture_variant not in FROZEN_ARCHITECTURE_VARIANTS:
+        raise ValueError(f"{label}: architecture variant is not frozen")
+    if registers <= 0:
+        raise ValueError(f"{label}: registers must be positive")
     source_text = neura_motifs.generate_motif_mlir(
         motif, operation_count, base_seed
     )
@@ -803,10 +902,13 @@ def validate_generated_training_report(
     if requested_per_family <= 0:
         raise ValueError("training samples per family must be positive")
     if (
-        requested_per_family < FROZEN_MINIMUM_SAMPLES_PER_FAMILY and
+        requested_per_family != FROZEN_REQUESTED_BASES_PER_FAMILY and
         not allow_small_smoke
     ):
-        raise ValueError("training samples per family are below the frozen protocol")
+        raise ValueError(
+            "training samples per family must equal the frozen requested "
+            f"count {FROZEN_REQUESTED_BASES_PER_FAMILY}"
+        )
     if int(config.get("legacy_random_samples", -1)) != 0:
         raise ValueError("legacy random samples are outside the frozen protocol")
     if "generator_family" not in config.get("metadata_holdout_keys", ()):
@@ -820,20 +922,109 @@ def validate_generated_training_report(
 
     samples = report.get("samples")
     if not isinstance(samples, list) or not samples:
-        raise ValueError("training report has no samples")
-    base_dfg_ids = set()
-    generator_families = set()
-    for index, sample in enumerate(samples):
+        raise ValueError("training report has no complete training samples")
+    # ``samples`` is the exact fit population.  A producer may retain every
+    # successful label in ``labelled_samples`` for audit/denominator accounting;
+    # partial generated lineages are validated there but never fitted.
+    labelled_samples = report.get("labelled_samples", samples)
+    if not isinstance(labelled_samples, list) or not labelled_samples:
+        raise ValueError("training report has no labelled samples")
+    for index, sample in enumerate(labelled_samples):
         if not isinstance(sample, Mapping):
             raise ValueError(f"training sample {index} is not an object")
         identity_text = json.dumps(sample, sort_keys=True).lower()
         if "machsuite" in identity_text:
             raise ValueError("MachSuite data is forbidden in the training report")
+        _validated_generated_sample(
+            sample, index, str(neura["revision"])
+        )
+
+    training_samples, training_selection = (
+        neura_experiment.complete_generated_training_subset(
+            labelled_samples, required_shape_variant_cells()
+        )
+    )
+    if report.get("training_selection") != training_selection:
+        raise ValueError(
+            "training candidate gate: complete-lineage selection disagrees "
+            "with independently recomputed labels"
+        )
+    if samples != training_samples:
+        raise ValueError(
+            "training candidate gate: report samples are not exactly the "
+            "complete generated training subset"
+        )
+    base_dfg_ids = set()
+    generator_families = set()
+    for index, sample in enumerate(samples):
+        if not isinstance(sample, Mapping):
+            raise ValueError(f"training sample {index} is not an object")
         base_dfg, generator_family = _validated_generated_sample(
             sample, index, str(neura["revision"])
         )
         base_dfg_ids.add(base_dfg)
         generator_families.add(generator_family)
+
+    motif_corpus = report.get("motif_corpus")
+    if not isinstance(motif_corpus, Mapping):
+        raise ValueError("training motif corpus coverage is missing")
+    motif_manifest_value = motif_corpus.get("manifest_path")
+    if not isinstance(motif_manifest_value, str) or not motif_manifest_value:
+        raise ValueError("training motif corpus manifest path is missing")
+    motif_manifest_path = Path(motif_manifest_value).resolve()
+    if not motif_manifest_path.is_file():
+        raise ValueError("training motif corpus manifest is missing")
+    declared_manifest = read_json(motif_manifest_path)
+    declared_candidates = declared_manifest.get("candidates")
+    if not isinstance(declared_candidates, list):
+        raise ValueError("training motif corpus manifest candidates are missing")
+    if motif_corpus.get("manifest_sha256") != raw_sha256(motif_manifest_path):
+        raise ValueError("training motif corpus manifest changed")
+    coverage = generated_training_coverage(
+        labelled_samples,
+        requested_bases_per_family=requested_per_family,
+        declared_candidates=declared_candidates,
+    )
+    if coverage.get("declared_candidate_count", 0) <= 0:
+        raise ValueError("training candidate gate: motif corpus has no declared candidates")
+    if (
+        coverage.get("declared_invalid_candidate_count", 0) or
+        coverage.get("declared_duplicate_candidate_count", 0) or
+        coverage.get("declared_cross_family_duplicate_candidate_count", 0) or
+        coverage.get("unpredeclared_successful_candidate_count", 0) or
+        coverage.get("declaration_contract_passed") is not True
+    ):
+        raise ValueError(
+            "training candidate gate: motif corpus declaration is invalid or duplicated"
+        )
+    expected_declared = {
+        family: requested_per_family for family in required_generator_families()
+    }
+    if (
+        coverage.get("declared_distinct_base_dfg_counts_by_family") !=
+        expected_declared and not allow_small_smoke
+    ):
+        raise ValueError(
+            "training candidate gate: motif corpus does not declare the "
+            "requested bases per family"
+        )
+    if (
+        coverage.get("declared_complete_base_dfg_counts_by_family") !=
+        expected_declared and not allow_small_smoke
+    ):
+        raise ValueError(
+            "training candidate gate: motif corpus declaration is missing "
+            "shape/variant cells"
+        )
+    expected_families = set(required_generator_families())
+    if generator_families != expected_families and not allow_small_smoke:
+        raise ValueError(
+            "training corpus generator families do not match the frozen population"
+        )
+    if coverage.get("invalid_candidate_count") or coverage.get(
+        "duplicate_candidate_count"
+    ):
+        raise ValueError("training corpus contains invalid or duplicate candidates")
 
     nested = report.get("nested_ridge_family_holdout")
     metadata_holdouts = report.get("nested_ridge_metadata_holdouts")
@@ -850,18 +1041,40 @@ def validate_generated_training_report(
             neura_motifs.DEFAULT_MOTIFS
         ) and
         report.get("selected_model") == "ridge" and
-        requested_per_family >= FROZEN_MINIMUM_SAMPLES_PER_FAMILY and
-        len(base_dfg_ids) >= DEFAULT_MINIMUM_BASE_DFGS and
-        generator_families == {
-            f"generated/motif/{motif}"
-            for motif in neura_motifs.DEFAULT_MOTIFS
-        }
+        requested_per_family == FROZEN_REQUESTED_BASES_PER_FAMILY and
+        coverage.get("passed") is True and
+        coverage.get("complete_base_dfg_count", 0) >= (
+            FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY * len(FROZEN_MOTIFS)
+        )
     )
     candidate_gate = report.get("candidate_gate")
-    declared_ready = bool(
-        isinstance(candidate_gate, Mapping) and
-        candidate_gate.get("overall_ready_for_machsuite_freeze") is True
-    )
+    if not isinstance(candidate_gate, Mapping):
+        raise ValueError("training candidate gate is missing")
+    declared_coverage = candidate_gate.get("coverage")
+    if declared_coverage != coverage:
+        raise ValueError("training candidate gate coverage disagrees with corpus")
+    expected_gate_fields = {
+        "required_generator_families": list(required_generator_families()),
+        "required_shape_variant_cells": list(required_shape_variant_cells()),
+        "minimum_complete_bases_per_family": FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY,
+        "minimum_total_complete_bases": (
+            FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY * len(FROZEN_MOTIFS)
+        ),
+        "requested_bases_per_family": requested_per_family,
+        "requested_total_bases": requested_per_family * len(FROZEN_MOTIFS),
+        "minimum_complete_fraction": (
+            FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY / requested_per_family
+        ),
+    }
+    # The producer records these fields at the top level as well as in the
+    # nested coverage object.  Check the identity-bearing fields explicitly;
+    # readiness itself is checked against independently recomputed statistics.
+    for field, expected in expected_gate_fields.items():
+        if candidate_gate.get(field) != expected:
+            raise ValueError(f"training candidate gate {field} disagrees")
+    declared_ready = candidate_gate.get("overall_ready_for_machsuite_freeze")
+    if not isinstance(declared_ready, bool):
+        raise ValueError("training candidate gate readiness is missing")
     if declared_ready != independently_ready:
         raise ValueError("training candidate gate disagrees with verified corpus")
 
@@ -869,7 +1082,7 @@ def validate_generated_training_report(
     model = loaded.model
     selected_ridge, selected_dead_zone = (
         neura_experiment.select_ridge_hyperparameters(
-            samples, FROZEN_RIDGE_CANDIDATES,
+            training_samples, FROZEN_RIDGE_CANDIDATES,
             FROZEN_DEAD_ZONE_CANDIDATES,
         )
     )
@@ -879,7 +1092,7 @@ def validate_generated_training_report(
     ):
         raise ValueError("frozen hyperparameters do not reproduce nested selection")
     retrained = neura_experiment.fit_ridge(
-        samples, selected_ridge, selected_dead_zone,
+        training_samples, selected_ridge, selected_dead_zone,
     )
     if isinstance(nested, Mapping) and nested.get("rows"):
         neura_experiment.calibrate_unseen_family_interval(
@@ -1114,31 +1327,76 @@ def preflight_machsuite(
 
 def freeze_random_training_model(
     report_path: Path, output_path: Path, *,
-    minimum_base_dfgs: int = DEFAULT_MINIMUM_BASE_DFGS,
-    minimum_generator_families: int = DEFAULT_MINIMUM_GENERATOR_FAMILIES,
+    minimum_base_dfgs: Optional[int] = None,
+    minimum_generator_families: Optional[int] = None,
+    minimum_complete_bases_per_family: Optional[int] = None,
     allow_small_smoke: bool = False,
 ) -> Mapping[str, Any]:
     if output_path.exists():
         raise ValueError(f"refusing to overwrite frozen model: {output_path}")
     report = read_json(report_path)
-    samples = report.get("samples")
     base_dfg_ids, generator_families, report_gate_ready = (
         validate_generated_training_report(
             report, report_path, allow_small_smoke=allow_small_smoke
         )
     )
-    if minimum_base_dfgs <= 0 or minimum_generator_families <= 0:
+    samples = report.get("samples")
+    labelled_samples = report.get("labelled_samples", samples)
+    if not isinstance(samples, list) or not isinstance(labelled_samples, list):
+        raise ValueError("training report samples are not lists")
+    training_samples, training_selection = (
+        neura_experiment.complete_generated_training_subset(
+            labelled_samples, required_shape_variant_cells()
+        )
+    )
+    if samples != training_samples or report.get("training_selection") != (
+        training_selection
+    ):
+        raise ValueError(
+            "training report complete-lineage selection changed before freeze"
+        )
+    if minimum_base_dfgs is None:
+        minimum_base_dfgs = (
+            FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY * len(FROZEN_MOTIFS)
+        )
+    if minimum_generator_families is None:
+        minimum_generator_families = len(FROZEN_MOTIFS)
+    if minimum_complete_bases_per_family is None:
+        minimum_complete_bases_per_family = FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY
+    report_config = report.get("provenance", {}).get("experiment_config", {})
+    requested_bases_per_family = int(
+        report_config.get("motif_samples_per_family", -1)
+    )
+    report_motif_corpus = report.get("motif_corpus", {})
+    report_manifest_path = Path(
+        str(report_motif_corpus.get("manifest_path", ""))
+    ).resolve()
+    report_manifest = read_json(report_manifest_path)
+    declared_candidates = report_manifest.get("candidates", [])
+    if (
+        minimum_base_dfgs <= 0 or minimum_generator_families <= 0 or
+        minimum_complete_bases_per_family <= 0
+    ):
         raise ValueError("minimum training-scale gates must be positive")
     if (
-        minimum_base_dfgs < DEFAULT_MINIMUM_BASE_DFGS or
-        minimum_generator_families < DEFAULT_MINIMUM_GENERATOR_FAMILIES
+        minimum_base_dfgs < (
+            minimum_complete_bases_per_family * len(FROZEN_MOTIFS)
+        ) or
+        minimum_generator_families < len(FROZEN_MOTIFS) or
+        minimum_complete_bases_per_family < FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY
     ) and not allow_small_smoke:
         raise ValueError(
             "frozen scale thresholds may only be raised; use "
             "--allow-small-smoke for a non-frozen artifact"
         )
-    scale_ready = (
-        len(base_dfg_ids) >= minimum_base_dfgs and
+    coverage = generated_training_coverage(
+        labelled_samples, minimum_complete_bases_per_family,
+        requested_bases_per_family=requested_bases_per_family,
+        declared_candidates=declared_candidates,
+    )
+    scale_ready = bool(
+        coverage.get("passed") is True and
+        coverage.get("complete_base_dfg_count", 0) >= minimum_base_dfgs and
         len(generator_families) >= minimum_generator_families
     )
     if not report_gate_ready and not allow_small_smoke:
@@ -1177,8 +1435,19 @@ def freeze_random_training_model(
             "predictor_repository": provenance.get("predictor_repository"),
             "training_report_path": str(report_path.resolve()),
             "training_report_sha256": raw_sha256(report_path),
-            "training_sample_count": len(samples),
+            "training_sample_count": len(training_samples),
+            "labelled_sample_count": len(labelled_samples),
+            "training_selection": training_selection,
             "training_distinct_base_dfg_count": len(base_dfg_ids),
+            "training_requested_bases_per_family": requested_bases_per_family,
+            "training_complete_bases_per_family_threshold": (
+                minimum_complete_bases_per_family
+            ),
+            "training_complete_base_fraction": (
+                coverage["complete_base_dfg_count"] /
+                (requested_bases_per_family * len(FROZEN_MOTIFS))
+                if requested_bases_per_family > 0 else None
+            ),
             "training_generator_family_count": len(generator_families),
             "training_sample_identity_sha256": canonical_json_sha256([
                 {
@@ -1187,8 +1456,14 @@ def freeze_random_training_model(
                     "candidate_id": sample.get("candidate_id"),
                     "source_sha256": sample.get("source_sha256"),
                 }
-                for sample in samples
+                for sample in training_samples
             ]),
+            "training_canonical_dfg_identity": {
+                "scheme": "canonical_dfg_sha256_v1",
+                "canonical_dfg_sha256s": sorted(base_dfg_ids),
+                "distinct_count": len(base_dfg_ids),
+                "set_sha256": canonical_json_sha256(sorted(base_dfg_ids)),
+            },
         },
         "training_contract": {
             "dataset_role": "generated_random_dfg_training_only",
@@ -1198,8 +1473,32 @@ def freeze_random_training_model(
             "scale_gate": {
                 "minimum_base_dfgs": minimum_base_dfgs,
                 "minimum_generator_families": minimum_generator_families,
+                "requested_bases_per_family": requested_bases_per_family,
+                "requested_total_bases": (
+                    requested_bases_per_family * len(FROZEN_MOTIFS)
+                ),
+                "minimum_complete_bases_per_family": (
+                    minimum_complete_bases_per_family
+                ),
+                "minimum_total_complete_bases": (
+                    minimum_complete_bases_per_family * len(FROZEN_MOTIFS)
+                ),
                 "actual_base_dfgs": len(base_dfg_ids),
+                "actual_complete_base_dfgs": coverage[
+                    "complete_base_dfg_count"
+                ],
                 "actual_generator_families": len(generator_families),
+                "complete_fraction": (
+                    coverage["complete_base_dfg_count"] /
+                    (requested_bases_per_family * len(FROZEN_MOTIFS))
+                    if requested_bases_per_family > 0 else None
+                ),
+                "minimum_complete_fraction": (
+                    minimum_complete_bases_per_family / requested_bases_per_family
+                    if requested_bases_per_family > 0 else None
+                ),
+                "coverage": coverage,
+                "training_selection": training_selection,
                 "passed": final_ready,
                 "training_report_candidate_gate_passed": report_gate_ready,
                 "small_smoke_override": allow_small_smoke and not final_ready,
@@ -1238,6 +1537,7 @@ def validate_prediction_report_and_seal(
         raise ValueError("frozen model feature contract changed")
     if loaded.lower_bound_contract != LOWER_BOUND_CONTRACT:
         raise ValueError("frozen model lower-bound contract changed")
+    _reject_training_test_overlap(manifest, loaded)
     if seal.get("schema_version") != PREDICTION_SEAL_SCHEMA:
         raise ValueError("invalid prediction seal")
     if seal.get("labels_accessed") is not False:
@@ -1354,12 +1654,15 @@ def freeze_predictions(
     manifest = read_json(manifest_path)
     validate_frozen_manifest(manifest, manifest_path)
     loaded = load_model_artifact(model_path)
+    if loaded.container != FROZEN_MODEL_SCHEMA:
+        raise ValueError("model is not the v2 frozen artifact container")
     if loaded.artifact_status != FROZEN_MODEL_STATUS:
         raise ValueError("model was not frozen before MachSuite label reveal")
     if list(loaded.model["feature_names"]) != list(neura_experiment.MODEL_FEATURE_NAMES):
         raise ValueError("model does not use the primary structure-only feature set")
     if loaded.lower_bound_contract.get("name") != "rec_res_max_v1":
         raise ValueError("model lower-bound contract is not rec_res_max_v1")
+    _reject_training_test_overlap(manifest, loaded)
     samples, provenance = load_prediction_samples(
         manifest_path, loaded.model["feature_names"]
     )
@@ -1624,11 +1927,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     model_parser.add_argument("--training-report", type=Path, required=True)
     model_parser.add_argument("--output", type=Path, required=True)
     model_parser.add_argument(
-        "--minimum-base-dfgs", type=int, default=DEFAULT_MINIMUM_BASE_DFGS
+        "--minimum-base-dfgs", type=int, default=None
     )
     model_parser.add_argument(
         "--minimum-generator-families", type=int,
-        default=DEFAULT_MINIMUM_GENERATOR_FAMILIES,
+        default=None,
+    )
+    model_parser.add_argument(
+        "--minimum-complete-bases-per-family", type=int,
+        default=FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY,
+        help=("Minimum complete canonical DFGs required for every frozen "
+              "generator family; may only be raised for formal artifacts."),
     )
     model_parser.add_argument(
         "--allow-small-smoke", action="store_true",
@@ -1676,6 +1985,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.training_report, args.output,
                 minimum_base_dfgs=args.minimum_base_dfgs,
                 minimum_generator_families=args.minimum_generator_families,
+                minimum_complete_bases_per_family=(
+                    args.minimum_complete_bases_per_family
+                ),
                 allow_small_smoke=args.allow_small_smoke,
             )
             print(result["trained_full_model_sha256"])

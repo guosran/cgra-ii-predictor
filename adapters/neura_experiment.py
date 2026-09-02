@@ -604,7 +604,7 @@ def resolve_rec_res_lower_bound(result: Sample) -> Tuple[int, str]:
     bound = max(components.values())
     if bound < 1:
         raise ValueError("lower bound must be a positive integer")
-    for alias in ("lower_bound", "baseline_lb"):
+    for alias in ("lower_bound", "baseline_lb", "proven_lower_bound"):
         if result.get(alias) is None:
             continue
         raw_alias = result[alias]
@@ -682,7 +682,12 @@ def normalize_input_sample(
         raise ValueError("sample metadata must be an object")
     row.setdefault("index", row.get("sample_id"))
     row.setdefault("family", row.get("group"))
-    row.setdefault("baseline_lb", row.get("lower_bound"))
+    if row.get("baseline_lb") is None:
+        authoritative_alias = row.get("lower_bound")
+        if authoritative_alias is None:
+            authoritative_alias = row.get("proven_lower_bound")
+        if authoritative_alias is not None:
+            row["baseline_lb"] = authoritative_alias
     for field in SAMPLE_PROVENANCE_FIELDS:
         if field not in row and field in metadata:
             row[field] = metadata[field]
@@ -1962,6 +1967,10 @@ def motif_corpus_summary(
         "manifest_path": (
             str(manifest_path.resolve()) if manifest_path is not None else None
         ),
+        "manifest_sha256": (
+            file_sha256(manifest_path)
+            if manifest_path is not None and manifest_path.is_file() else None
+        ),
     }
     if manifest is not None:
         summary.update({
@@ -1997,6 +2006,421 @@ def motif_corpus_summary(
             }),
         })
     return summary
+
+
+def motif_coverage_summary(
+    samples: Sequence[Sample], required_families: Sequence[str],
+    required_shapes: Sequence[str], required_variants: Sequence[str],
+    minimum_complete_bases_per_family: int,
+    requested_bases_per_family: Optional[int] = None,
+    declared_candidates: Optional[Sequence[Mapping[str, Any]]] = None,
+) -> Dict[str, object]:
+    """Compute the auditable generated-motif coverage contract.
+
+    A base is identified only by its canonical DFG hash.  A base is complete
+    when a successful labelled row exists for every required shape/variant
+    cell.  Counts in this record are therefore invariant to row ordering and
+    cannot be inflated by duplicate labels for one candidate.
+    """
+    families = tuple(dict.fromkeys(str(value) for value in required_families))
+    shapes = tuple(dict.fromkeys(str(value) for value in required_shapes))
+    variants = tuple(dict.fromkeys(str(value) for value in required_variants))
+    cells = tuple(f"{shape}/{variant}" for shape in shapes for variant in variants)
+    cell_set = set(cells)
+    requested = (
+        None if requested_bases_per_family is None
+        else int(requested_bases_per_family)
+    )
+    family_bases: Dict[str, Dict[str, Set[str]]] = {
+        family: {} for family in families
+    }
+    cell_bases: Dict[Tuple[str, str], Set[str]] = {
+        (family, cell): set() for family in families for cell in cells
+    }
+    cell_candidate_counts: Dict[Tuple[str, str], int] = {
+        (family, cell): 0 for family in families for cell in cells
+    }
+    declared_family_bases: Dict[str, Set[str]] = {
+        family: set() for family in families
+    }
+    declared_family_cells: Dict[Tuple[str, str], Set[str]] = {
+        (family, cell): set() for family in families for cell in cells
+    }
+    declared_invalid_rows = 0
+    declared_duplicate_rows = 0
+    declared_cross_family_duplicate_rows = 0
+    declared_count = 0
+    declared_seen_pairs: Set[Tuple[str, str, str]] = set()
+    declared_canonical_family: Dict[str, str] = {}
+    observed_families: Set[str] = set()
+    canonical_family: Dict[str, str] = {}
+    invalid_rows = 0
+    duplicate_rows = 0
+    cross_family_duplicate_rows = 0
+    unpredeclared_successful_rows = 0
+    successful_rows = 0
+    hash_pattern = re.compile(r"[0-9a-f]{64}")
+
+    for row in declared_candidates or ():
+        declared_count += 1
+        if not isinstance(row, Mapping):
+            declared_invalid_rows += 1
+            continue
+        family = str(row.get("generator_family", ""))
+        canonical = row.get("canonical_dfg_sha256", row.get("base_dfg_id"))
+        raw_rows = row.get("rows")
+        raw_columns = row.get("columns")
+        raw_tiles = row.get("tiles")
+        variant = row.get("architecture_variant")
+        if (
+            raw_tiles is None and isinstance(raw_rows, int) and
+            isinstance(raw_columns, int)
+        ):
+            raw_tiles = raw_rows * raw_columns
+        if (
+            family not in family_bases or
+            not isinstance(canonical, str) or
+            hash_pattern.fullmatch(canonical) is None or
+            isinstance(raw_rows, bool) or not isinstance(raw_rows, int) or
+            isinstance(raw_tiles, bool) or not isinstance(raw_tiles, int) or
+            raw_rows <= 0 or raw_tiles <= 0 or raw_tiles % raw_rows != 0 or
+            not isinstance(variant, str) or not variant
+        ):
+            declared_invalid_rows += 1
+            continue
+        cell = f"{raw_rows}x{raw_tiles // raw_rows}/{variant}"
+        if cell not in cell_set:
+            declared_invalid_rows += 1
+            continue
+        owner = declared_canonical_family.get(canonical)
+        if owner is not None and owner != family:
+            declared_invalid_rows += 1
+            declared_cross_family_duplicate_rows += 1
+            continue
+        declared_canonical_family[canonical] = family
+        pair = (family, canonical, cell)
+        if pair in declared_seen_pairs:
+            declared_duplicate_rows += 1
+            continue
+        declared_seen_pairs.add(pair)
+        declared_family_bases[family].add(canonical)
+        declared_family_cells[(family, cell)].add(canonical)
+
+    for row in samples:
+        if not is_synthetic_row(row):
+            continue
+        family = str(row.get("generator_family", ""))
+        observed_families.add(family)
+        canonical = row.get("canonical_dfg_sha256", row.get("base_dfg_id"))
+        if not isinstance(canonical, str) or hash_pattern.fullmatch(canonical) is None:
+            invalid_rows += 1
+            continue
+        owner = canonical_family.get(canonical)
+        if owner is not None and owner != family:
+            # The global minimum is a distinct-canonical-D FG gate.  Reject
+            # cross-family reuse explicitly instead of allowing one DFG to
+            # satisfy two per-family thresholds.
+            invalid_rows += 1
+            cross_family_duplicate_rows += 1
+            continue
+        canonical_family[canonical] = family
+        raw_rows = row.get("rows")
+        raw_tiles = row.get("tiles")
+        variant = row.get("architecture_variant")
+        if (
+            isinstance(raw_rows, bool) or not isinstance(raw_rows, (int, float)) or
+            not float(raw_rows).is_integer() or int(raw_rows) <= 0 or
+            isinstance(raw_tiles, bool) or not isinstance(raw_tiles, (int, float)) or
+            not float(raw_tiles).is_integer() or int(raw_tiles) <= 0 or
+            int(raw_tiles) % int(raw_rows) != 0 or
+            not isinstance(variant, str) or not variant
+        ):
+            invalid_rows += 1
+            continue
+        shape = f"{int(raw_rows)}x{int(raw_tiles) // int(raw_rows)}"
+        cell = f"{shape}/{variant}"
+        if family not in family_bases or cell not in cell_set:
+            invalid_rows += 1
+            continue
+        family_map = family_bases[family]
+        base_cells = family_map.setdefault(canonical, set())
+        if cell in base_cells:
+            duplicate_rows += 1
+            continue
+        base_cells.add(cell)
+        cell_bases[(family, cell)].add(canonical)
+        cell_candidate_counts[(family, cell)] += 1
+        if (family, canonical, cell) not in declared_seen_pairs:
+            unpredeclared_successful_rows += 1
+        successful_rows += 1
+
+    family_records: Dict[str, Dict[str, object]] = {}
+    complete_by_family: Dict[str, Set[str]] = {}
+    declared_complete_by_family: Dict[str, Set[str]] = {}
+    all_successful_bases: Set[str] = set()
+    for family in families:
+        base_map = family_bases[family]
+        complete = {
+            canonical for canonical, seen_cells in base_map.items()
+            if set(seen_cells) == set(cells)
+        }
+        complete_by_family[family] = complete
+        declared_complete_by_family[family] = {
+            canonical for canonical in declared_family_bases[family]
+            if all(
+                canonical in declared_family_cells[(family, cell)]
+                for cell in cells
+            )
+        }
+        all_successful_bases.update(base_map)
+        family_records[family] = {
+            "successful_distinct_base_dfg_count": len(base_map),
+            "complete_distinct_base_dfg_count": len(complete),
+            "requested_base_dfg_count": requested,
+            "complete_fraction": (
+                len(complete) / requested
+                if requested is not None and requested > 0 else None
+            ),
+            "shape_variant_distinct_base_counts": {
+                cell: len(cell_bases[(family, cell)]) for cell in cells
+            },
+            "shape_variant_successful_candidate_counts": {
+                cell: cell_candidate_counts[(family, cell)] for cell in cells
+            },
+            "missing_shape_variant_cells": {
+                canonical: [
+                    cell for cell in cells
+                    if cell not in seen_cells
+                ]
+                for canonical, seen_cells in sorted(base_map.items())
+                if set(seen_cells) != set(cells)
+            },
+            "minimum_complete_bases_per_family": (
+                minimum_complete_bases_per_family
+            ),
+            "complete_fraction_threshold": (
+                minimum_complete_bases_per_family / requested
+                if requested is not None and requested > 0 else None
+            ),
+            "passed": (
+                len(complete) >= minimum_complete_bases_per_family and
+                (requested is None or (
+                    requested > 0 and len(complete) <= requested and
+                    len(complete) / requested >= (
+                        minimum_complete_bases_per_family / requested
+                    )
+                ))
+            ),
+            "declared_distinct_base_dfg_count": len(
+                declared_family_bases[family]
+            ),
+            "declared_complete_distinct_base_dfg_count": len(
+                declared_complete_by_family[family]
+            ),
+        }
+
+    missing_families = [family for family in families if family not in observed_families]
+    unexpected_families = sorted(set(observed_families).difference(families))
+    complete_ids = {
+        canonical
+        for complete in complete_by_family.values()
+        for canonical in complete
+    }
+    complete_count = len(complete_ids)
+    minimum_total = minimum_complete_bases_per_family * len(families)
+    expected_declared_count = (
+        requested * len(families) * len(cells)
+        if requested is not None else None
+    )
+    expected_declared_by_family = {
+        family: requested for family in families
+    }
+    expected_declared_by_cell = {
+        f"{family}/{cell}": requested
+        for family in families for cell in cells
+    }
+    declaration_contract_passed = bool(
+        requested is not None and requested > 0 and
+        declared_candidates is not None and
+        declared_count == expected_declared_count and
+        declared_invalid_rows == 0 and declared_duplicate_rows == 0 and
+        declared_cross_family_duplicate_rows == 0 and
+        {
+            family: len(declared_family_bases[family]) for family in families
+        } == expected_declared_by_family and
+        {
+            family: len(declared_complete_by_family[family])
+            for family in families
+        } == expected_declared_by_family and
+        {
+            f"{family}/{cell}": len(declared_family_cells[(family, cell)])
+            for family in families for cell in cells
+        } == expected_declared_by_cell
+    )
+    passed = bool(
+        minimum_complete_bases_per_family > 0 and
+        not missing_families and not unexpected_families and
+        invalid_rows == 0 and duplicate_rows == 0 and
+        unpredeclared_successful_rows == 0 and declaration_contract_passed and
+        all(record["passed"] for record in family_records.values()) and
+        complete_count >= minimum_total
+    )
+    return {
+        "required_generator_families": list(families),
+        "required_shape_variant_cells": list(cells),
+        "minimum_complete_bases_per_family": minimum_complete_bases_per_family,
+        "minimum_total_complete_bases": minimum_total,
+        "requested_bases_per_family": requested,
+        "requested_total_bases": (
+            requested * len(families) if requested is not None else None
+        ),
+        "declared_candidate_count": declared_count,
+        "declared_invalid_candidate_count": declared_invalid_rows,
+        "declared_duplicate_candidate_count": declared_duplicate_rows,
+        "declared_cross_family_duplicate_candidate_count": (
+            declared_cross_family_duplicate_rows
+        ),
+        "declared_distinct_base_dfg_count": len({
+            canonical for values in declared_family_bases.values()
+            for canonical in values
+        }),
+        "declared_distinct_base_dfg_counts_by_family": {
+            family: len(declared_family_bases[family]) for family in families
+        },
+        "declared_complete_base_dfg_counts_by_family": {
+            family: len(declared_complete_by_family[family])
+            for family in families
+        },
+        "declared_shape_variant_distinct_base_counts": {
+            f"{family}/{cell}": len(declared_family_cells[(family, cell)])
+            for family in families for cell in cells
+        },
+        "declared_complete_base_dfg_count": len({
+            canonical
+            for values in declared_complete_by_family.values()
+            for canonical in values
+        }),
+        "expected_declared_candidate_count": expected_declared_count,
+        "declaration_contract_passed": declaration_contract_passed,
+        "observed_generator_families": sorted(observed_families),
+        "missing_generator_families": missing_families,
+        "unexpected_generator_families": unexpected_families,
+        "successful_candidate_count": successful_rows,
+        "invalid_candidate_count": invalid_rows,
+        "duplicate_candidate_count": duplicate_rows,
+        "cross_family_duplicate_candidate_count": cross_family_duplicate_rows,
+        "unpredeclared_successful_candidate_count": (
+            unpredeclared_successful_rows
+        ),
+        "successful_distinct_base_dfg_count": len(all_successful_bases),
+        "complete_base_dfg_count": complete_count,
+        "complete_distinct_base_dfg_count": len(complete_ids),
+        "families": family_records,
+        "passed": passed,
+    }
+
+
+def complete_generated_training_subset(
+    samples: Sequence[Sample], required_cells: Sequence[str],
+) -> Tuple[List[Sample], Dict[str, object]]:
+    """Keep only generated bases with a successful row in every cell.
+
+    The full labelled report remains available for auditing and denominator
+    accounting.  Only this returned subset may be used for model fitting or
+    holdout evaluation when generated motif rows are present.
+    """
+    cell_set = set(str(value) for value in required_cells)
+    generated_rows: List[Sample] = []
+    other_rows: List[Sample] = []
+    groups: Dict[Tuple[str, str], List[Sample]] = {}
+    group_cells: Dict[Tuple[str, str], Set[str]] = {}
+    for row in samples:
+        family = str(row.get("generator_family", ""))
+        if not family.startswith("generated/motif/"):
+            other_rows.append(row)
+            continue
+        generated_rows.append(row)
+        canonical = str(row.get(
+            "canonical_dfg_sha256", row.get("base_dfg_id", "")
+        ))
+        raw_rows = row.get("rows")
+        raw_tiles = row.get("tiles")
+        variant = row.get("architecture_variant")
+        if (
+            isinstance(raw_rows, bool) or not isinstance(raw_rows, (int, float)) or
+            not float(raw_rows).is_integer() or
+            isinstance(raw_tiles, bool) or not isinstance(raw_tiles, (int, float)) or
+            not float(raw_tiles).is_integer() or int(raw_rows) <= 0 or
+            int(raw_tiles) <= 0 or int(raw_tiles) % int(raw_rows) != 0 or
+            not isinstance(variant, str)
+        ):
+            cell = "<invalid>"
+        else:
+            cell = f"{int(raw_rows)}x{int(raw_tiles) // int(raw_rows)}/{variant}"
+        key = (family, canonical)
+        groups.setdefault(key, []).append(row)
+        group_cells.setdefault(key, set()).add(cell)
+
+    if not generated_rows:
+        return list(samples), {
+            "required_shape_variant_cells": list(required_cells),
+            "included_sample_count": len(samples),
+            "excluded_sample_count": 0,
+            "excluded_lineage_count": 0,
+            "excluded_lineage_ids": [],
+            "excluded_sample_ids": [],
+            "partial_generated_base_count": 0,
+            "all_generated_lineages_complete": True,
+            "passed": True,
+        }
+
+    excluded_rows: List[Sample] = []
+    excluded_keys: List[Tuple[str, str]] = []
+    for key in sorted(groups):
+        # A complete lineage has exactly one successful sample for each
+        # required cell.  Set equality alone would admit an extra duplicate
+        # row for a cell and make the training denominator ambiguous.
+        if not (
+            group_cells[key] == cell_set and
+            len(groups[key]) == len(cell_set)
+        ):
+            excluded_rows.extend(groups[key])
+            excluded_keys.append(key)
+    # Keep the original report order.  Besides making the fit deterministic,
+    # this lets the frozen validator compare the producer's selected rows
+    # with its independently recomputed subset byte-for-byte.
+    excluded_key_set = set(excluded_keys)
+    included_keys = set(groups).difference(excluded_key_set)
+    included = [
+        row for row in samples
+        if not str(row.get("generator_family", "")).startswith(
+            "generated/motif/"
+        ) or (
+            str(row.get("generator_family", "")), str(row.get(
+                "canonical_dfg_sha256", row.get("base_dfg_id", "")
+            ))) in included_keys
+    ]
+    excluded_lineages = sorted({
+        str(row.get("leakage_lineage_id", row.get("lineage", key[0])))
+        for key in excluded_keys for row in groups[key]
+    })
+    excluded_sample_ids = sorted(
+        str(row.get("index", row.get("sample_id", "")))
+        for row in excluded_rows
+    )
+    return included, {
+        "required_shape_variant_cells": list(required_cells),
+        "included_sample_count": len(included),
+        "excluded_sample_count": len(excluded_rows),
+        "excluded_lineage_count": len(excluded_lineages),
+        "excluded_lineage_ids": excluded_lineages,
+        "excluded_sample_ids": excluded_sample_ids,
+        "partial_generated_base_count": len(excluded_keys),
+        "all_generated_lineages_complete": not excluded_rows,
+        # ``passed`` describes that filtering was successfully applied, not
+        # that there happened to be no incomplete labels to exclude.
+        "passed": True,
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -2585,6 +3009,21 @@ def main() -> int:
         suite = family_suites.get(source_family, family_suites.get(effective_lineage))
         if suite is not None:
             row["suite"] = suite
+    # A generated base is eligible for formal fitting only when every frozen
+    # shape/architecture cell produced one successful label.  Keep the full
+    # labelled list in ``samples`` for coverage/denominator accounting, but
+    # route only this independently derived subset to every fit and holdout.
+    required_training_shapes = tuple(
+        f"{rows}x{columns}" for rows, columns in neura_motifs.DEFAULT_SHAPES
+    )
+    required_training_cells = tuple(
+        f"{shape}/{variant}"
+        for shape in required_training_shapes
+        for variant in neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS
+    )
+    training_samples, training_selection = complete_generated_training_subset(
+        samples, required_training_cells
+    )
     row_holdout: Optional[Dict[str, object]] = None
     family_holdout: Optional[Dict[str, object]] = None
     nested_ridge_holdout: Optional[Dict[str, object]] = None
@@ -2599,19 +3038,21 @@ def main() -> int:
         selected_model = "ridge"
         trained_full_model = dict(external_model.model)
     else:
-        if len(samples) < 12:
+        if len(training_samples) < 12:
             print(
-                f"only {len(samples)} labels collected; no model fitted",
+                f"only {len(training_samples)} complete labels collected; "
+                "no model fitted",
                 file=sys.stderr,
             )
             return 1
         row_holdout = random_row_holdout(
-            samples, args.seed, args.ridge,
+            training_samples, args.seed, args.ridge,
             args.tree_depth, args.tree_min_samples,
         )
         try:
             family_holdout = leave_one_family_out(
-                samples, args.ridge, args.tree_depth, args.tree_min_samples
+                training_samples, args.ridge, args.tree_depth,
+                args.tree_min_samples
             )
         except ValueError:
             # A synthetic-only corpus has one family by design.  Its row split
@@ -2619,13 +3060,13 @@ def main() -> int:
             family_holdout = None
         try:
             nested_ridge_holdout = nested_ridge_family_holdout(
-                samples, ridge_candidates, dead_zone_candidates
+                training_samples, ridge_candidates, dead_zone_candidates
             )
         except ValueError:
             nested_ridge_holdout = None
         for key in dict.fromkeys(args.metadata_holdout_key):
             metadata_holdouts[key] = nested_ridge_metadata_holdout(
-                samples, key, ridge_candidates, dead_zone_candidates
+                training_samples, key, ridge_candidates, dead_zone_candidates
             )
         if nested_ridge_holdout is not None:
             # Model 1 is predeclared as residual Ridge. Tree/row-split results
@@ -2633,10 +3074,10 @@ def main() -> int:
             selected_model = "ridge"
             selected_rows = nested_ridge_holdout["rows"]
             selected_ridge, selected_dead_zone = select_ridge_hyperparameters(
-                samples, ridge_candidates, dead_zone_candidates
+                training_samples, ridge_candidates, dead_zone_candidates
             )
             trained_full_model = fit_ridge(
-                samples, selected_ridge, selected_dead_zone
+                training_samples, selected_ridge, selected_dead_zone
             )
             if selected_rows:
                 calibrate_unseen_family_interval(
@@ -2941,7 +3382,7 @@ def main() -> int:
                 }
             },
             "metadata": portable_sample_metadata(row),
-        } for row in samples],
+        } for row in training_samples],
         "censored_samples": list(INVOCATION_FAILURES),
     }
     generated_corpus = motif_corpus_summary(samples, motif_manifest_path)
@@ -2960,11 +3401,38 @@ def main() -> int:
     generator_family_holdout_available = (
         metadata_holdouts["generator_family"].get("status") == "ok"
     )
+    required_generator_families = tuple(
+        f"generated/motif/{motif}" for motif in neura_motifs.DEFAULT_MOTIFS
+    )
+    required_shapes = tuple(
+        f"{rows}x{columns}" for rows, columns in neura_motifs.DEFAULT_SHAPES
+    )
+    required_shape_variant_cells = tuple(
+        f"{shape}/{variant}"
+        for shape in required_shapes
+        for variant in neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS
+    )
+    declared_motif_candidates: Sequence[Mapping[str, Any]] = ()
+    if motif_manifest_path is not None and motif_manifest_path.is_file():
+        declared_manifest = json.loads(motif_manifest_path.read_text())
+        if isinstance(declared_manifest, Mapping) and isinstance(
+            declared_manifest.get("candidates"), list
+        ):
+            declared_motif_candidates = declared_manifest["candidates"]
+    generated_coverage = motif_coverage_summary(
+        generated_rows,
+        required_generator_families,
+        required_shapes,
+        neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS,
+        200,
+        args.motif_samples_per_family,
+        declared_motif_candidates,
+    )
     frozen_model_scale_ready = bool(
         generated_only_training and trained_full_model is not None and
         nested_ridge_holdout is not None and
         generator_family_holdout_available and
-        generated_base_dfg_count >= 1000 and generated_family_count >= 6
+        generated_coverage["passed"] is True
     )
     trained_full_model_sha256 = active_model_sha256
     report_metadata = (
@@ -3013,7 +3481,13 @@ def main() -> int:
             list(trained_full_model["feature_names"])
             if trained_full_model is not None else list(MODEL_FEATURE_NAMES)
         ),
-        "samples": samples,
+        # ``samples`` is the exact fit/evaluation population.  Preserve all
+        # successful labels separately so a partial generated lineage remains
+        # visible in the report and coverage accounting without entering the
+        # model or holdout splits.
+        "samples": training_samples,
+        "labelled_samples": samples,
+        "training_selection": training_selection,
         "random_row_holdout_diagnostic": row_holdout,
         "family_holdout": family_holdout,
         "nested_ridge_family_holdout": nested_ridge_holdout,
@@ -3043,18 +3517,34 @@ def main() -> int:
             "effective_lineage_key": "effective_lineage",
             "family_lineages": family_lineages,
             "family_suites": family_suites,
-            "effective_group_count": len({str(row["family"]) for row in samples}),
+            "effective_group_count": len({
+                str(row["family"]) for row in training_samples
+            }),
         },
         "motif_corpus": generated_corpus,
         "candidate_gate": {
             "requires": [
                 "generated-only training rows with source/canonical identities",
-                "at least 1000 distinct generated base DFGs",
-                "all six predeclared generator families",
+                "at least 200 complete distinct base DFGs per generator family",
+                "every required shape/architecture cell for every complete base",
                 "nested generated-base lineage model selection",
                 "whole-generator-family holdout requested and available",
                 "structure-only model features disjoint from Rec/Res floor",
             ],
+            "required_generator_families": list(required_generator_families),
+            "required_shape_variant_cells": list(required_shape_variant_cells),
+            "requested_bases_per_family": args.motif_samples_per_family,
+            "requested_total_bases": (
+                args.motif_samples_per_family * len(required_generator_families)
+            ),
+            "minimum_complete_bases_per_family": 200,
+            "minimum_total_complete_bases": 200 * len(required_generator_families),
+            "minimum_complete_fraction": (
+                200 / args.motif_samples_per_family
+                if args.motif_samples_per_family > 0 else None
+            ),
+            "coverage": generated_coverage,
+            "training_selection": training_selection,
             "generated_only_training": generated_only_training,
             "generated_distinct_base_dfg_count": generated_base_dfg_count,
             "generated_generator_family_count": generated_family_count,

@@ -144,6 +144,65 @@ def canonical_model_sha256(model: Mapping[str, Any]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _canonical_json_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _validate_training_canonical_dfg_identity(
+    provenance: Mapping[str, Any], source: Path,
+) -> None:
+    """Validate the exact training-base identity set carried by v2."""
+    identity = provenance.get("training_canonical_dfg_identity")
+    if not isinstance(identity, Mapping):
+        raise ValueError(
+            f"{source}: v2 artifact is missing training canonical DFG identity"
+        )
+    if identity.get("scheme") != "canonical_dfg_sha256_v1":
+        raise ValueError(f"{source}: unsupported training DFG identity scheme")
+    hashes = identity.get("canonical_dfg_sha256s")
+    if not isinstance(hashes, list) or any(
+        not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None
+        for value in hashes
+    ):
+        raise ValueError(
+            f"{source}: training canonical DFG hashes must be lowercase SHA-256"
+        )
+    if hashes != sorted(hashes) or len(set(hashes)) != len(hashes):
+        raise ValueError(
+            f"{source}: training canonical DFG hashes must be sorted and unique"
+        )
+    count = identity.get("distinct_count")
+    if isinstance(count, bool) or not isinstance(count, int) or count != len(hashes):
+        raise ValueError(
+            f"{source}: training canonical DFG count does not match hash list"
+        )
+    expected_digest = _canonical_json_sha256(hashes)
+    if identity.get("set_sha256") != expected_digest:
+        raise ValueError(f"{source}: training canonical DFG set digest changed")
+    existing_count = provenance.get("training_distinct_base_dfg_count")
+    if (
+        isinstance(existing_count, bool) or
+        not isinstance(existing_count, int) or existing_count != count
+    ):
+        raise ValueError(
+            f"{source}: training canonical DFG count disagrees with provenance"
+        )
+
+
+def training_canonical_dfg_hashes(loaded: LoadedModel) -> frozenset[str]:
+    """Return the validated v2 training canonical DFG identity set."""
+    identity = loaded.provenance.get("training_canonical_dfg_identity")
+    if not isinstance(identity, Mapping):
+        raise ValueError("frozen model training canonical DFG identity is missing")
+    hashes = identity.get("canonical_dfg_sha256s")
+    if not isinstance(hashes, list):
+        raise ValueError("frozen model training canonical DFG identity is invalid")
+    return frozenset(str(value) for value in hashes)
+
+
 def load_model_artifact(path: Path) -> LoadedModel:
     """Load either a direct model object or a training report containing one."""
     raw_bytes = path.read_bytes()
@@ -164,6 +223,7 @@ def load_model_artifact(path: Path) -> LoadedModel:
             "portable-model-report-v2",
             "neura-experiment-v2",
             "compiled-ii-model-artifact-v1",
+            "compiled-ii-model-artifact-v2",
         }
         if schema_version not in accepted_containers:
             raise ValueError(
@@ -210,6 +270,8 @@ def load_model_artifact(path: Path) -> LoadedModel:
             dict(report_provenance)
             if isinstance(report_provenance, Mapping) else {}
         )
+        if schema_version == "compiled-ii-model-artifact-v2":
+            _validate_training_canonical_dfg_identity(provenance, path)
     model = validate_model(candidate)
     actual_sha256 = canonical_model_sha256(model)
     if expected_sha256 is not None and expected_sha256 != actual_sha256:
