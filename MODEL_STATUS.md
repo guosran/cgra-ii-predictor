@@ -204,7 +204,7 @@ At this update:
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
-generated end-to-end smoke: 18 declared, 16 labels, 2 mapper-censored
+generated training smoke: 12 declared, 12 labels, 0 mapper-censored; Ridge fit completed
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
 predictor unit tests: 87 passed
