@@ -1,0 +1,233 @@
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+from cgra_ii_predictor.predict import (
+    build_prediction_report,
+    canonical_model_sha256,
+    load_model_artifact,
+    load_prediction_samples,
+    parse_prediction_sample,
+    predict_sample,
+    validate_model,
+)
+
+
+def model():
+    return {
+        "model_type": "residual_ridge",
+        "feature_names": ["x"],
+        "mean": [0.0],
+        "scale": [1.0],
+        "weights": [0.5, 1.0],
+        "ridge": 1.0,
+        "residual_dead_zone": 1.0,
+        "unseen_group_absolute_error_radius": 2.0,
+        "unseen_group_interval_empirical_quantile": 0.9,
+    }
+
+
+def candidate(x=2.0):
+    return {
+        "sample_id": "kernel/4x4",
+        "lower_bound": 5,
+        "rec_mii": 5,
+        "res_mii": 3,
+        "features": {"x": x},
+        "metadata": {
+            "lower_bound_source": "rec_res_max_v1",
+            "source_sha256": "source-hash",
+            "architecture_id": "mesh-4x4",
+            "mapper_id": "neura-heuristic",
+            "mapper_revision": "revision-a",
+            "mapper_config": "mapping-strategy=heuristic",
+        },
+    }
+
+
+class PredictionTest(unittest.TestCase):
+    def _write_report(self, directory: Path, value=None) -> Path:
+        artifact = model() if value is None else value
+        report = {
+            "schema_version": "portable-model-report-v2",
+            "trained_full_model": artifact,
+            "trained_full_model_sha256": canonical_model_sha256(artifact),
+            "dataset_provenance": {
+                "neura": {"revision": "revision-a"},
+            },
+        }
+        path = directory / "model-report.json"
+        path.write_text(json.dumps(report))
+        return path
+
+    def test_prediction_exposes_residual_steps_without_a_label(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            loaded = load_model_artifact(
+                self._write_report(Path(raw_directory))
+            )
+            parsed = parse_prediction_sample(
+                candidate(), loaded.model["feature_names"], "candidate"
+            )
+            result = predict_sample(loaded, parsed)
+        self.assertEqual(result["raw_predicted_residual"], 2.5)
+        self.assertEqual(result["nonnegative_predicted_residual"], 2.5)
+        self.assertEqual(result["predicted_residual"], 2.5)
+        self.assertEqual(result["predicted_compiled_ii"], 7.5)
+        self.assertEqual(result["prediction_interval_lower"], 5.5)
+        self.assertEqual(result["prediction_interval_upper"], 9.5)
+        self.assertEqual(result["model_features"], {"x": 2.0})
+        self.assertNotIn("compiled_ii", result)
+
+    def test_negative_floor_and_dead_zone_both_return_the_lower_bound(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            loaded = load_model_artifact(
+                self._write_report(Path(raw_directory))
+            )
+            negative = predict_sample(loaded, parse_prediction_sample(
+                candidate(-2.0), loaded.model["feature_names"], "negative"
+            ))
+            small = predict_sample(loaded, parse_prediction_sample(
+                candidate(0.0), loaded.model["feature_names"], "small"
+            ))
+        self.assertEqual(negative["predicted_compiled_ii"], 5.0)
+        self.assertTrue(negative["nonnegative_floor_applied"])
+        self.assertEqual(small["predicted_compiled_ii"], 5.0)
+        self.assertTrue(small["dead_zone_applied"])
+
+    def test_prediction_input_rejects_labels_and_inconsistent_lower_bounds(self):
+        labelled = candidate()
+        labelled["compiled_ii"] = 8
+        with self.assertRaisesRegex(ValueError, "not allowed"):
+            parse_prediction_sample(labelled, model()["feature_names"], "labelled")
+        nested_label = candidate()
+        nested_label["features"]["compiled_ii"] = 8
+        with self.assertRaisesRegex(ValueError, "not allowed anywhere"):
+            parse_prediction_sample(
+                nested_label, model()["feature_names"], "nested-label"
+            )
+        metadata_label = candidate()
+        metadata_label["metadata"]["compiled_ii"] = 8
+        with self.assertRaisesRegex(ValueError, "not allowed anywhere"):
+            parse_prediction_sample(
+                metadata_label, model()["feature_names"], "metadata-label"
+            )
+        nested_bound = candidate()
+        nested_bound["features"]["rec_mii"] = 5
+        with self.assertRaisesRegex(ValueError, "top-level contract"):
+            parse_prediction_sample(
+                nested_bound, model()["feature_names"], "nested-bound"
+            )
+        inconsistent = candidate()
+        inconsistent["baseline_lb"] = 6
+        with self.assertRaisesRegex(ValueError, "lower bound disagrees"):
+            parse_prediction_sample(
+                inconsistent, model()["feature_names"], "inconsistent"
+            )
+        missing = candidate()
+        del missing["features"]["x"]
+        with self.assertRaisesRegex(ValueError, "missing model feature x"):
+            parse_prediction_sample(missing, model()["feature_names"], "missing")
+        below_component = candidate()
+        below_component["rec_mii"] = 6
+        with self.assertRaisesRegex(ValueError, "below proven component rec_mii"):
+            parse_prediction_sample(
+                below_component, model()["feature_names"], "below-component"
+            )
+        loose_floor = candidate()
+        loose_floor["lower_bound"] = 10
+        with self.assertRaisesRegex(ValueError, "must equal max"):
+            parse_prediction_sample(
+                loose_floor, model()["feature_names"], "loose-floor"
+            )
+        missing_component = candidate()
+        del missing_component["res_mii"]
+        with self.assertRaisesRegex(ValueError, "requires rec_mii and res_mii"):
+            parse_prediction_sample(
+                missing_component, model()["feature_names"], "missing-component"
+            )
+        for invalid_bound in (0, -1, 2.5):
+            invalid = candidate()
+            invalid["lower_bound"] = invalid_bound
+            with self.subTest(lower_bound=invalid_bound), self.assertRaisesRegex(
+                ValueError, "positive integer"
+            ):
+                parse_prediction_sample(
+                    invalid, model()["feature_names"], "invalid-bound"
+                )
+
+    def test_model_loader_validates_structure_and_report_hash(self):
+        invalid_models = [
+            {**model(), "model_type": "tree"},
+            {**model(), "scale": [0.0]},
+            {**model(), "weights": [1.0]},
+            {**model(), "mean": [float("nan")]},
+            {**model(), "feature_names": ["compiled_ii"]},
+            {**model(), "feature_names": ["baseline_lb"]},
+            {**model(), "feature_names": ["rec_mii"]},
+            {**model(), "feature_names": ["res_mii"]},
+        ]
+        for invalid in invalid_models:
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    validate_model(invalid)
+        with tempfile.TemporaryDirectory() as raw_directory:
+            path = self._write_report(Path(raw_directory))
+            raw = json.loads(path.read_text())
+            raw["trained_full_model"]["weights"][0] += 1.0
+            path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                load_model_artifact(path)
+            del raw["trained_full_model_sha256"]
+            path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, "must contain"):
+                load_model_artifact(path)
+            raw["trained_full_model_sha256"] = canonical_model_sha256(
+                raw["trained_full_model"]
+            )
+            raw["schema_version"] = "unrelated-regression-report-v1"
+            path.write_text(json.dumps(raw))
+            with self.assertRaisesRegex(ValueError, "unsupported compiled-II"):
+                load_model_artifact(path)
+
+    def test_non_finite_prediction_result_is_rejected(self):
+        extreme = model()
+        extreme["scale"] = [1e-308]
+        extreme["weights"] = [0.0, 1e308]
+        with tempfile.TemporaryDirectory() as raw_directory:
+            loaded = load_model_artifact(
+                self._write_report(Path(raw_directory), extreme)
+            )
+            parsed = parse_prediction_sample(
+                candidate(1e308), loaded.model["feature_names"], "extreme"
+            )
+            with self.assertRaisesRegex(ValueError, "not finite"):
+                predict_sample(loaded, parsed)
+
+    def test_prediction_report_round_trip_is_order_independent(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = Path(raw_directory)
+            loaded = load_model_artifact(self._write_report(directory))
+            first = candidate()
+            first["features"] = {"x": 2.0}
+            input_path = directory / "prediction-input.json"
+            input_path.write_text(json.dumps({"samples": [first]}))
+            samples, provenance = load_prediction_samples(
+                input_path, loaded.model["feature_names"]
+            )
+            report = build_prediction_report(
+                loaded, samples, input_path, provenance
+            )
+            serialized = json.dumps(report, allow_nan=False)
+            restored = json.loads(serialized)
+        self.assertEqual(restored["sample_count"], 1)
+        self.assertEqual(
+            restored["predictions"][0]["predicted_compiled_ii"], 7.5
+        )
+        self.assertFalse(
+            restored["semantics"]["prediction_input_compiled_ii_used"]
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

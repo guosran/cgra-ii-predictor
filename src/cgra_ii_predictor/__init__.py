@@ -1,7 +1,12 @@
 """Compiler-agnostic CGRA compiled-II prediction utilities."""
 
 from .dataset import Dataset, Sample, load_dataset
-from .model import fit_ridge, nested_group_holdout, predict_ridge
+from .model import (
+    fit_ridge,
+    nested_group_holdout,
+    predict_compiled_ii,
+    predict_ridge,
+)
 
 __all__ = [
     "Dataset",
@@ -9,6 +14,6 @@ __all__ = [
     "fit_ridge",
     "load_dataset",
     "nested_group_holdout",
+    "predict_compiled_ii",
     "predict_ridge",
 ]
-

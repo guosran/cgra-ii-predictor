@@ -27,11 +27,43 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import (
+    Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple,
+)
 
 import numpy as np
+
+try:
+    from adapters import neura_motifs
+except ImportError:  # Running the file directly from its adapters directory.
+    import neura_motifs  # type: ignore
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = PROJECT_ROOT / "src"
+SUBMODULE_NEURA_ROOT = PROJECT_ROOT / "third_party" / "neura"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from cgra_ii_predictor.dataset import Sample as CoreSample  # noqa: E402
+from cgra_ii_predictor.model import (  # noqa: E402
+    calibrate_unseen_group_interval as core_calibrate_interval,
+    constrained_predicted_residual as core_constrained_predicted_residual,
+    fit_ridge as core_fit_ridge,
+    nested_group_holdout as core_nested_group_holdout,
+    predict_compiled_ii as core_predict_compiled_ii,
+    predict_ridge as core_predict_ridge,
+    raw_ridge_residual_from_features as core_raw_residual_from_features,
+    select_ridge_hyperparameters as core_select_ridge_hyperparameters,
+)
+from cgra_ii_predictor.predict import (  # noqa: E402
+    LoadedModel,
+    canonical_model_sha256,
+    load_model_artifact,
+)
 
 
 DATA_TYPE = "!neura.data<i32, i1>"
@@ -39,18 +71,15 @@ FEATURE_NAMES = (
     "baseline_lb",
     "rec_mii",
     "res_mii",
-    "placement_lower_bound",
+    "compute_mii",
     "mem_mii",
-    "route_lower_bound",
     "reg_mii",
     "analytical_ii",
     "rec_res_gap",
-    "rec_placement_gap",
     "rec_dominant",
     "analytical_excess",
     "route_excess",
     "reg_excess",
-    "issue_mii",
     "route_mii",
     "nodes",
     "moves",
@@ -86,15 +115,11 @@ FEATURE_NAMES = (
 )
 
 # The complete feature record above is useful for corpus analysis.  The model
-# deliberately uses a smaller, physically motivated subset: with only fifteen
-# independent real kernel families, fitting all correlated counters reduced
-# unseen-family accuracy.  Architecture still enters through the three proven
-# bounds, whose values are recomputed for each YAML/shape.
+# deliberately uses a smaller, physically motivated subset.  The hard floor is
+# max(RecMII, ResMII), so neither that floor nor its two components are learned
+# features.  The Ridge model sees only pre-mapping graph structure and raw
+# architecture topology and predicts the residual above that floor.
 MODEL_FEATURE_NAMES = (
-    "baseline_lb",
-    "rec_mii",
-    "res_mii",
-    "placement_lower_bound",
     "semantic_edges",
     "semantic_depth",
     "semantic_width",
@@ -110,19 +135,27 @@ MODEL_FEATURE_NAMES = (
     "gep_ops",
     "indirect_geps",
     "pointer_loads",
+    "tiles",
+    "links",
+    "rows",
+    "split_domain",
 )
 
+LOWER_BOUND_COMPONENT_NAMES = ("rec_mii", "res_mii")
+
 Sample = Dict[str, Any]
+INVOCATION_FAILURES: List[Dict[str, object]] = []
 COST_FEATURE_NAMES = (
-    "rec_mii",
-    "res_mii",
-    "mem_mii",
-    "placement_lower_bound",
-    "issue_mii",
-    "route_mii",
-    "route_lower_bound",
-    "reg_mii",
     "analytical_ii",
+    "compute_mii",
+    "mem_mii",
+    "rec_mii",
+    "reg_mii",
+    "res_mii",
+    "route_mii",
+)
+OPTIONAL_COST_BOOLEAN_NAMES = (
+    "infeasible", "exceeds_max_ii",
 )
 
 
@@ -151,6 +184,16 @@ class CSpec:
 
 def resolve_default_opt(repo: Path) -> Path:
     return repo / "build/tools/mlir-neura-opt/mlir-neura-opt"
+
+
+def resolve_configured_neura_root() -> Optional[Path]:
+    """Prefer an explicit environment override, then the pinned submodule."""
+    configured_root = os.environ.get("NEURA_ROOT")
+    if configured_root:
+        return Path(configured_root)
+    if (SUBMODULE_NEURA_ROOT / "CMakeLists.txt").is_file():
+        return SUBMODULE_NEURA_ROOT
+    return None
 
 
 def resolve_default_llvm_tool(name: str) -> Path:
@@ -316,18 +359,101 @@ def write_c_loop(path: Path, spec: CSpec) -> None:
     )
 
 
-def invoke(command: Sequence[str], timeout: int) -> bool:
+def invocation_stage(command: Sequence[str]) -> str:
+    joined = " ".join(command)
+    if "--map-to-accelerator" in joined:
+        return "mapper"
+    if "--cost-model-analytical" in joined:
+        return "cost-model"
+    if any(token in joined for token in
+           ("--lower-", "--import-llvm", "--assign-accelerator")):
+        return "lowering"
+    return "frontend"
+
+
+def invocation_output(command: Sequence[str]) -> Optional[str]:
     try:
+        output_index = command.index("-o") + 1
+    except ValueError:
+        return None
+    return command[output_index] if output_index < len(command) else None
+
+
+def record_invocation_failure(
+    command: Sequence[str], status: str, timeout: int,
+    returncode: Optional[int] = None, stderr: str = "",
+) -> None:
+    INVOCATION_FAILURES.append({
+        "status": status,
+        "stage": invocation_stage(command),
+        "timeout_seconds": timeout,
+        "returncode": returncode,
+        "output": invocation_output(command),
+        "command": list(command),
+        "stderr_head": stderr[:1200],
+        "stderr_tail": stderr[-2800:],
+    })
+
+
+def bounded_stderr_excerpt(stream: Any) -> str:
+    """Read at most the retained head/tail from a seekable binary stream."""
+    stream.flush()
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    if size <= 4000:
+        stream.seek(0)
+        payload = stream.read()
+    else:
+        stream.seek(0)
+        head = stream.read(1200)
+        stream.seek(max(0, size - 2800))
+        tail = stream.read(2800)
+        payload = head + b"\n... stderr middle omitted ...\n" + tail
+    return payload.decode(errors="replace")
+
+
+def invoke(command: Sequence[str], timeout: int) -> bool:
+    # A disk-backed temporary stream avoids buffering arbitrarily verbose
+    # mapper diagnostics in memory.  Only a bounded excerpt enters the report.
+    with tempfile.TemporaryFile() as stderr_stream:
+        try:
+            completed = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_stream,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            record_invocation_failure(
+                command, "timeout", timeout,
+                stderr=bounded_stderr_excerpt(stderr_stream),
+            )
+            return False
+        if completed.returncode != 0:
+            record_invocation_failure(
+                command, "nonzero-exit", timeout,
+                returncode=completed.returncode,
+                stderr=bounded_stderr_excerpt(stderr_stream),
+            )
+            return False
+    return True
+
+
+def command_stdout_sha256(command: Sequence[str]) -> Optional[str]:
+    """Hash command output without retaining the entire stream in memory."""
+    with tempfile.TemporaryFile() as output_stream:
         completed = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=timeout,
+            command, stdout=output_stream, stderr=subprocess.DEVNULL,
             check=False,
         )
-    except subprocess.TimeoutExpired:
-        return False
-    return completed.returncode == 0
+        if completed.returncode != 0:
+            return None
+        output_stream.seek(0)
+        digest = hashlib.sha256()
+        for block in iter(lambda: output_stream.read(1024 * 1024), b""):
+            digest.update(block)
+        return digest.hexdigest()
 
 
 def git_provenance(root: Optional[Path]) -> Dict[str, object]:
@@ -343,10 +469,18 @@ def git_provenance(root: Optional[Path]) -> Dict[str, object]:
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         text=True, check=False,
     )
+    status_text = status.stdout if status.returncode == 0 else ""
     return {
         "root": str(root.resolve()),
         "revision": revision.stdout.strip() if revision.returncode == 0 else None,
-        "dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
+        "dirty": bool(status_text.strip()) if status.returncode == 0 else None,
+        "status_sha256": (
+            hashlib.sha256(status_text.encode()).hexdigest()
+            if status.returncode == 0 else None
+        ),
+        "tracked_diff_sha256": command_stdout_sha256(
+            ("git", "-C", str(root), "diff", "--binary", "HEAD")
+        ),
     }
 
 
@@ -360,9 +494,213 @@ def file_sha256(path: Path) -> Optional[str]:
     return digest.hexdigest()
 
 
+def attach_sample_provenance(
+    result: Sample, source: Path, architecture: Path,
+    architecture_variant: str, lineage: str,
+    dfg_source: Optional[Path] = None,
+) -> None:
+    """Attach auditable input identities without guessing suite membership."""
+    source_hash = file_sha256(source)
+    dfg_hash = file_sha256(dfg_source) if dfg_source is not None else source_hash
+    architecture_hash = file_sha256(architecture)
+    result.update({
+        "lineage": lineage,
+        "source_path": str(source.resolve()),
+        "source_sha256": source_hash,
+        "architecture_path": str(architecture.resolve()),
+        "architecture_sha256": architecture_hash,
+        "architecture_variant": architecture_variant,
+        "architecture_id": f"{architecture_hash}:{architecture_variant}",
+        # Include the DFG/source identity: the same architecture candidate can
+        # label many different kernels and must never share a candidate ID.
+        "candidate_id": (
+            f"{dfg_hash}:{architecture_hash}:{architecture_variant}:heuristic"
+        ),
+        "base_dfg_id": dfg_hash,
+        "ranking_query_id": dfg_hash,
+        "mapper_id": "neura-heuristic",
+        "mapper_config": "mapping-strategy=heuristic",
+    })
+    if dfg_source is not None:
+        result["dfg_source_path"] = str(dfg_source.resolve())
+        result["dfg_source_sha256"] = dfg_hash
+
+
 def parse_integer_attribute(text: str, name: str) -> Optional[int]:
     match = re.search(rf"\b{re.escape(name)} = (-?\d+) : i32", text)
     return int(match.group(1)) if match else None
+
+
+def parse_boolean_attribute(text: str, name: str) -> Optional[bool]:
+    match = re.search(rf"\b{re.escape(name)} = (true|false)\b", text)
+    return (match.group(1) == "true") if match else None
+
+
+def parse_cost_features(text: str) -> Optional[Dict[str, object]]:
+    """Parse the main-branch analytical facts used by the Rec/Res contract."""
+    required = {
+        name: parse_integer_attribute(text, name) for name in COST_FEATURE_NAMES
+    }
+    if any(value is None for value in required.values()):
+        return None
+    result = {name: int(value) for name, value in required.items()}
+    for name in OPTIONAL_COST_BOOLEAN_NAMES:
+        value = parse_boolean_attribute(text, name)
+        if value is not None:
+            result[name] = value
+    # These states cannot yield a valid compiled-II target or point prediction
+    # within the architecture's control-memory contract. Treat them as censored
+    # cost facts, never as ordinary numeric rows whose placeholder MII is one.
+    if (
+        result.get("infeasible") is True or result.get("exceeds_max_ii") is True
+    ):
+        return None
+    return result
+
+
+def resolve_rec_res_lower_bound(result: Sample) -> Tuple[int, str]:
+    """Return the single authoritative v1 floor: max(RecMII, ResMII)."""
+    bound = max(int(result["rec_mii"]), int(result["res_mii"]))
+    for alias in ("lower_bound", "baseline_lb"):
+        if result.get(alias) is not None and int(result[alias]) != bound:
+            raise ValueError(
+                f"{alias}={result[alias]} disagrees with "
+                f"max(rec_mii,res_mii)={bound}"
+            )
+    return bound, "rec_res_max_v1"
+
+
+SAMPLE_PROVENANCE_FIELDS = (
+    "lineage",
+    "suite",
+    "source_family",
+    "source_kind",
+    "original_lineage",
+    "effective_lineage",
+    "source_path",
+    "source_sha256",
+    "dfg_source_path",
+    "dfg_source_sha256",
+    "architecture_id",
+    "architecture_path",
+    "architecture_sha256",
+    "architecture_variant",
+    "candidate_id",
+    "mapper_id",
+    "mapper_revision",
+    "mapper_config",
+    "lower_bound_source",
+    "mapped_artifact_path",
+    "mapped_artifact_sha256",
+    "generator_family",
+    "generator_type",
+    "generator_version",
+    "motif",
+    "base_id",
+    "base_seed",
+    "root_seed",
+    "operation_count",
+    "canonical_dfg_sha256",
+    "registers",
+    "leakage_lineage_id",
+    "declared_leakage_lineage_id",
+    "base_dfg_id",
+    "ranking_query_id",
+    "training_stratum",
+)
+
+
+def normalize_input_sample(
+    raw: Dict[str, object], report_path: Path,
+    report_sha256: Optional[str],
+    report_provenance: Optional[Mapping[str, object]] = None,
+) -> Sample:
+    """Accept both legacy flat rows and portable nested samples."""
+    row: Sample = dict(raw)
+    nested_features = row.pop("features", None)
+    if isinstance(nested_features, dict):
+        row.update(nested_features)
+    metadata = row.pop("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("sample metadata must be an object")
+    row.setdefault("index", row.get("sample_id"))
+    row.setdefault("family", row.get("group"))
+    row.setdefault("baseline_lb", row.get("lower_bound"))
+    for field in SAMPLE_PROVENANCE_FIELDS:
+        if field not in row and field in metadata:
+            row[field] = metadata[field]
+    if report_provenance:
+        if report_provenance.get("architecture") is not None:
+            row.setdefault("architecture_path", report_provenance["architecture"])
+        if report_provenance.get("architecture_sha256") is not None:
+            row.setdefault(
+                "architecture_sha256", report_provenance["architecture_sha256"]
+            )
+        if report_provenance.get("mapping_strategy") is not None:
+            row.setdefault("mapper_id", report_provenance["mapping_strategy"])
+        neura = report_provenance.get("neura")
+        if isinstance(neura, Mapping) and neura.get("revision") is not None:
+            row.setdefault("mapper_revision", neura["revision"])
+    if row.get("index") is None or row.get("family") is None:
+        raise ValueError("input sample needs index/sample_id and family/group")
+    source_kind = str(row.get("source_kind", "")).lower()
+    source_identity = str(row.get("source_family", row.get("family", "")))
+    generated = source_kind in {"generated", "synthetic"} or source_identity.startswith(
+        ("generated", "synthetic")
+    )
+    row.setdefault("training_stratum", "generated" if generated else "real")
+    row.setdefault(
+        "leakage_lineage_id",
+        row.get("lineage", row.get("family")),
+    )
+    # Keep ranking unavailable for legacy rows that have no explicit source
+    # identity.  A merged lineage is a fit/holdout unit, not a DSE query.
+    base_dfg_id = row.get("base_dfg_id")
+    if base_dfg_id in (None, ""):
+        base_dfg_id = row.get(
+            "canonical_dfg_sha256",
+            row.get("dfg_source_sha256", row.get("source_sha256")),
+        )
+    if base_dfg_id not in (None, ""):
+        row.setdefault("base_dfg_id", base_dfg_id)
+        row.setdefault("ranking_query_id", base_dfg_id)
+    row["input_report_path"] = str(report_path.resolve())
+    row["input_report_sha256"] = report_sha256
+    return row
+
+
+def deduplicate_samples_by_id(samples: Sequence[Sample]) -> List[Sample]:
+    """Collapse identical imports and reject any conflicting repeated ID."""
+    unique_samples: Dict[str, Sample] = {}
+    unique_fingerprints: Dict[str, str] = {}
+    for row in samples:
+        sample_id = str(row["index"])
+        fingerprint = json.dumps({
+            name: value for name, value in row.items()
+            if name not in {"input_report_path", "input_report_sha256"}
+        }, sort_keys=True, allow_nan=False)
+        prior = unique_fingerprints.get(sample_id)
+        if prior is not None and prior != fingerprint:
+            raise ValueError(
+                f"conflicting duplicate sample ID across reports: {sample_id}"
+            )
+        unique_fingerprints[sample_id] = fingerprint
+        unique_samples.setdefault(sample_id, row)
+    return list(unique_samples.values())
+
+
+def resolve_effective_lineage(
+    row: Mapping[str, object], source_family: str,
+    family_lineages: Mapping[str, str],
+) -> Tuple[str, str]:
+    """Honor an explicit conservative lineage unless an alias merges it."""
+    declared = str(row.get(
+        "leakage_lineage_id", row.get("lineage", source_family)
+    ))
+    effective = family_lineages.get(
+        source_family, family_lineages.get(declared, declared)
+    )
+    return declared, effective
 
 
 def load_sibling_cost_features(report_path: Path) -> Dict[str, Dict[str, int]]:
@@ -384,28 +722,21 @@ def load_sibling_cost_features(report_path: Path) -> Dict[str, Dict[str, int]]:
         else:
             continue
         text = cost_path.read_text()
-        values = {
-            name: parse_integer_attribute(text, name)
-            for name in COST_FEATURE_NAMES
-        }
-        if all(value is not None for value in values.values()):
-            result[index] = {name: int(value) for name, value in values.items()}
+        values = parse_cost_features(text)
+        if values is not None:
+            result[index] = values
     return result
 
 
 def add_prediction_features(result: Sample) -> None:
     """Add only pre-mapping features; this never changes a mapping decision."""
-    result["baseline_lb"] = max(
-        result["rec_mii"], result["res_mii"], result["placement_lower_bound"]
-    )
+    bound, source = resolve_rec_res_lower_bound(result)
+    result["baseline_lb"] = bound
+    result["lower_bound_source"] = source
+    if "compiled_ii" in result and int(result["compiled_ii"]) < bound:
+        raise ValueError("compiled_ii is below max(RecMII, ResMII)")
     result["rec_res_gap"] = result["rec_mii"] - result["res_mii"]
-    result["rec_placement_gap"] = (
-        result["rec_mii"] - result["placement_lower_bound"]
-    )
-    result["rec_dominant"] = int(
-        result["rec_mii"] >= result["res_mii"] and
-        result["rec_mii"] >= result["placement_lower_bound"]
-    )
+    result["rec_dominant"] = int(result["rec_mii"] >= result["res_mii"])
     # The following are deliberately *prediction* features.  RouteMII and
     # RegMII are not pruning bounds, but may still correlate with the II at
     # which this particular heuristic finds a mapping.
@@ -443,27 +774,166 @@ def collect_sample(opt: Path, sample_dir: Path, spec: SampleSpec,
 
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
-    values = {
-        "rec_mii": parse_integer_attribute(cost_text, "rec_mii"),
-        "res_mii": parse_integer_attribute(cost_text, "res_mii"),
-        "mem_mii": parse_integer_attribute(cost_text, "mem_mii"),
-        "placement_lower_bound": parse_integer_attribute(
-            cost_text, "placement_lower_bound"),
-        "issue_mii": parse_integer_attribute(cost_text, "issue_mii"),
-        "route_mii": parse_integer_attribute(cost_text, "route_mii"),
-        "route_lower_bound": parse_integer_attribute(
-            cost_text, "route_lower_bound"),
-        "reg_mii": parse_integer_attribute(cost_text, "reg_mii"),
-        "analytical_ii": parse_integer_attribute(cost_text, "analytical_ii"),
-        "compiled_ii": parse_integer_attribute(mapped_text, "compiled_ii"),
-    }
-    if any(value is None for value in values.values()):
+    values = parse_cost_features(cost_text)
+    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
+    if values is None or compiled_ii is None:
         return None
-    result: Sample = {key: int(value) for key, value in values.items()}
+    result: Sample = dict(values)
+    result["compiled_ii"] = int(compiled_ii)
     result.update(graph_features)
     add_prediction_features(result)
     result.update(asdict(spec))
     result["family"] = "synthetic"
+    attach_sample_provenance(
+        result, source, arch,
+        f"{spec.rows}x{spec.columns}:split-domain={spec.split_domain}",
+        "synthetic-dfg-template",
+    )
+    return result
+
+
+def collect_motif_sample(
+    opt: Path, candidate: neura_motifs.MotifCandidate, timeout: int,
+    manifest_path: Optional[Path] = None,
+) -> Optional[Sample]:
+    """Collect one predeclared motif candidate and preserve its manifest state.
+
+    Source/architecture files are materialized before the manifest is written
+    by the caller.  This function consequently only invokes the analytical
+    pass and mapper; it never creates an unannounced candidate.  A failed
+    invocation or missing ``compiled_ii`` is recorded as censored and returns
+    no training row.
+    """
+    source = Path(candidate.source_path)
+    architecture = Path(candidate.architecture_path)
+    sample_dir = source.parent
+    cost = sample_dir / "cost.mlir"
+    mapped = sample_dir / "mapped.mlir"
+
+    def manifest_update(
+        status: str, stage: str, failure: Optional[str] = None,
+        updates: Optional[Mapping[str, object]] = None,
+    ) -> None:
+        if manifest_path is not None:
+            neura_motifs.update_manifest_candidate(
+                manifest_path, candidate.candidate_id, status, stage, failure,
+                updates,
+            )
+
+    # Do not silently map a source or architecture that changed after
+    # predeclaration; such a candidate is censored and can be regenerated with
+    # a new manifest/identity.
+    if (
+        file_sha256(source) != candidate.source_sha256 or
+        file_sha256(architecture) != candidate.architecture_sha256
+    ):
+        manifest_update(
+            "censored", "preflight", "predeclared-input-hash-mismatch"
+        )
+        return None
+
+    manifest_update("running", "cost-model")
+    failure_start = len(INVOCATION_FAILURES)
+    if not invoke(
+        (str(opt), str(source), f"--architecture-spec={architecture}",
+         "--cost-model-analytical", "-o", str(cost)),
+        timeout,
+    ):
+        failure = "cost-model-invocation-failed"
+        if len(INVOCATION_FAILURES) > failure_start:
+            failure = str(INVOCATION_FAILURES[-1].get("status", failure))
+        manifest_update("censored", "cost-model", failure)
+        return None
+
+    try:
+        values = parse_cost_features(cost.read_text())
+    except OSError:
+        values = None
+    if values is None:
+        manifest_update(
+            "censored", "cost-model", "invalid-or-infeasible-cost-facts"
+        )
+        return None
+
+    manifest_update("running", "mapper")
+    failure_start = len(INVOCATION_FAILURES)
+    if not invoke(
+        (str(opt), str(source), f"--architecture-spec={architecture}",
+         '--map-to-accelerator=mapping-strategy=heuristic', "-o", str(mapped)),
+        timeout,
+    ):
+        failure = "mapper-invocation-failed"
+        if len(INVOCATION_FAILURES) > failure_start:
+            failure = str(INVOCATION_FAILURES[-1].get("status", failure))
+        manifest_update("censored", "mapper", failure)
+        return None
+
+    try:
+        compiled_ii = parse_integer_attribute(mapped.read_text(), "compiled_ii")
+    except OSError:
+        compiled_ii = None
+    if values is None or compiled_ii is None:
+        manifest_update("censored", "label-parse", "compiled_ii-unavailable")
+        return None
+
+    result: Sample = dict(values)
+    result["compiled_ii"] = int(compiled_ii)
+    result.update(graph_features_from_neura(
+        source.read_text(), candidate.rows, candidate.columns
+    ))
+    add_prediction_features(result)
+    result.update({
+        "index": candidate.candidate_id,
+        # Group by the base source, not by shape or architecture variant.
+        "family": candidate.lineage,
+        "lineage": candidate.lineage,
+        "effective_lineage": candidate.lineage,
+        "leakage_lineage_id": candidate.lineage,
+        "base_dfg_id": candidate.canonical_dfg_sha256,
+        "ranking_query_id": candidate.canonical_dfg_sha256,
+        "training_stratum": "generated",
+        "source_family": (
+            f"generated/{candidate.generator_version}/{candidate.motif}"
+        ),
+        "source_kind": "generated",
+        "generator_family": candidate.generator_family,
+        "generator_type": candidate.generator_type,
+        "generator_version": candidate.generator_version,
+        "motif": candidate.motif,
+        "base_id": candidate.base_id,
+        "base_seed": candidate.base_seed,
+        "root_seed": candidate.root_seed,
+        "operation_count": candidate.operation_count,
+        "canonical_dfg_sha256": candidate.canonical_dfg_sha256,
+        "source_sha256": candidate.source_sha256,
+        "source_path": str(source.resolve()),
+        "architecture_path": str(architecture.resolve()),
+        "architecture_sha256": candidate.architecture_sha256,
+        "architecture_variant": candidate.architecture_variant,
+        "architecture_id": candidate.architecture_id,
+        "candidate_id": candidate.candidate_id,
+        "mapper_id": "neura-heuristic",
+        "mapper_config": "mapping-strategy=heuristic",
+        "mapped_artifact_path": str(mapped.resolve()),
+        "mapped_artifact_sha256": file_sha256(mapped),
+        "registers": candidate.registers,
+    })
+    manifest_update(
+        "success", "mapper", updates={
+            "sample_id": candidate.candidate_id,
+            "compiled_ii": int(compiled_ii),
+            "lower_bound": int(result["baseline_lb"]),
+            "cost_artifact_path": str(
+                cost.relative_to(manifest_path.parent)
+                if manifest_path is not None else cost.resolve()
+            ),
+            "mapped_artifact_path": str(
+                mapped.relative_to(manifest_path.parent)
+                if manifest_path is not None else mapped.resolve()
+            ),
+            "mapped_artifact_sha256": file_sha256(mapped),
+        }
+    )
     return result
 
 
@@ -518,28 +988,21 @@ def collect_c_sample(opt: Path, sample_dir: Path, spec: CSpec,
         return None
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
-    values = {
-        "rec_mii": parse_integer_attribute(cost_text, "rec_mii"),
-        "res_mii": parse_integer_attribute(cost_text, "res_mii"),
-        "mem_mii": parse_integer_attribute(cost_text, "mem_mii"),
-        "placement_lower_bound": parse_integer_attribute(
-            cost_text, "placement_lower_bound"),
-        "issue_mii": parse_integer_attribute(cost_text, "issue_mii"),
-        "route_mii": parse_integer_attribute(cost_text, "route_mii"),
-        "route_lower_bound": parse_integer_attribute(
-            cost_text, "route_lower_bound"),
-        "reg_mii": parse_integer_attribute(cost_text, "reg_mii"),
-        "analytical_ii": parse_integer_attribute(cost_text, "analytical_ii"),
-        "compiled_ii": parse_integer_attribute(mapped_text, "compiled_ii"),
-    }
-    if any(value is None for value in values.values()):
+    values = parse_cost_features(cost_text)
+    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
+    if values is None or compiled_ii is None:
         return None
-    result: Sample = {key: int(value) for key, value in values.items()}
+    result: Sample = dict(values)
+    result["compiled_ii"] = int(compiled_ii)
     result.update(graph_features_from_neura(lowered.read_text(), spec.rows,
                                             spec.columns))
     add_prediction_features(result)
     result.update(asdict(spec))
     result["family"] = "synthetic-c"
+    attach_sample_provenance(
+        result, source, architecture, f"{spec.rows}x{spec.columns}",
+        "synthetic-c-loop-template", dfg_source=lowered,
+    )
     return result
 
 
@@ -771,28 +1234,23 @@ def collect_real_fixture(opt: Path, sample_dir: Path, name: str, source: Path,
 
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
-    values = {
-        "rec_mii": parse_integer_attribute(cost_text, "rec_mii"),
-        "res_mii": parse_integer_attribute(cost_text, "res_mii"),
-        "mem_mii": parse_integer_attribute(cost_text, "mem_mii"),
-        "placement_lower_bound": parse_integer_attribute(
-            cost_text, "placement_lower_bound"),
-        "issue_mii": parse_integer_attribute(cost_text, "issue_mii"),
-        "route_mii": parse_integer_attribute(cost_text, "route_mii"),
-        "route_lower_bound": parse_integer_attribute(
-            cost_text, "route_lower_bound"),
-        "reg_mii": parse_integer_attribute(cost_text, "reg_mii"),
-        "analytical_ii": parse_integer_attribute(cost_text, "analytical_ii"),
-        "compiled_ii": parse_integer_attribute(mapped_text, "compiled_ii"),
-    }
-    if any(value is None for value in values.values()):
+    values = parse_cost_features(cost_text)
+    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
+    if values is None or compiled_ii is None:
         return None
-    result: Sample = {key: int(value) for key, value in values.items()}
+    result: Sample = dict(values)
+    result["compiled_ii"] = int(compiled_ii)
     result.update(graph_features_from_neura(source.read_text(), rows, columns,
                                             valid_tiles))
     add_prediction_features(result)
     result["index"] = f"{name}-{rows}x{columns}{suffix}"
     result["family"] = name
+    mask = "all" if valid_tiles is None else ",".join(
+        f"{x}_{y}" for x, y in sorted(valid_tiles)
+    )
+    attach_sample_provenance(
+        result, source, architecture, f"{rows}x{columns}:tiles={mask}", name
+    )
     return result
 
 
@@ -818,27 +1276,23 @@ def collect_completed_real_fixture(
     mapped_text = mapped.read_text()
     if 'mapping_strategy = "heuristic"' not in mapped_text:
         return None
-    values = {
-        "rec_mii": parse_integer_attribute(cost_text, "rec_mii"),
-        "res_mii": parse_integer_attribute(cost_text, "res_mii"),
-        "mem_mii": parse_integer_attribute(cost_text, "mem_mii"),
-        "placement_lower_bound": parse_integer_attribute(
-            cost_text, "placement_lower_bound"),
-        "issue_mii": parse_integer_attribute(cost_text, "issue_mii"),
-        "route_mii": parse_integer_attribute(cost_text, "route_mii"),
-        "route_lower_bound": parse_integer_attribute(
-            cost_text, "route_lower_bound"),
-        "reg_mii": parse_integer_attribute(cost_text, "reg_mii"),
-        "analytical_ii": parse_integer_attribute(cost_text, "analytical_ii"),
-        "compiled_ii": parse_integer_attribute(mapped_text, "compiled_ii"),
-    }
-    if any(value is None for value in values.values()):
+    values = parse_cost_features(cost_text)
+    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
+    if values is None or compiled_ii is None:
         return None
-    result: Sample = {key: int(value) for key, value in values.items()}
+    result: Sample = dict(values)
+    result["compiled_ii"] = int(compiled_ii)
     result.update(graph_features_from_neura(source.read_text(), rows, columns))
     add_prediction_features(result)
     result["index"] = f"{name}-{rows}x{columns}"
     result["family"] = name
+    result["training_stratum"] = "real"
+    result["leakage_lineage_id"] = name
+    attach_sample_provenance(
+        result, source, architecture, f"{rows}x{columns}:tiles=all", name
+    )
+    result["mapped_artifact_path"] = str(mapped.resolve())
+    result["mapped_artifact_sha256"] = file_sha256(mapped)
     return result
 
 
@@ -855,17 +1309,19 @@ def collect_prediction_fixture(
     ):
         return None
     cost_text = cost.read_text()
-    values = {
-        field: parse_integer_attribute(cost_text, field)
-        for field in COST_FEATURE_NAMES
-    }
-    if any(value is None for value in values.values()):
+    values = parse_cost_features(cost_text)
+    if values is None:
         return None
-    result: Sample = {key: int(value) for key, value in values.items()}
+    result: Sample = dict(values)
     result.update(graph_features_from_neura(source.read_text(), rows, columns))
     add_prediction_features(result)
     result["index"] = f"{name}-{rows}x{columns}"
     result["family"] = name
+    result["training_stratum"] = "real"
+    result["leakage_lineage_id"] = name
+    attach_sample_provenance(
+        result, source, architecture, f"{rows}x{columns}:tiles=all", name
+    )
     return result
 
 
@@ -896,53 +1352,75 @@ def random_connected_tile_masks(rng: random.Random, count: int,
     return masks
 
 
+def to_core_sample(row: Sample) -> CoreSample:
+    """Translate a Neura flat row into the compiler-agnostic core schema."""
+    lower_bound = float(row["baseline_lb"])
+    return CoreSample(
+        sample_id=str(row.get("index", "prediction")),
+        group=str(row.get("family", "prediction")),
+        lower_bound=lower_bound,
+        compiled_ii=float(row.get("compiled_ii", lower_bound)),
+        features={
+            name: float(row[name]) for name in MODEL_FEATURE_NAMES if name in row
+        },
+        metadata={
+            name: row[name]
+            for name in (
+                "candidate_id", "architecture_id", "architecture_variant",
+                "mapper_id", "mapper_revision", "mapper_config",
+                "source_family", "source_kind", "training_weight_group",
+                "source_sha256", "dfg_source_sha256",
+                "lineage", "declared_leakage_lineage_id",
+                "generator_family", "generator_version", "motif",
+                "generator_type", "base_id", "base_seed", "root_seed",
+                "operation_count",
+                "canonical_dfg_sha256",
+                "leakage_lineage_id", "base_dfg_id", "ranking_query_id",
+                "training_stratum", "rec_mii", "res_mii",
+                "lower_bound_source",
+            )
+            if name in row
+        },
+    )
+
+
 def fit_ridge(train: Sequence[Sample], ridge: float,
               residual_dead_zone: float = 0.0) -> Dict[str, object]:
-    """Fit a ridge model for non-negative heuristic-II residuals.
-
-    ``residual_dead_zone`` suppresses small positive residuals after the fit.
-    It is a prediction calibration parameter, not a mapping lower bound.
-    """
-    if not train:
-        raise ValueError("cannot fit an empty training set")
-    if residual_dead_zone < 0.0:
-        raise ValueError("residual dead zone must be non-negative")
-    x_train = np.asarray(
-        [[row[name] for name in MODEL_FEATURE_NAMES] for row in train],
-        dtype=float,
+    """Compatibility wrapper around the single core Ridge implementation."""
+    return core_fit_ridge(
+        [to_core_sample(row) for row in train], MODEL_FEATURE_NAMES,
+        ridge, residual_dead_zone,
     )
-    y_train = np.asarray(
-        [row["compiled_ii"] - row["baseline_lb"] for row in train], dtype=float
-    )
-    mean = x_train.mean(axis=0)
-    scale = x_train.std(axis=0)
-    scale[scale == 0] = 1.0
-    normalized = (x_train - mean) / scale
-    design = np.column_stack((np.ones(len(train)), normalized))
-    penalty = np.eye(design.shape[1]) * ridge
-    penalty[0, 0] = 0.0
-    weights = np.linalg.solve(design.T @ design + penalty, design.T @ y_train)
-
-    return {
-        "feature_names": list(MODEL_FEATURE_NAMES),
-        "mean": mean.tolist(),
-        "scale": scale.tolist(),
-        "weights": weights.tolist(),
-        "ridge": ridge,
-        "residual_dead_zone": residual_dead_zone,
-    }
 
 
 def predict_ridge(model: Dict[str, object], row: Sample) -> float:
-    mean = np.asarray(model["mean"], dtype=float)
-    scale = np.asarray(model["scale"], dtype=float)
-    weights = np.asarray(model["weights"], dtype=float)
-    feature_names = model["feature_names"]
-    vector = np.asarray([row[name] for name in feature_names], dtype=float)
-    residual = max(0.0, weights[0] + ((vector - mean) / scale) @ weights[1:])
-    if residual < float(model.get("residual_dead_zone", 0.0)):
-        residual = 0.0
-    return row["baseline_lb"] + float(residual)
+    return core_predict_ridge(model, to_core_sample(row))
+
+
+def predict_unlabelled_candidate(
+    model: Mapping[str, object], row: Sample,
+) -> Dict[str, object]:
+    """Evaluate an unlabeled flat Neura feature record without a fake label."""
+    lower_bound, _ = resolve_rec_res_lower_bound(row)
+    model_features = {
+        feature_name: float(row[feature_name])
+        for feature_name in model["feature_names"]
+    }
+    raw_residual = core_raw_residual_from_features(model, model_features)
+    predicted_residual = core_constrained_predicted_residual(
+        model, raw_residual
+    )
+    prediction = core_predict_compiled_ii(
+        model, float(lower_bound), model_features,
+        rec_mii=float(row["rec_mii"]), res_mii=float(row["res_mii"]),
+    )
+    return {
+        "model_features": model_features,
+        "raw_predicted_residual": raw_residual,
+        "nonnegative_predicted_residual": max(0.0, raw_residual),
+        "predicted_residual": predicted_residual,
+        "predicted_compiled_ii": prediction,
+    }
 
 
 def residual_sse(rows: Sequence[Sample]) -> float:
@@ -958,7 +1436,7 @@ def fit_residual_tree(train: Sequence[Sample], max_depth: int,
                       min_samples: int) -> Dict[str, object]:
     """Fit a deterministic, dependency-free shallow regression tree.
 
-    The tree predicts the residual above the proven lower bound.  It is a
+    The tree predicts the residual above max(RecMII, ResMII). It is a
     reporting experiment only; no compiler code reads this model.
     """
     if not train:
@@ -972,7 +1450,7 @@ def fit_residual_tree(train: Sequence[Sample], max_depth: int,
             return {"value": leaf, "count": len(rows)}
 
         best: Optional[Tuple[float, int, float, List[Sample], List[Sample]]] = None
-        for feature_index, name in enumerate(FEATURE_NAMES):
+        for feature_index, name in enumerate(MODEL_FEATURE_NAMES):
             values = sorted({float(row[name]) for row in rows})
             for low, high in zip(values, values[1:]):
                 threshold = (low + high) / 2.0
@@ -988,7 +1466,7 @@ def fit_residual_tree(train: Sequence[Sample], max_depth: int,
             return {"value": leaf, "count": len(rows)}
         _, feature_index, threshold, left, right = best
         return {
-            "feature": FEATURE_NAMES[feature_index],
+            "feature": MODEL_FEATURE_NAMES[feature_index],
             "threshold": threshold,
             "count": len(rows),
             "left": build(left, depth + 1),
@@ -996,7 +1474,7 @@ def fit_residual_tree(train: Sequence[Sample], max_depth: int,
         }
 
     return {
-        "feature_names": list(FEATURE_NAMES),
+        "feature_names": list(MODEL_FEATURE_NAMES),
         "max_depth": max_depth,
         "min_samples": min_samples,
         "tree": build(list(train), 0),
@@ -1011,16 +1489,35 @@ def predict_residual_tree(model: Dict[str, object], row: Sample) -> float:
 
 
 def prediction_rows(test: Sequence[Sample], predictor: Callable[[Sample], float]) -> List[Dict[str, object]]:
-    return [
-        {
+    result: List[Dict[str, object]] = []
+    for row in test:
+        prediction: Dict[str, object] = {
             "sample": row["index"],
             "family": row["family"],
             "baseline": row["baseline_lb"],
             "prediction": predictor(row),
             "compiled_ii": row["compiled_ii"],
         }
-        for row in test
-    ]
+        for name in (
+            "candidate_id", "architecture_id", "architecture_variant",
+            "source_family", "source_kind", "leakage_lineage_id",
+            "base_dfg_id", "ranking_query_id", "training_stratum",
+            "generator_family", "generator_version", "motif",
+        ):
+            if name in row:
+                prediction[name] = row[name]
+        result.append(prediction)
+    return result
+
+
+def is_synthetic_row(row: Dict[str, object]) -> bool:
+    if str(row.get("source_kind", "")).lower() in {"generated", "synthetic"}:
+        return True
+    identity = row.get(
+        "generator_family",
+        row.get("source_family", row.get("family", row.get("group", ""))),
+    )
+    return str(identity).startswith(("synthetic", "generated"))
 
 
 def random_row_holdout(samples: Sequence[Sample], seed: int, ridge: float,
@@ -1086,11 +1583,11 @@ def leave_one_family_out(samples: Sequence[Sample], ridge: float,
     }
     real_ridge_rows = [
         row for row in ridge_rows
-        if not str(row["family"]).startswith("synthetic")
+        if not is_synthetic_row(row)
     ]
     real_tree_rows = [
         row for row in tree_rows
-        if not str(row["family"]).startswith("synthetic")
+        if not is_synthetic_row(row)
     ]
     if real_ridge_rows:
         result.update({
@@ -1113,7 +1610,7 @@ def add_real_holdout_metrics(result: Dict[str, object],
     """Add micro/macro metrics after excluding generated synthetic families."""
     real_ridge_rows = [
         row for row in ridge_rows
-        if not str(row["family"]).startswith("synthetic")
+        if not is_synthetic_row(row)
     ]
     if not real_ridge_rows:
         return
@@ -1128,7 +1625,7 @@ def add_real_holdout_metrics(result: Dict[str, object],
     if tree_rows is not None:
         real_tree_rows = [
             row for row in tree_rows
-            if not str(row["family"]).startswith("synthetic")
+            if not is_synthetic_row(row)
         ]
         result.update({
             "real_tree_mae": mean_absolute_error(real_tree_rows, "prediction"),
@@ -1141,39 +1638,15 @@ def select_ridge_hyperparameters(
     train: Sequence[Sample], ridge_candidates: Sequence[float],
     dead_zone_candidates: Sequence[float],
 ) -> Tuple[float, float]:
-    """Choose Ridge calibration only from inner family holdout predictions."""
+    """Choose Ridge calibration through the compiler-agnostic core."""
     families = sorted({str(row["family"]) for row in train})
     if len(families) < 2:
         return (ridge_candidates[len(ridge_candidates) // 2],
                 dead_zone_candidates[len(dead_zone_candidates) // 2])
-    best: Optional[Tuple[float, float, float, float]] = None
-    for ridge in ridge_candidates:
-        raw_predictions: List[Tuple[Sample, Dict[str, object]]] = []
-        for family in families:
-            inner_train = [row for row in train if row["family"] != family]
-            inner_test = [row for row in train if row["family"] == family]
-            if not inner_train:
-                continue
-            model = fit_ridge(inner_train, ridge)
-            raw_predictions.extend((row, model) for row in inner_test)
-        for dead_zone in dead_zone_candidates:
-            predictions: List[Dict[str, object]] = []
-            for row, model in raw_predictions:
-                calibrated = dict(model)
-                calibrated["residual_dead_zone"] = dead_zone
-                predictions.extend(prediction_rows(
-                    [row], lambda sample: predict_ridge(calibrated, sample)))
-            score = (
-                macro_family_mae(predictions, "prediction"),
-                mean_absolute_error(predictions, "prediction"),
-                ridge,
-                dead_zone,
-            )
-            if best is None or score < best:
-                best = score
-    if best is None:
-        raise ValueError("not enough samples for Ridge hyperparameter selection")
-    return best[2], best[3]
+    return core_select_ridge_hyperparameters(
+        [to_core_sample(row) for row in train], MODEL_FEATURE_NAMES,
+        ridge_candidates, dead_zone_candidates,
+    )
 
 
 def nested_ridge_family_holdout(samples: Sequence[Sample],
@@ -1181,36 +1654,96 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
                                 dead_zone_candidates: Sequence[float],
                                 ) -> Dict[str, object]:
     """Outer family holdout with calibration chosen only from outer training."""
-    families = sorted({str(row["family"]) for row in samples})
+    core_result = core_nested_group_holdout(
+        [to_core_sample(row) for row in samples], MODEL_FEATURE_NAMES,
+        ridge_candidates, dead_zone_candidates,
+    )
     rows: List[Dict[str, object]] = []
-    chosen: Dict[str, Dict[str, float]] = {}
-    for family in families:
-        train = [row for row in samples if row["family"] != family]
-        test = [row for row in samples if row["family"] == family]
-        if len({str(row["family"]) for row in train}) < 2:
-            continue
-        ridge, dead_zone = select_ridge_hyperparameters(
-            train, ridge_candidates, dead_zone_candidates)
-        chosen[family] = {
-            "ridge": ridge,
-            "residual_dead_zone": dead_zone,
+    for row in core_result["rows"]:
+        translated: Dict[str, object] = {
+            "sample": row["sample_id"],
+            "family": row["group"],
+            "baseline": row["lower_bound"],
+            "prediction": row["prediction"],
+            "compiled_ii": row["compiled_ii"],
+            "raw_predicted_residual": row["raw_predicted_residual"],
         }
-        model = fit_ridge(train, ridge, dead_zone)
-        rows.extend(prediction_rows(test, lambda row: predict_ridge(model, row)))
-    if not rows:
-        raise ValueError("not enough independent kernel families for nested ridge")
+        for name in (
+            "candidate_id", "architecture_id", "architecture_variant",
+            "source_family", "source_kind", "leakage_lineage_id",
+            "base_dfg_id", "ranking_query_id", "training_stratum",
+            "generator_family", "generator_version", "motif",
+        ):
+            if name in row:
+                translated[name] = row[name]
+        rows.append(translated)
     result: Dict[str, object] = {
         "rows": rows,
-        "chosen_hyperparameters_by_held_out_family": chosen,
+        "outer_split_protocol": core_result["outer_split_protocol"],
+        "outer_fold_count": core_result["outer_fold_count"],
+        "outer_held_out_groups_by_fold": (
+            core_result["outer_held_out_groups_by_fold"]
+        ),
+        "evaluation_input_row_count": core_result["evaluation_input_row_count"],
+        "evaluation_distinct_observation_count": (
+            core_result["evaluation_distinct_observation_count"]
+        ),
+        "evaluation_duplicate_rows_collapsed": (
+            core_result["evaluation_duplicate_rows_collapsed"]
+        ),
+        "chosen_hyperparameters_by_held_out_family": (
+            core_result["chosen_hyperparameters_by_held_out_group"]
+        ),
         "baseline_mae": mean_absolute_error(rows, "baseline"),
         "ridge_mae": mean_absolute_error(rows, "prediction"),
         "baseline_macro_family_mae": macro_family_mae(rows, "baseline"),
         "ridge_macro_family_mae": macro_family_mae(rows, "prediction"),
+        "baseline_group_ranking": core_result["lower_bound_group_ranking"],
+        "ridge_group_ranking": core_result["model_group_ranking"],
+        "raw_residual_metrics": core_result["raw_residual_metrics"],
     }
     add_prediction_quality_metrics(result, rows, "baseline")
     add_prediction_quality_metrics(result, rows, "ridge", "prediction")
     add_real_holdout_metrics(result, rows)
     return result
+
+
+def nested_ridge_metadata_holdout(
+    samples: Sequence[Sample], metadata_key: str,
+    ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
+) -> Dict[str, object]:
+    """Hold out a metadata-defined domain while weighting source lineages."""
+    missing = [str(row["index"]) for row in samples if not row.get(metadata_key)]
+    if missing:
+        return {
+            "status": "unavailable_missing_metadata",
+            "holdout_key": metadata_key,
+            "missing_sample_count": len(missing),
+            "sample_count": len(samples),
+        }
+    groups = sorted({str(row[metadata_key]) for row in samples})
+    if len(groups) < 3:
+        return {
+            "status": "unavailable_too_few_groups",
+            "holdout_key": metadata_key,
+            "group_count": len(groups),
+            "minimum_group_count": 3,
+        }
+    regrouped: List[Sample] = []
+    for row in samples:
+        copy = dict(row)
+        copy["training_weight_group"] = str(row["family"])
+        copy["family"] = str(row[metadata_key])
+        regrouped.append(copy)
+    return {
+        "status": "ok",
+        "holdout_key": metadata_key,
+        "group_count": len(groups),
+        "training_weight_group": "source_lineage",
+        "evaluation": nested_ridge_family_holdout(
+            regrouped, ridge_candidates, dead_zone_candidates
+        ),
+    }
 
 
 def mean_absolute_error(rows: Iterable[Dict[str, object]], prediction: str) -> float:
@@ -1256,17 +1789,148 @@ def macro_family_mae(rows: Iterable[Dict[str, object]], prediction: str) -> floa
     ) / len(grouped)
 
 
+def calibrate_unseen_family_interval(
+    model: Dict[str, object], rows: Sequence[Dict[str, object]], quantile: float,
+) -> None:
+    """Adapter-compatible wrapper around the core empirical interval."""
+    real_rows = [
+        row for row in rows
+        if not is_synthetic_row(row)
+    ] or list(rows)
+    if not real_rows:
+        return
+    portable_rows = [{
+        "group": row["family"],
+        "prediction": row["prediction"],
+        "compiled_ii": row["compiled_ii"],
+    } for row in real_rows]
+    model.update(core_calibrate_interval(
+        model, portable_rows, quantile=quantile
+    ))
+
+
+def parse_name_mapping(values: Sequence[str], option: str) -> Dict[str, str]:
+    mapping: Dict[str, str] = {}
+    for value in values:
+        source, separator, target = value.partition("=")
+        if not separator or not source or not target:
+            raise SystemExit(f"invalid {option} NAME=VALUE: {value}")
+        if source in mapping and mapping[source] != target:
+            raise SystemExit(f"conflicting {option} entries for {source}")
+        mapping[source] = target
+    return mapping
+
+
+def portable_sample_metadata(row: Sample) -> Dict[str, object]:
+    metadata: Dict[str, object] = {
+        "adapter": "neura",
+        "rows": row["rows"],
+        "tiles": row["tiles"],
+        "links": row["links"],
+        "source_kind": (
+            "generated"
+            if is_synthetic_row(row)
+            else "real"
+        ),
+    }
+    for field in SAMPLE_PROVENANCE_FIELDS + (
+        "input_report_path", "input_report_sha256",
+    ):
+        if field in row:
+            metadata[field] = row[field]
+    return metadata
+
+
+def motif_corpus_summary(
+    samples: Sequence[Sample], manifest_path: Optional[Path] = None,
+) -> Dict[str, object]:
+    """Report generated-corpus units without treating censored rows as labels."""
+    generated_rows = [row for row in samples if is_synthetic_row(row)]
+    manifest: Optional[Mapping[str, object]] = None
+    if manifest_path is not None and manifest_path.is_file():
+        loaded = json.loads(manifest_path.read_text())
+        if isinstance(loaded, Mapping):
+            manifest = loaded
+    records = list(manifest.get("candidates", [])) if manifest else []
+    source_rows = generated_rows
+    base_ids = {
+        (str(row.get("motif")), str(row.get("base_id")))
+        for row in source_rows
+        if row.get("base_id")
+    }
+    canonical_dfgs = {
+        str(row.get("canonical_dfg_sha256"))
+        for row in source_rows
+        if row.get("canonical_dfg_sha256")
+    }
+    lineages = {
+        str(row.get("lineage", row.get("family")))
+        for row in source_rows
+        if row.get("lineage", row.get("family"))
+    }
+    candidates = {
+        str(row.get("candidate_id", row.get("index")))
+        for row in source_rows
+        if row.get("candidate_id", row.get("index"))
+    }
+    summary: Dict[str, object] = {
+        "base_dfg_count": len(base_ids),
+        "distinct_canonical_dfg_count": len(canonical_dfgs),
+        "lineage_count": len(lineages),
+        "successful_candidate_count": len(candidates),
+        "label_count": len(generated_rows),
+        "censored_candidate_count": 0,
+        "manifest_path": (
+            str(manifest_path.resolve()) if manifest_path is not None else None
+        ),
+    }
+    if manifest is not None:
+        summary.update({
+            "manifest_schema_version": manifest.get("schema_version"),
+            "manifest_status": manifest.get("status"),
+            "declared_candidate_count": len(records),
+            "successful_candidate_count": sum(
+                record.get("status") == "success" for record in records
+            ),
+            "censored_candidate_count": sum(
+                record.get("status") == "censored" for record in records
+            ),
+            "running_candidate_count": sum(
+                record.get("status") == "running" for record in records
+            ),
+            "distinct_manifest_base_dfg_count": len({
+                (str(record.get("motif")), str(record.get("base_id")))
+                for record in records
+                if record.get("base_id")
+            }),
+            "distinct_manifest_canonical_dfg_count": len({
+                str(record.get("canonical_dfg_sha256")) for record in records
+                if record.get("canonical_dfg_sha256")
+            }),
+            "generator_family_count": len({
+                str(record.get("generator_family"))
+                for record in records
+                if record.get("generator_family")
+            }),
+            "distinct_manifest_lineage_count": len({
+                str(record.get("lineage")) for record in records
+                if record.get("lineage")
+            }),
+        })
+    return summary
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    configured_root = os.environ.get("NEURA_ROOT")
     parser.add_argument(
         "--neura-root", type=Path,
-        default=Path(configured_root) if configured_root else None,
-        help="Optional Neura checkout (or set NEURA_ROOT).",
+        default=resolve_configured_neura_root(),
+        help=("Neura checkout; defaults to NEURA_ROOT, then the initialized "
+              "third_party/neura submodule."),
     )
     parser.add_argument(
         "--opt", type=Path,
-        help="mlir-neura-opt binary; defaults under --neura-root.",
+        help="mlir-neura-opt binary; defaults under the selected Neura root.",
     )
     parser.add_argument("--output-dir", type=Path,
                         default=Path("/tmp/neura-ii-predictor-corpus"))
@@ -1274,6 +1938,33 @@ def parse_args() -> argparse.Namespace:
         "--samples", type=int, default=0,
         help=("Number of generated synthetic DFGs to label. Defaults to zero so "
               "report reuse and --predict-fixture never invoke the mapper."),
+    )
+    parser.add_argument(
+        "--motif-samples-per-family", type=int, default=0,
+        help=("Number of deterministic base DFGs per compute motif family. "
+              "Defaults to zero; unlike legacy --samples this emits a "
+              "multi-motif corpus and a pre-mapper manifest."),
+    )
+    parser.add_argument(
+        "--motif", dest="motif", action="append", default=[],
+        metavar="NAME[,NAME...]",
+        help=("Compute motif family to generate; repeat or use commas. "
+              "Defaults to chain,fanout,reduction,diamond,mixed,random_dag."),
+    )
+    parser.add_argument(
+        "--motifs", dest="motifs_alias", action="append", default=[],
+        metavar="NAME[,NAME...]",
+        help="Alias for --motif (kept for experiment scripts).",
+    )
+    parser.add_argument(
+        "--motif-shape", action="append", default=[], metavar="ROWSxCOLS",
+        help="Shape(s) for every motif base (default: 3x3,3x4,4x4).",
+    )
+    parser.add_argument(
+        "--motif-architecture-variant", action="append", default=[],
+        metavar="NAME[,NAME...]",
+        help=("Architecture variant(s) for motif attempts (default: "
+              "homogeneous,split-domain)."),
     )
     parser.add_argument(
         "--random-c-samples", type=int, default=0,
@@ -1294,6 +1985,16 @@ def parse_args() -> argparse.Namespace:
         help=("Comma-separated non-negative residual thresholds considered "
               "only by the nested family-holdout selector."),
     )
+    interval = parser.add_mutually_exclusive_group()
+    interval.add_argument(
+        "--interval-quantile", type=float, default=0.9,
+        help=("Empirical quantile of held-out-family maximum errors; not a "
+              "formal coverage guarantee"),
+    )
+    interval.add_argument(
+        "--interval-coverage", type=float, dest="legacy_interval_coverage",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--tree-depth", type=int, default=1,
                         help="Maximum depth of the residual regression tree")
     parser.add_argument("--tree-min-samples", type=int, default=3)
@@ -1304,10 +2005,32 @@ def parse_args() -> argparse.Namespace:
               "are deduplicated."),
     )
     parser.add_argument(
+        "--model-report", type=Path,
+        help=("Load an already trained residual-Ridge artifact for "
+              "--predict-fixture. In this prediction-only mode no candidate "
+              "label is used, no model is refitted, and no mapper is run."),
+    )
+    parser.add_argument(
         "--feature-source", action="append", default=[], metavar="NAME=PATH",
         help=("Source DFG used to hydrate structural features of legacy input "
               "reports. Repeat for every real family whose report predates a "
               "new feature."),
+    )
+    parser.add_argument(
+        "--family-lineage", action="append", default=[],
+        metavar="FAMILY=LINEAGE",
+        help=("Merge related source variants into one leakage-safe evaluation "
+              "lineage; applied before every holdout and fit"),
+    )
+    parser.add_argument(
+        "--family-suite", action="append", default=[], metavar="FAMILY=SUITE",
+        help="Record an explicitly known benchmark suite without guessing it",
+    )
+    parser.add_argument(
+        "--metadata-holdout-key", action="append", default=[],
+        choices=("architecture_id", "suite", "generator_family"),
+        help=("Also run nested holdout by an auditable metadata domain. This "
+              "can be expensive when the domain has many distinct values."),
     )
     parser.add_argument(
         "--real-fixture", action="append", default=[], metavar="NAME=PATH",
@@ -1329,7 +2052,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predict-fixture", action="append", default=[], metavar="NAME=PATH",
         help=("Pre-lowered Neura DFG to estimate without invoking the mapper. "
-              "Requires a labelled corpus/report to train a model."),
+              "Requires either --model-report or a labelled corpus to train "
+              "a model."),
     )
     parser.add_argument(
         "--predict-shape", action="append", default=[], metavar="ROWSxCOLS",
@@ -1357,12 +2081,16 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.opt is None:
         if args.neura_root is None:
-            parser.error("provide --neura-root/NEURA_ROOT or an explicit --opt")
+            parser.error(
+                "initialize third_party/neura, provide --neura-root/NEURA_ROOT, "
+                "or provide an explicit --opt"
+            )
         args.opt = resolve_default_opt(args.neura_root)
     if args.real_architecture is None:
         if args.neura_root is None:
             parser.error(
-                "provide --neura-root/NEURA_ROOT or --real-architecture"
+                "initialize third_party/neura, provide --neura-root/NEURA_ROOT, "
+                "or provide --real-architecture"
             )
         args.real_architecture = (
             args.neura_root / "test/arch_spec/architecture.yaml"
@@ -1372,6 +2100,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    interval_quantile = (
+        args.legacy_interval_coverage
+        if args.legacy_interval_coverage is not None
+        else args.interval_quantile
+    )
+    if not 0.0 < interval_quantile <= 1.0:
+        raise SystemExit("--interval-quantile must be in (0, 1]")
     if not args.opt.is_file():
         raise SystemExit(f"mlir-neura-opt not found: {args.opt}")
     if args.random_c_samples < 0:
@@ -1383,6 +2118,90 @@ def main() -> int:
     if args.clean and args.output_dir.exists():
         shutil.rmtree(args.output_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    if args.samples < 0:
+        raise SystemExit("--samples must be non-negative")
+    if args.motif_samples_per_family < 0:
+        raise SystemExit("--motif-samples-per-family must be non-negative")
+    try:
+        selected_motifs = neura_motifs.parse_motif_names(
+            list(args.motif) + list(args.motifs_alias)
+        )
+        selected_motif_shapes = neura_motifs.parse_shapes(args.motif_shape)
+        selected_motif_architectures = neura_motifs.parse_architecture_variants(
+            args.motif_architecture_variant
+        )
+    except ValueError as error:
+        raise SystemExit(str(error))
+
+    # Materialize every new corpus candidate and atomically predeclare it
+    # before *any* mapper invocation (including legacy --samples below).
+    # With the default zero count no files/manifest are created, preserving
+    # the legacy generator's behavior and cost.
+    motif_candidates: Tuple[neura_motifs.MotifCandidate, ...] = ()
+    motif_manifest_path: Optional[Path] = None
+    if args.motif_samples_per_family:
+        motif_bases = neura_motifs.make_base_specs(
+            args.motif_samples_per_family, args.seed, selected_motifs
+        )
+        motif_candidates = neura_motifs.make_candidates(
+            motif_bases, args.output_dir, selected_motif_shapes,
+            selected_motif_architectures,
+        )
+        motif_manifest_path = args.output_dir / "corpus-manifest.json"
+        motif_manifest = neura_motifs.make_manifest(
+            motif_candidates, args.output_dir, args.seed,
+            selected_motifs, selected_motif_shapes,
+        )
+        neura_motifs.atomic_write_json(motif_manifest_path, motif_manifest)
+        print(
+            f"motif_manifest=predeclared candidates={len(motif_candidates)} "
+            f"path={motif_manifest_path}"
+        )
+    predictor_repository_provenance = git_provenance(PROJECT_ROOT)
+    neura_repository_provenance = git_provenance(args.neura_root)
+    external_model: Optional[LoadedModel] = None
+    if args.model_report is not None:
+        if not args.predict_fixture:
+            raise SystemExit("--model-report requires at least one --predict-fixture")
+        if (
+            args.samples or args.random_c_samples or args.input_report or
+            args.real_fixture or args.mapped_real_fixture or
+            args.real_random_masks or args.metadata_holdout_key or
+            args.motif_samples_per_family
+        ):
+            raise SystemExit(
+                "--model-report is prediction-only and cannot be combined with "
+                "label collection or --input-report"
+            )
+        try:
+            external_model = load_model_artifact(args.model_report)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            raise SystemExit(f"invalid --model-report: {error}")
+        available_features = set(MODEL_FEATURE_NAMES)
+        missing_model_features = set(
+            external_model.model["feature_names"]
+        ).difference(available_features)
+        if missing_model_features:
+            raise SystemExit(
+                "--model-report requires features unavailable from the Neura "
+                f"prediction pass: {sorted(missing_model_features)}"
+            )
+        if tuple(external_model.model["feature_names"]) != MODEL_FEATURE_NAMES:
+            raise SystemExit(
+                "--model-report must use the predeclared structure-only "
+                "Model-1 feature contract"
+            )
+        expected_bound_contract = {
+            "name": "rec_res_max_v1",
+            "formula": "max(rec_mii,res_mii)",
+            "training_lower_bound_sources": ["rec_res_max_v1"],
+            "components_are_model_features": False,
+        }
+        if external_model.lower_bound_contract != expected_bound_contract:
+            raise SystemExit(
+                "--model-report must use the exact RecMII/ResMII lower-bound "
+                "contract"
+            )
 
     rng = random.Random(args.seed)
     if args.tree_depth < 0:
@@ -1412,6 +2231,10 @@ def main() -> int:
         raise SystemExit(
             "--residual-dead-zone-candidates must contain non-negative values"
         )
+    family_lineages = parse_name_mapping(
+        args.family_lineage, "--family-lineage"
+    )
+    family_suites = parse_name_mapping(args.family_suite, "--family-suite")
 
     feature_sources: Dict[str, Path] = {}
     for value in args.feature_source:
@@ -1423,15 +2246,30 @@ def main() -> int:
 
     samples: List[Sample] = []
     sibling_cost_features: Dict[str, Dict[str, int]] = {}
+    input_report_provenance: List[Dict[str, object]] = []
     for report_path in args.input_report:
         if not report_path.is_file():
             raise SystemExit(f"input report not found: {report_path}")
+        report_hash = file_sha256(report_path)
         loaded = json.loads(report_path.read_text())
+        input_report_provenance.append({
+            "path": str(report_path.resolve()),
+            "sha256": report_hash,
+            "provenance": loaded.get("provenance", {}),
+        })
         sibling_cost_features.update(load_sibling_cost_features(report_path))
         for row in loaded.get("samples", []):
             if not isinstance(row, dict):
                 raise SystemExit(f"invalid sample in input report: {report_path}")
-            samples.append(row)
+            try:
+                samples.append(normalize_input_sample(
+                    row, report_path, report_hash,
+                    loaded.get("provenance", {}),
+                ))
+            except ValueError as error:
+                raise SystemExit(
+                    f"invalid sample in input report {report_path}: {error}"
+                )
     for index in range(args.samples):
         rows, columns = rng.choice(((1, 3), (1, 4), (1, 5), (2, 3),
                                     (2, 4), (3, 3), (4, 4)))
@@ -1461,6 +2299,23 @@ def main() -> int:
             )
         else:
             print(f"sample={index:03d} unavailable", file=sys.stderr)
+
+    for candidate in motif_candidates:
+        result = collect_motif_sample(
+            args.opt, candidate, args.timeout, motif_manifest_path
+        )
+        if result is not None:
+            samples.append(result)
+            print(
+                f"motif={candidate.candidate_id} "
+                f"lb={result['baseline_lb']} compiled={result['compiled_ii']} "
+                f"ops={candidate.operation_count}"
+            )
+        else:
+            print(
+                f"motif={candidate.candidate_id} unavailable",
+                file=sys.stderr,
+            )
 
     for index in range(args.random_c_samples):
         rows, columns = rng.choice(((3, 3), (3, 4), (4, 4)))
@@ -1495,8 +2350,8 @@ def main() -> int:
         if not match:
             raise SystemExit(f"invalid --real-shape (expected ROWSxCOLS): {value}")
         rows, columns = (int(component) for component in match.groups())
-        if rows * columns > 20:
-            raise SystemExit("--real-shape exceeds the 20-tile all-cut RouteLB limit")
+        if rows < 1 or columns < 1:
+            raise SystemExit("--real-shape dimensions must be positive")
         shapes.append((rows, columns))
     for fixture in args.real_fixture:
         name, separator, raw_path = fixture.partition("=")
@@ -1557,8 +2412,8 @@ def main() -> int:
                 "invalid --mapped-real-fixture NAME=SOURCE=MAPPED=ROWSxCOLS"
             )
         rows, columns = (int(component) for component in match.groups())
-        if rows * columns > 20:
-            raise SystemExit("--mapped-real-fixture exceeds the 20-tile RouteLB limit")
+        if rows < 1 or columns < 1:
+            raise SystemExit("--mapped-real-fixture dimensions must be positive")
         sample_dir = args.output_dir / f"completed-{name}-{rows}x{columns}"
         sample_dir.mkdir(exist_ok=True)
         result = collect_completed_real_fixture(
@@ -1574,96 +2429,136 @@ def main() -> int:
         else:
             print(f"completed={name}-{shape} unavailable", file=sys.stderr)
 
-    # Labels may be present in several reports (for example an initial shape
-    # sweep plus a later mask sweep).  Preserve the last occurrence, so a
-    # relabelled sample can replace an earlier timeout-era result.
-    unique_samples = {str(row["index"]): row for row in samples}
-    samples = list(unique_samples.values())
+    # Multiple reports may repeat a byte-equivalent logical row, but an ID may
+    # never silently replace different features, provenance, or a new label.
+    try:
+        samples = deduplicate_samples_by_id(samples)
+    except ValueError as error:
+        raise SystemExit(str(error))
     required_features = set(FEATURE_NAMES)
     for row in samples:
         row.update(sibling_cost_features.get(str(row["index"]), {}))
         add_prediction_features(row)
         missing = required_features.difference(row)
-        if not missing:
-            continue
-        source = feature_sources.get(str(row["family"]))
-        if source is None:
-            missing_text = ", ".join(sorted(missing))
-            raise SystemExit(
-                f"sample {row['index']} lacks [{missing_text}]; provide "
-                f"--feature-source {row['family']}=PATH or recollect it"
-            )
-        row.update(semantic_features_from_neura(source.read_text()))
-        add_prediction_features(row)
-        missing = required_features.difference(row)
+        source_family = str(row["family"])
+        source = feature_sources.get(source_family)
         if missing:
-            raise SystemExit(
-                f"sample {row['index']} still lacks features: {sorted(missing)}"
+            if source is None:
+                missing_text = ", ".join(sorted(missing))
+                raise SystemExit(
+                    f"sample {row['index']} lacks [{missing_text}]; provide "
+                    f"--feature-source {source_family}=PATH or recollect it"
+                )
+            row.update(semantic_features_from_neura(source.read_text()))
+            add_prediction_features(row)
+            missing = required_features.difference(row)
+            if missing:
+                raise SystemExit(
+                    f"sample {row['index']} still lacks features: {sorted(missing)}"
+                )
+        row.setdefault("source_family", source_family)
+        if neura_repository_provenance.get("revision") is not None:
+            row.setdefault(
+                "mapper_revision", neura_repository_provenance["revision"]
             )
-    if len(samples) < 12:
-        print(f"only {len(samples)} labels collected; no model fitted", file=sys.stderr)
-        return 1
-    row_holdout = random_row_holdout(
-        samples, args.seed, args.ridge, args.tree_depth, args.tree_min_samples)
-    try:
-        family_holdout: Optional[Dict[str, object]] = leave_one_family_out(
-            samples, args.ridge, args.tree_depth, args.tree_min_samples)
-    except ValueError:
-        # A synthetic-only corpus has one family by design.  Its row split may
-        # help debug the generator, but is not evidence of generalization.
-        family_holdout = None
-    try:
-        nested_ridge_holdout: Optional[Dict[str, object]] = (
-            nested_ridge_family_holdout(
-                samples, ridge_candidates, dead_zone_candidates))
-    except ValueError:
-        nested_ridge_holdout = None
-    real_family_count = len({
-        str(row["family"]) for row in samples
-        if not str(row["family"]).startswith("synthetic")
-    })
+        if source is not None:
+            row.setdefault("source_path", str(source.resolve()))
+            row.setdefault("source_sha256", file_sha256(source))
+        declared_lineage, effective_lineage = resolve_effective_lineage(
+            row, source_family, family_lineages
+        )
+        row.setdefault("lineage", declared_lineage)
+        row.setdefault(
+            "declared_leakage_lineage_id",
+            row.get("leakage_lineage_id", declared_lineage),
+        )
+        row["effective_lineage"] = effective_lineage
+        row["family"] = effective_lineage
+        generated = is_synthetic_row(row)
+        row.setdefault("training_stratum", "generated" if generated else "real")
+        # This is the authoritative identity actually used by the outer split.
+        # Preserve any earlier declaration above, but never report a stale ID
+        # after --family-lineage merges related source variants.
+        row["leakage_lineage_id"] = effective_lineage
+        # Ranking queries require an explicit source/DFG identity.  In
+        # particular, never fall back to the leakage lineage: aliases may
+        # intentionally merge related source variants for fitting while those
+        # variants are not the same DSE query.
+        base_dfg_id = row.get("base_dfg_id")
+        if base_dfg_id in (None, ""):
+            base_dfg_id = row.get(
+                "canonical_dfg_sha256",
+                row.get("dfg_source_sha256", row.get("source_sha256")),
+            )
+        if base_dfg_id not in (None, ""):
+            row.setdefault("base_dfg_id", base_dfg_id)
+            row.setdefault("ranking_query_id", base_dfg_id)
+        suite = family_suites.get(source_family, family_suites.get(effective_lineage))
+        if suite is not None:
+            row["suite"] = suite
+    row_holdout: Optional[Dict[str, object]] = None
+    family_holdout: Optional[Dict[str, object]] = None
+    nested_ridge_holdout: Optional[Dict[str, object]] = None
+    metadata_holdouts: Dict[str, Dict[str, object]] = {
+        key: {"status": "not_requested", "holdout_key": key}
+        for key in ("architecture_id", "suite", "generator_family")
+    }
     selected_model = "none"
-    selected_metric_key = ""
     selected_rows: List[Dict[str, object]] = []
     trained_full_model: Optional[Dict[str, object]] = None
-    if family_holdout is not None:
-        # Selection is intentionally based on the real-kernel holdout only.
-        # Synthetic corpus rows may augment training experiments, but may not
-        # select a model for a real DSE workload.
-        ridge_score = (
-            nested_ridge_holdout.get("real_ridge_mae", float("inf"))
-            if nested_ridge_holdout is not None else float("inf"),
-            nested_ridge_holdout.get("real_ridge_macro_family_mae", float("inf"))
-            if nested_ridge_holdout is not None else float("inf"),
+    if external_model is not None:
+        selected_model = "ridge"
+        trained_full_model = dict(external_model.model)
+    else:
+        if len(samples) < 12:
+            print(
+                f"only {len(samples)} labels collected; no model fitted",
+                file=sys.stderr,
+            )
+            return 1
+        row_holdout = random_row_holdout(
+            samples, args.seed, args.ridge,
+            args.tree_depth, args.tree_min_samples,
         )
-        tree_score = (
-            family_holdout.get("real_tree_mae", float("inf")),
-            family_holdout.get("real_tree_macro_family_mae", float("inf")),
-        )
-        if ridge_score <= tree_score:
+        try:
+            family_holdout = leave_one_family_out(
+                samples, args.ridge, args.tree_depth, args.tree_min_samples
+            )
+        except ValueError:
+            # A synthetic-only corpus has one family by design.  Its row split
+            # may debug the generator, but is not evidence of generalization.
+            family_holdout = None
+        try:
+            nested_ridge_holdout = nested_ridge_family_holdout(
+                samples, ridge_candidates, dead_zone_candidates
+            )
+        except ValueError:
+            nested_ridge_holdout = None
+        for key in dict.fromkeys(args.metadata_holdout_key):
+            metadata_holdouts[key] = nested_ridge_metadata_holdout(
+                samples, key, ridge_candidates, dead_zone_candidates
+            )
+        if nested_ridge_holdout is not None:
+            # Model 1 is predeclared as residual Ridge. Tree/row-split results
+            # remain diagnostics and never select the reported point model.
             selected_model = "ridge"
-            selected_metric_key = "ridge"
             selected_rows = nested_ridge_holdout["rows"]
             selected_ridge, selected_dead_zone = select_ridge_hyperparameters(
-                samples, ridge_candidates, dead_zone_candidates)
+                samples, ridge_candidates, dead_zone_candidates
+            )
             trained_full_model = fit_ridge(
-                samples, selected_ridge, selected_dead_zone)
-        else:
-            selected_model = "residual_tree"
-            selected_metric_key = "tree"
-            selected_rows = family_holdout["tree_rows"]
-            trained_full_model = fit_residual_tree(
-                samples, args.tree_depth, args.tree_min_samples)
-    numeric_gate = bool(
-        family_holdout is not None and nested_ridge_holdout is not None and
-        real_family_count >= 12 and
-        (nested_ridge_holdout if selected_metric_key == "ridge"
-         else family_holdout)[f"real_{selected_metric_key}_mae"] <
-        family_holdout["real_baseline_mae"] and
-        (nested_ridge_holdout if selected_metric_key == "ridge"
-         else family_holdout)[f"real_{selected_metric_key}_macro_family_mae"] <
-        family_holdout["real_baseline_macro_family_mae"]
+                samples, selected_ridge, selected_dead_zone
+            )
+            if selected_rows:
+                calibrate_unseen_family_interval(
+                    trained_full_model, selected_rows, interval_quantile
+                )
+    active_model_sha256 = (
+        canonical_model_sha256(trained_full_model)
+        if trained_full_model is not None else None
     )
+    prediction_request_count = 0
+    prediction_failures: List[Dict[str, object]] = []
     predictions: List[Dict[str, object]] = []
     if args.predict_fixture:
         if trained_full_model is None:
@@ -1678,8 +2573,8 @@ def main() -> int:
                     "invalid --predict-shape (expected ROWSxCOLS): " + value
                 )
             rows, columns = (int(component) for component in match.groups())
-            if rows * columns > 20:
-                raise SystemExit("--predict-shape exceeds the 20-tile RouteLB limit")
+            if rows < 1 or columns < 1:
+                raise SystemExit("--predict-shape dimensions must be positive")
             prediction_shapes.append((rows, columns))
         for fixture in args.predict_fixture:
             name, separator, raw_path = fixture.partition("=")
@@ -1687,6 +2582,7 @@ def main() -> int:
             if not separator or not name or not source.is_file():
                 raise SystemExit(f"invalid --predict-fixture NAME=PATH: {fixture}")
             for rows, columns in prediction_shapes:
+                prediction_request_count += 1
                 sample_dir = (
                     args.output_dir / f"prediction-{name}-{rows}x{columns}"
                 )
@@ -1696,87 +2592,407 @@ def main() -> int:
                     rows, columns, args.timeout,
                 )
                 if features is None:
+                    prediction_failures.append({
+                        "sample": f"{name}-{rows}x{columns}",
+                        "stage": "feature_collection",
+                        "error": "analytical cost or feature extraction unavailable",
+                    })
                     print(f"prediction={name}-{rows}x{columns} unavailable",
                           file=sys.stderr)
                     continue
-                if selected_model == "ridge":
-                    predicted_ii = predict_ridge(trained_full_model, features)
-                else:
-                    predicted_ii = predict_residual_tree(
-                        trained_full_model, features)
+                if neura_repository_provenance.get("revision") is not None:
+                    features.setdefault(
+                        "mapper_revision",
+                        neura_repository_provenance["revision"],
+                    )
+                try:
+                    point = predict_unlabelled_candidate(
+                        trained_full_model, features
+                    )
+                except (KeyError, ValueError, OverflowError) as error:
+                    prediction_failures.append({
+                        "sample": features.get("index"),
+                        "stage": "point_prediction",
+                        "error": str(error),
+                    })
+                    print(
+                        f"prediction={name}-{rows}x{columns} failed: {error}",
+                        file=sys.stderr,
+                    )
+                    continue
+                model_features = point["model_features"]
+                raw_residual = float(point["raw_predicted_residual"])
+                predicted_residual = float(point["predicted_residual"])
+                predicted_ii = float(point["predicted_compiled_ii"])
+                prediction_warnings: List[str] = []
+                if external_model is not None:
+                    training_neura = external_model.provenance.get("neura")
+                    expected_revision = (
+                        training_neura.get("revision")
+                        if isinstance(training_neura, Mapping) else None
+                    )
+                    current_revision = neura_repository_provenance.get("revision")
+                    if current_revision is None:
+                        prediction_warnings.append(
+                            "mapper_revision_unrecorded_for_prediction"
+                        )
+                    if (
+                        expected_revision and current_revision and
+                        str(expected_revision) != str(current_revision)
+                    ):
+                        prediction_warnings.append(
+                            "mapper_revision_mismatch:"
+                            f"model={expected_revision},input={current_revision}"
+                        )
+                    if (
+                        isinstance(training_neura, Mapping) and
+                        training_neura.get("dirty") is True
+                    ):
+                        prediction_warnings.append(
+                            "model_training_producer_dirty"
+                        )
+                    if neura_repository_provenance.get("dirty") is True:
+                        prediction_warnings.append(
+                            "prediction_feature_producer_dirty"
+                        )
+                    if (
+                        external_model.artifact_status is not None and
+                        ("exploratory" in external_model.artifact_status or
+                         "not_frozen" in external_model.artifact_status)
+                    ):
+                        prediction_warnings.append(
+                            "model_artifact_status:"
+                            f"{external_model.artifact_status}"
+                        )
+                    training_bound_sources = (
+                        external_model.lower_bound_contract.get(
+                            "training_lower_bound_sources"
+                        )
+                    )
+                    if not external_model.lower_bound_contract:
+                        prediction_warnings.append(
+                            "model_lower_bound_contract_unrecorded"
+                        )
+                    if (
+                        isinstance(training_bound_sources, list) and
+                        training_bound_sources and
+                        str(features["lower_bound_source"]) not in {
+                            str(value) for value in training_bound_sources
+                        }
+                    ):
+                        prediction_warnings.append(
+                            "lower_bound_source_mismatch:model=" +
+                            ",".join(sorted(
+                                str(value) for value in training_bound_sources
+                            )) + ",input=" +
+                            str(features["lower_bound_source"])
+                        )
                 prediction = {
                     "sample": features["index"],
                     "predicted_compiled_ii": predicted_ii,
+                    "prediction_kind": "continuous_point_estimate",
+                    "raw_predicted_residual": raw_residual,
+                    "nonnegative_predicted_residual": max(0.0, raw_residual),
+                    "predicted_residual": predicted_residual,
+                    "nonnegative_floor_applied": raw_residual < 0.0,
+                    "dead_zone": float(trained_full_model.get(
+                        "residual_dead_zone", 0.0
+                    )),
+                    "dead_zone_applied": (
+                        raw_residual > 0.0 and predicted_residual == 0.0
+                    ),
                     "baseline_lb": features["baseline_lb"],
+                    "lower_bound": features["baseline_lb"],
+                    "lower_bound_source": features["lower_bound_source"],
                     "analytical_ii": features["analytical_ii"],
                     "rec_mii": features["rec_mii"],
                     "res_mii": features["res_mii"],
                     "route_mii": features["route_mii"],
+                    "lineage": features.get("lineage"),
+                    "leakage_lineage_id": features.get("leakage_lineage_id"),
+                    "base_dfg_id": features.get("base_dfg_id"),
+                    "ranking_query_id": features.get("ranking_query_id"),
+                    "training_stratum": features.get("training_stratum", "real"),
+                    "generator_family": features.get("generator_family"),
+                    "generator_version": features.get("generator_version"),
+                    "motif": features.get("motif"),
+                    "source_path": features.get("source_path"),
+                    "source_sha256": features.get("source_sha256"),
+                    "architecture_id": features.get("architecture_id"),
+                    "candidate_id": features.get("candidate_id"),
+                    "mapper_id": features.get("mapper_id"),
+                    "mapper_revision": features.get("mapper_revision"),
+                    "mapper_config": features.get("mapper_config"),
+                    "model_features": model_features,
+                    "model_sha256": active_model_sha256,
+                    "warnings": prediction_warnings,
+                    "evaluation": {
+                        "status": "prediction_only_unlabelled_in_this_invocation",
+                        "prediction_input_compiled_ii_present": False,
+                        "prediction_input_compiled_ii_used": False,
+                        "model_container_may_include_historical_training_labels": (
+                            external_model is not None and
+                            external_model.container in {
+                                "portable-model-report-v2",
+                                "neura-experiment-v2",
+                            }
+                        ),
+                        "heuristic_mapper_invoked_by_this_invocation": False,
+                        "model_refit_by_this_invocation": external_model is None,
+                        "frozen_blind_claim": False,
+                    },
                 }
+                radius = trained_full_model.get(
+                    "unseen_group_absolute_error_radius"
+                )
+                if radius is not None:
+                    interval_lower = max(
+                        float(features["baseline_lb"]),
+                        predicted_ii - float(radius),
+                    )
+                    interval_upper = predicted_ii + float(radius)
+                    if not (
+                        np.isfinite(interval_lower) and
+                        np.isfinite(interval_upper)
+                    ):
+                        prediction_failures.append({
+                            "sample": features.get("index"),
+                            "stage": "prediction_interval",
+                            "error": "prediction interval is not finite",
+                        })
+                        print(
+                            f"prediction={name}-{rows}x{columns} failed: "
+                            "prediction interval is not finite",
+                            file=sys.stderr,
+                        )
+                        continue
+                    prediction["interval_lower"] = interval_lower
+                    prediction["interval_upper"] = interval_upper
+                    prediction["interval_kind"] = (
+                        "empirical_held_out_group_max_error_quantile"
+                    )
+                    prediction["interval_empirical_quantile"] = (
+                        trained_full_model.get(
+                            "unseen_group_interval_empirical_quantile"
+                        )
+                    )
+                    prediction["formal_interval_coverage_guarantee"] = False
                 predictions.append(prediction)
                 print(
                     f"prediction={prediction['sample']} "
                     f"compiled_ii={prediction['predicted_compiled_ii']:.2f} "
                     f"lb={prediction['baseline_lb']}"
                 )
+    prediction_complete = (
+        prediction_request_count == len(predictions)
+    )
     provenance = {
         "adapter": "neura",
-        "neura": git_provenance(args.neura_root),
+        "predictor_repository": predictor_repository_provenance,
+        "adapter_path": str(Path(__file__).resolve()),
+        "adapter_sha256": file_sha256(Path(__file__)),
+        "neura": neura_repository_provenance,
         "mlir_neura_opt": str(args.opt.resolve()),
+        "mlir_neura_opt_sha256": file_sha256(args.opt),
         "architecture": str(args.real_architecture.resolve()),
         "architecture_sha256": file_sha256(args.real_architecture),
         "mapping_strategy": "heuristic",
-        "label_policy": "successful_compiled_ii_only_timeouts_are_not_labels",
+        "label_policy": (
+            "no_prediction_input_labels_used"
+            if external_model is not None else
+            "successful_compiled_ii_only_timeouts_are_not_labels"
+        ),
+        "loaded_model": ({
+            "path": str(external_model.source_path),
+            "source_sha256": external_model.source_sha256,
+            "model_sha256": external_model.model_sha256,
+            "container": external_model.container,
+            "target": external_model.target,
+            "artifact_status": external_model.artifact_status,
+            "lower_bound_contract": dict(external_model.lower_bound_contract),
+        } if external_model is not None else None),
+        "input_reports": input_report_provenance,
+        "experiment_config": {
+            "mode": (
+                "prediction_only_loaded_model"
+                if external_model is not None else "train_evaluate_optional_predict"
+            ),
+            "seed": args.seed,
+            "timeout_seconds": args.timeout,
+            "ridge_candidates": ridge_candidates,
+            "residual_dead_zone_candidates": dead_zone_candidates,
+            "interval_empirical_quantile": interval_quantile,
+            "motif_samples_per_family": args.motif_samples_per_family,
+            "motifs": list(selected_motifs),
+            "motif_shapes": [
+                f"{rows}x{columns}"
+                for rows, columns in selected_motif_shapes
+            ],
+            "motif_architecture_variants": list(selected_motif_architectures),
+            "legacy_random_samples": args.samples,
+            "metadata_holdout_keys": list(dict.fromkeys(
+                args.metadata_holdout_key
+            )),
+        },
     }
     portable_dataset = {
+        "schema_version": "portable-v1",
         "provenance": provenance,
         "feature_names": list(MODEL_FEATURE_NAMES),
         "samples": [{
             "sample_id": str(row["index"]),
             "group": str(row["family"]),
             "lower_bound": row["baseline_lb"],
+            "rec_mii": row["rec_mii"],
+            "res_mii": row["res_mii"],
             "compiled_ii": row["compiled_ii"],
-            "features": {name: row[name] for name in FEATURE_NAMES},
-            "metadata": {
-                "adapter": "neura",
-                "rows": row["rows"],
-                "tiles": row["tiles"],
-                "links": row["links"],
-                "source_kind": (
-                    "generated" if str(row["family"]).startswith("synthetic")
-                    else "real"
-                ),
+            "features": {
+                name: row[name] for name in FEATURE_NAMES
+                if name not in {
+                    "baseline_lb", "rec_mii", "res_mii"
+                }
             },
+            "metadata": portable_sample_metadata(row),
         } for row in samples],
-        "censored_samples": [],
+        "censored_samples": list(INVOCATION_FAILURES),
     }
+    generated_corpus = motif_corpus_summary(samples, motif_manifest_path)
+    portable_dataset["motif_corpus"] = generated_corpus
+    generated_rows = [row for row in samples if is_synthetic_row(row)]
+    generated_base_dfg_count = len({
+        str(row.get("base_dfg_id", row.get("canonical_dfg_sha256")))
+        for row in generated_rows
+        if row.get("base_dfg_id", row.get("canonical_dfg_sha256"))
+    })
+    generated_family_count = len({
+        str(row["generator_family"]) for row in generated_rows
+        if row.get("generator_family")
+    })
+    generated_only_training = bool(samples) and len(generated_rows) == len(samples)
+    generator_family_holdout_available = (
+        metadata_holdouts["generator_family"].get("status") == "ok"
+    )
+    frozen_model_scale_ready = bool(
+        generated_only_training and trained_full_model is not None and
+        nested_ridge_holdout is not None and
+        generator_family_holdout_available and
+        generated_base_dfg_count >= 1000 and generated_family_count >= 6
+    )
+    trained_full_model_sha256 = active_model_sha256
+    report_metadata = (
+        {
+            "evaluation_status": "prediction_only",
+            "dataset_role": "unlabelled_prediction_inputs",
+            "holdout_protocol": "not_run",
+            "labels_available_at_evaluation": False,
+            "feature_set_status": "loaded_from_model_artifact",
+            "model_class_status": "loaded_residual_ridge",
+            "model_selection_status": "not_run_loaded_existing_model",
+            "frozen_test": False,
+            "blind": False,
+        }
+        if external_model is not None else
+        {
+            "evaluation_status": "exploratory",
+            "dataset_role": "labeled_train_validation",
+            "holdout_protocol": "nested_lineage_holdout",
+            "labels_available_at_evaluation": True,
+            "feature_set_status": "predeclared_model_1_feature_set",
+            "model_class_status": "predeclared_residual_ridge",
+            "model_selection_status": "selected_on_this_labeled_dataset",
+            "frozen_test": False,
+            "blind": False,
+        }
+    )
     report = {
+        "schema_version": "neura-experiment-v2",
+        "target": "compiled_ii_from_neura_heuristic_mapper",
+        "artifact_status": (
+            external_model.artifact_status
+            if external_model is not None else "exploratory_not_frozen"
+        ),
+        "lower_bound_contract": {
+            "name": "rec_res_max_v1",
+            "formula": "max(rec_mii,res_mii)",
+            "training_lower_bound_sources": ["rec_res_max_v1"],
+            "components_are_model_features": False,
+        },
         "provenance": provenance,
         "feature_names": list(FEATURE_NAMES),
-        "model_feature_names": list(MODEL_FEATURE_NAMES),
+        "model_feature_names": (
+            list(trained_full_model["feature_names"])
+            if trained_full_model is not None else list(MODEL_FEATURE_NAMES)
+        ),
         "samples": samples,
         "random_row_holdout_diagnostic": row_holdout,
         "family_holdout": family_holdout,
         "nested_ridge_family_holdout": nested_ridge_holdout,
+        "nested_ridge_metadata_holdouts": metadata_holdouts,
         "selected_model": selected_model,
         "trained_full_model": trained_full_model,
+        "trained_full_model_sha256": trained_full_model_sha256,
+        "prediction_request_count": prediction_request_count,
+        "prediction_completed_count": len(predictions),
+        "prediction_completion_status": (
+            "complete" if prediction_complete else "incomplete"
+        ),
+        "prediction_failures": prediction_failures,
         "predictions": predictions,
-        "candidate_status": "offline_experiment_only_never_compiler_input",
+        "invocation_failures": list(INVOCATION_FAILURES),
+        "candidate_status": (
+            (
+                "offline_point_prediction_complete"
+                if prediction_complete else "offline_point_prediction_incomplete"
+            ) if external_model is not None else
+            "offline_experiment_only_never_compiler_input"
+        ),
+        "report_metadata": report_metadata,
+        "grouping": {
+            "effective_group_key": "family",
+            "declared_lineage_key": "lineage",
+            "effective_lineage_key": "effective_lineage",
+            "family_lineages": family_lineages,
+            "family_suites": family_suites,
+            "effective_group_count": len({str(row["family"]) for row in samples}),
+        },
+        "motif_corpus": generated_corpus,
         "candidate_gate": {
             "requires": [
-                "selected model real family-holdout MAE strictly improves baseline",
-                "selected model real macro-family MAE strictly improves baseline",
-                "at least twelve independent real kernel families",
-                "separate broader-corpus validation before compiler integration",
+                "generated-only training rows with source/canonical identities",
+                "at least 1000 distinct generated base DFGs",
+                "all six predeclared generator families",
+                "nested generated-base lineage model selection",
+                "whole-generator-family holdout requested and available",
+                "structure-only model features disjoint from Rec/Res floor",
             ],
-            "current_numeric_conditions_met": numeric_gate,
-            "real_family_count": real_family_count,
+            "generated_only_training": generated_only_training,
+            "generated_distinct_base_dfg_count": generated_base_dfg_count,
+            "generated_generator_family_count": generated_family_count,
+            "nested_lineage_holdout_available": nested_ridge_holdout is not None,
+            "generator_family_holdout_available": generator_family_holdout_available,
+            "architecture_holdout_available": (
+                metadata_holdouts["architecture_id"]["status"] == "ok"
+            ),
+            "dse_ranking_eligible_group_count": (
+                nested_ridge_holdout["ridge_group_ranking"]
+                ["eligible_group_count"]
+                if nested_ridge_holdout is not None else 0
+            ),
+            "overall_ready_for_machsuite_freeze": frozen_model_scale_ready,
         },
     }
-    (args.output_dir / "report.json").write_text(json.dumps(report, indent=2))
+    (args.output_dir / "report.json").write_text(
+        json.dumps(report, indent=2, allow_nan=False)
+    )
     (args.output_dir / "dataset.json").write_text(
-        json.dumps(portable_dataset, indent=2) + "\n")
-    if family_holdout is not None:
+        json.dumps(portable_dataset, indent=2, allow_nan=False) + "\n")
+    if external_model is not None:
+        print(
+            "mode=prediction_only "
+            f"model_sha256={external_model.model_sha256} "
+            f"predictions={len(predictions)}"
+        )
+    elif family_holdout is not None:
         print(
             "family_holdout=" + str(len(family_holdout["ridge_rows"])) +
             f" baseline_mae={family_holdout['baseline_mae']:.3f}" +
@@ -1795,12 +3011,13 @@ def main() -> int:
             f" rounded_exact="
             f"{nested_ridge_holdout['ridge_rounded_exact_rate']:.3f}"
         )
-    print(
-        "row_holdout_diagnostic=" + str(len(row_holdout["ridge_rows"])) +
-        f" baseline_mae={row_holdout['baseline_mae']:.3f}" +
-        f" ridge_mae={row_holdout['ridge_mae']:.3f}" +
-        f" tree_mae={row_holdout['tree_mae']:.3f}"
-    )
+    if row_holdout is not None:
+        print(
+            "row_holdout_diagnostic=" + str(len(row_holdout["ridge_rows"])) +
+            f" baseline_mae={row_holdout['baseline_mae']:.3f}" +
+            f" ridge_mae={row_holdout['ridge_mae']:.3f}" +
+            f" tree_mae={row_holdout['tree_mae']:.3f}"
+        )
     if family_holdout is not None:
         for row in selected_rows:
             print(
@@ -1808,6 +3025,13 @@ def main() -> int:
                 f"lb={row['baseline']:.1f} "
                 f"prediction={row['prediction']:.2f} compiled={row['compiled_ii']}"
             )
+    if not prediction_complete:
+        print(
+            f"only {len(predictions)} of {prediction_request_count} requested "
+            "predictions completed",
+            file=sys.stderr,
+        )
+        return 2
     return 0
 
 

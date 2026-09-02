@@ -11,7 +11,13 @@ dependencies = ["numpy>=1.20"]
 
 [project.scripts]
 cgra-ii-predictor = "cgra_ii_predictor.cli:main"
+cgra-ii-predict = "cgra_ii_predictor.predict:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+# The pinned Neura dependency has its own Python tests and plugin stack.  Keep
+# this repository's unit-test command scoped to the predictor package.
+testpaths = ["tests"]
+addopts = "-p no:pytest-pymtl3"

@@ -1,0 +1,26 @@
+{
+  "schema_version": "compiled-ii-prediction-input-v1",
+  "provenance": {
+    "description": "Tiny unlabeled format example; values are illustrative"
+  },
+  "samples": [
+    {
+      "sample_id": "suite-new/kernel-new/4x4",
+      "lower_bound": 4,
+      "rec_mii": 4,
+      "res_mii": 3,
+      "features": {
+        "pressure": 3.5,
+        "semantic_depth": 10
+      },
+      "metadata": {
+        "lower_bound_source": "rec_res_max_v1",
+        "source_sha256": "example-source-sha256",
+        "architecture_id": "mesh-4x4",
+        "mapper_id": "demo",
+        "mapper_revision": "demo-revision",
+        "mapper_config": "demo-config"
+      }
+    }
+  ]
+}
