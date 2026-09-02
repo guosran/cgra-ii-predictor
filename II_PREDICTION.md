@@ -134,7 +134,7 @@ PYTHONPATH=src python3 -m cgra_ii_predictor.predict \
 ## End-to-end Neura prediction without mapping
 
 For a lowered Neura DFG, the adapter can load the existing model, run only the
-analytical cost/feature pass, and predict:
+analysis-only RecMII/ResMII pass plus static feature extraction, and predict:
 
 ~~~sh
 python3 adapters/neura_experiment.py \
@@ -150,8 +150,10 @@ In this mode:
   report may still be parsed as the model container);
 - the model is not selected or refitted;
 - the heuristic mapper is not invoked;
-- `mlir-neura-opt --cost-model-analytical` supplies RecMII/ResMII and cost
-  facts, while static DFG analysis supplies the structural features;
+- `mlir-neura-opt --analyze-rec-res-mii` supplies RecMII/ResMII by directly
+  calling the same Neura C++ functions used by the mapper; the pass emits no
+  `compiled_ii` and performs no placement or routing, while static DFG
+  analysis supplies the structural features;
 - `report.json` records source, architecture, mapper and model identities,
   the exact model features, residual post-processing, interval semantics, and
   any revision or dirty-producer warning;

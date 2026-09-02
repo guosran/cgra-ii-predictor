@@ -2,7 +2,7 @@
 """Neura adapter for reproducible compiled-II prediction experiments.
 
 This adapter is deliberately offline.  It does not change the mapper or
-the analytical lower bound: labels are the existing heuristic mapper's
+the RecMII/ResMII lower bound: labels are the existing heuristic mapper's
 ``compiled_ii``, while features are available before mapping from the Neura
 DFG and YAML architecture.  The script writes all generated inputs and labels
 under its requested output directory (``/tmp`` by default).
@@ -71,16 +71,8 @@ FEATURE_NAMES = (
     "baseline_lb",
     "rec_mii",
     "res_mii",
-    "compute_mii",
-    "mem_mii",
-    "reg_mii",
-    "analytical_ii",
     "rec_res_gap",
     "rec_dominant",
-    "analytical_excess",
-    "route_excess",
-    "reg_excess",
-    "route_mii",
     "nodes",
     "moves",
     "ctrl_moves",
@@ -146,16 +138,8 @@ LOWER_BOUND_COMPONENT_NAMES = ("rec_mii", "res_mii")
 Sample = Dict[str, Any]
 INVOCATION_FAILURES: List[Dict[str, object]] = []
 COST_FEATURE_NAMES = (
-    "analytical_ii",
-    "compute_mii",
-    "mem_mii",
     "rec_mii",
-    "reg_mii",
     "res_mii",
-    "route_mii",
-)
-OPTIONAL_COST_BOOLEAN_NAMES = (
-    "infeasible", "exceeds_max_ii",
 )
 
 
@@ -363,8 +347,8 @@ def invocation_stage(command: Sequence[str]) -> str:
     joined = " ".join(command)
     if "--map-to-accelerator" in joined:
         return "mapper"
-    if "--cost-model-analytical" in joined:
-        return "cost-model"
+    if "--analyze-rec-res-mii" in joined:
+        return "rec-res-analysis"
     if any(token in joined for token in
            ("--lower-", "--import-llvm", "--assign-accelerator")):
         return "lowering"
@@ -456,6 +440,21 @@ def command_stdout_sha256(command: Sequence[str]) -> Optional[str]:
         return digest.hexdigest()
 
 
+def require_opt_argument(opt: Path, argument: str) -> None:
+    """Fail before corpus creation when the selected compiler lacks a pass."""
+    try:
+        completed = subprocess.run(
+            (str(opt), "--help"), stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"cannot inspect {opt}: {error}") from error
+    if completed.returncode != 0 or argument not in completed.stdout:
+        raise ValueError(
+            f"{opt} does not provide required pass argument {argument}"
+        )
+
+
 def git_provenance(root: Optional[Path]) -> Dict[str, object]:
     if root is None:
         return {"root": None, "revision": None, "dirty": None}
@@ -531,31 +530,63 @@ def parse_integer_attribute(text: str, name: str) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
-def parse_boolean_attribute(text: str, name: str) -> Optional[bool]:
-    match = re.search(rf"\b{re.escape(name)} = (true|false)\b", text)
-    return (match.group(1) == "true") if match else None
-
-
 def parse_cost_features(text: str) -> Optional[Dict[str, object]]:
-    """Parse the main-branch analytical facts used by the Rec/Res contract."""
+    """Parse the analysis-only facts emitted by Neura main.
+
+    The compiler pass calls the same C++ RecMII/ResMII implementation as the
+    mapper.  No placement or routing is attempted, and ``compiled_ii`` is not
+    part of this artifact.
+    """
+    forbidden = tuple(
+        name for name in (
+            "compiled_ii", "mapping_info", "mapping_strategy",
+            "analytical_ii", "compute_mii", "mem_mii", "reg_mii",
+            "route_mii", "infeasible", "exceeds_max_ii",
+        )
+        if re.search(rf"\b{re.escape(name)}\b", text)
+    )
+    if forbidden:
+        raise ValueError(
+            "analysis-only Rec/Res artifact contains mapping/label tokens: "
+            + ", ".join(forbidden)
+        )
+    if re.search(r"\brec_res_mii_info\b", text) is None:
+        return None
     required = {
         name: parse_integer_attribute(text, name) for name in COST_FEATURE_NAMES
     }
     if any(value is None for value in required.values()):
         return None
     result = {name: int(value) for name, value in required.items()}
-    for name in OPTIONAL_COST_BOOLEAN_NAMES:
-        value = parse_boolean_attribute(text, name)
-        if value is not None:
-            result[name] = value
-    # These states cannot yield a valid compiled-II target or point prediction
-    # within the architecture's control-memory contract. Treat them as censored
-    # cost facts, never as ordinary numeric rows whose placeholder MII is one.
-    if (
-        result.get("infeasible") is True or result.get("exceeds_max_ii") is True
-    ):
+    if any(value < 1 for value in result.values()):
         return None
     return result
+
+
+def parse_checked_mapper_label(
+    mapped_text: str, analysis: Mapping[str, object],
+) -> Optional[int]:
+    """Parse the label and require mapper/analysis Rec/Res identity.
+
+    A mismatch is a compiler/protocol error, not a censored sample: training
+    must never pair a label with lower-bound facts computed under a different
+    contract.
+    """
+    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
+    mapper_rec_mii = parse_integer_attribute(mapped_text, "rec_mii")
+    mapper_res_mii = parse_integer_attribute(mapped_text, "res_mii")
+    if compiled_ii is None or mapper_rec_mii is None or mapper_res_mii is None:
+        return None
+    expected = (int(analysis["rec_mii"]), int(analysis["res_mii"]))
+    observed = (mapper_rec_mii, mapper_res_mii)
+    if observed != expected:
+        raise ValueError(
+            "analysis-only and mapper Rec/Res facts disagree: "
+            f"analysis={expected}, mapper={observed}"
+        )
+    if compiled_ii < max(expected):
+        raise ValueError("compiled_ii is below max(RecMII, ResMII)")
+    return compiled_ii
 
 
 def resolve_rec_res_lower_bound(result: Sample) -> Tuple[int, str]:
@@ -590,8 +621,11 @@ SAMPLE_PROVENANCE_FIELDS = (
     "mapper_revision",
     "mapper_config",
     "lower_bound_source",
+    "rec_res_evidence",
     "mapped_artifact_path",
     "mapped_artifact_sha256",
+    "cost_artifact_path",
+    "cost_artifact_sha256",
     "generator_family",
     "generator_type",
     "generator_version",
@@ -666,6 +700,7 @@ def normalize_input_sample(
         row.setdefault("ranking_query_id", base_dfg_id)
     row["input_report_path"] = str(report_path.resolve())
     row["input_report_sha256"] = report_sha256
+    row["rec_res_evidence"] = "imported_report_unverified"
     return row
 
 
@@ -704,11 +739,11 @@ def resolve_effective_lineage(
 
 
 def load_sibling_cost_features(report_path: Path) -> Dict[str, Dict[str, int]]:
-    """Recover full features from cost artifacts beside a legacy report.
+    """Recover Rec/Res facts from current analysis artifacts beside a report.
 
-    The initial experiment reports predated several prediction-only features.
-    Their generated cost.mlir artifacts are still the source of truth, so this
-    reconstruction avoids relabelling (or silently filling missing features).
+    Solver-branch artifacts are deliberately rejected by
+    :func:`parse_cost_features`; their extra MII fields identify a different
+    producer contract and must be recollected on main.
     """
     result: Dict[str, Dict[str, int]] = {}
     for cost_path in report_path.parent.glob("real-*/cost.mlir"):
@@ -737,16 +772,15 @@ def add_prediction_features(result: Sample) -> None:
         raise ValueError("compiled_ii is below max(RecMII, ResMII)")
     result["rec_res_gap"] = result["rec_mii"] - result["res_mii"]
     result["rec_dominant"] = int(result["rec_mii"] >= result["res_mii"])
-    # The following are deliberately *prediction* features.  RouteMII and
-    # RegMII are not pruning bounds, but may still correlate with the II at
-    # which this particular heuristic finds a mapping.
-    if all(name in result for name in
-           ("analytical_ii", "route_mii", "reg_mii")):
-        result["analytical_excess"] = (
-            result["analytical_ii"] - result["baseline_lb"]
-        )
-        result["route_excess"] = result["route_mii"] - result["baseline_lb"]
-        result["reg_excess"] = result["reg_mii"] - result["baseline_lb"]
+
+
+def attach_rec_res_artifact(result: Sample, artifact: Path) -> None:
+    """Record the compiler-produced analysis evidence used by this row."""
+    result.update({
+        "rec_res_evidence": "neura_shared_rec_res_analysis_v1",
+        "cost_artifact_path": str(artifact.resolve()),
+        "cost_artifact_sha256": file_sha256(artifact),
+    })
 
 
 def collect_sample(opt: Path, sample_dir: Path, spec: SampleSpec,
@@ -761,7 +795,7 @@ def collect_sample(opt: Path, sample_dir: Path, spec: SampleSpec,
 
     if not invoke(
         (str(opt), str(source), f"--architecture-spec={arch}",
-         "--cost-model-analytical", "-o", str(cost)),
+         "--analyze-rec-res-mii", "-o", str(cost)),
         timeout,
     ):
         return None
@@ -775,11 +809,14 @@ def collect_sample(opt: Path, sample_dir: Path, spec: SampleSpec,
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
     values = parse_cost_features(cost_text)
-    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
-    if values is None or compiled_ii is None:
+    if values is None:
+        return None
+    compiled_ii = parse_checked_mapper_label(mapped_text, values)
+    if compiled_ii is None:
         return None
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features)
     add_prediction_features(result)
     result.update(asdict(spec))
@@ -799,8 +836,8 @@ def collect_motif_sample(
     """Collect one predeclared motif candidate and preserve its manifest state.
 
     Source/architecture files are materialized before the manifest is written
-    by the caller.  This function consequently only invokes the analytical
-    pass and mapper; it never creates an unannounced candidate.  A failed
+    by the caller.  This function consequently only invokes the Rec/Res
+    analysis pass and mapper; it never creates an unannounced candidate.  A failed
     invocation or missing ``compiled_ii`` is recorded as censored and returns
     no training row.
     """
@@ -832,17 +869,17 @@ def collect_motif_sample(
         )
         return None
 
-    manifest_update("running", "cost-model")
+    manifest_update("running", "rec-res-analysis")
     failure_start = len(INVOCATION_FAILURES)
     if not invoke(
         (str(opt), str(source), f"--architecture-spec={architecture}",
-         "--cost-model-analytical", "-o", str(cost)),
+         "--analyze-rec-res-mii", "-o", str(cost)),
         timeout,
     ):
-        failure = "cost-model-invocation-failed"
+        failure = "rec-res-analysis-invocation-failed"
         if len(INVOCATION_FAILURES) > failure_start:
             failure = str(INVOCATION_FAILURES[-1].get("status", failure))
-        manifest_update("censored", "cost-model", failure)
+        manifest_update("censored", "rec-res-analysis", failure)
         return None
 
     try:
@@ -851,7 +888,7 @@ def collect_motif_sample(
         values = None
     if values is None:
         manifest_update(
-            "censored", "cost-model", "invalid-or-infeasible-cost-facts"
+            "censored", "rec-res-analysis", "invalid-rec-res-facts"
         )
         return None
 
@@ -869,15 +906,16 @@ def collect_motif_sample(
         return None
 
     try:
-        compiled_ii = parse_integer_attribute(mapped.read_text(), "compiled_ii")
+        compiled_ii = parse_checked_mapper_label(mapped.read_text(), values)
     except OSError:
         compiled_ii = None
-    if values is None or compiled_ii is None:
+    if compiled_ii is None:
         manifest_update("censored", "label-parse", "compiled_ii-unavailable")
         return None
 
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(
         source.read_text(), candidate.rows, candidate.columns
     ))
@@ -927,6 +965,7 @@ def collect_motif_sample(
                 cost.relative_to(manifest_path.parent)
                 if manifest_path is not None else cost.resolve()
             ),
+            "cost_artifact_sha256": file_sha256(cost),
             "mapped_artifact_path": str(
                 mapped.relative_to(manifest_path.parent)
                 if manifest_path is not None else mapped.resolve()
@@ -977,7 +1016,7 @@ def collect_c_sample(opt: Path, sample_dir: Path, spec: CSpec,
     options = f"x-tiles={spec.columns} y-tiles={spec.rows}"
     if not invoke(
         (str(opt), str(lowered), f"--architecture-spec={architecture}",
-         f"--cost-model-analytical={options}", "-o", str(cost)), timeout,
+         f"--analyze-rec-res-mii={options}", "-o", str(cost)), timeout,
     ):
         return None
     if not invoke(
@@ -989,11 +1028,14 @@ def collect_c_sample(opt: Path, sample_dir: Path, spec: CSpec,
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
     values = parse_cost_features(cost_text)
-    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
-    if values is None or compiled_ii is None:
+    if values is None:
+        return None
+    compiled_ii = parse_checked_mapper_label(mapped_text, values)
+    if compiled_ii is None:
         return None
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(lowered.read_text(), spec.rows,
                                             spec.columns))
     add_prediction_features(result)
@@ -1220,7 +1262,7 @@ def collect_real_fixture(opt: Path, sample_dir: Path, name: str, source: Path,
         options += f" valid-tiles={valid_tile_text}"
     if not invoke(
         (str(opt), str(source), f"--architecture-spec={architecture}",
-         f"--cost-model-analytical={options}", "-o", str(cost)),
+         f"--analyze-rec-res-mii={options}", "-o", str(cost)),
         timeout,
     ):
         return None
@@ -1235,11 +1277,14 @@ def collect_real_fixture(opt: Path, sample_dir: Path, name: str, source: Path,
     cost_text = cost.read_text()
     mapped_text = mapped.read_text()
     values = parse_cost_features(cost_text)
-    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
-    if values is None or compiled_ii is None:
+    if values is None:
+        return None
+    compiled_ii = parse_checked_mapper_label(mapped_text, values)
+    if compiled_ii is None:
         return None
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(source.read_text(), rows, columns,
                                             valid_tiles))
     add_prediction_features(result)
@@ -1262,13 +1307,13 @@ def collect_completed_real_fixture(
 
     This is useful for expensive kernels: the mapping must have completed in a
     previous invocation of *this* heuristic mapper.  We still rerun the cheap
-    analytical pass, and reject artifacts without a heuristic `compiled_ii`.
+    Rec/Res analysis pass, and reject artifacts without a heuristic `compiled_ii`.
     """
     cost = sample_dir / "cost.mlir"
     options = f"x-tiles={columns} y-tiles={rows}"
     if not invoke(
         (str(opt), str(source), f"--architecture-spec={architecture}",
-         f"--cost-model-analytical={options}", "-o", str(cost)),
+         f"--analyze-rec-res-mii={options}", "-o", str(cost)),
         timeout,
     ):
         return None
@@ -1277,11 +1322,14 @@ def collect_completed_real_fixture(
     if 'mapping_strategy = "heuristic"' not in mapped_text:
         return None
     values = parse_cost_features(cost_text)
-    compiled_ii = parse_integer_attribute(mapped_text, "compiled_ii")
-    if values is None or compiled_ii is None:
+    if values is None:
+        return None
+    compiled_ii = parse_checked_mapper_label(mapped_text, values)
+    if compiled_ii is None:
         return None
     result: Sample = dict(values)
     result["compiled_ii"] = int(compiled_ii)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(source.read_text(), rows, columns))
     add_prediction_features(result)
     result["index"] = f"{name}-{rows}x{columns}"
@@ -1305,7 +1353,7 @@ def collect_prediction_fixture(
     options = f"x-tiles={columns} y-tiles={rows}"
     if not invoke(
         (str(opt), str(source), f"--architecture-spec={architecture}",
-         f"--cost-model-analytical={options}", "-o", str(cost)), timeout,
+         f"--analyze-rec-res-mii={options}", "-o", str(cost)), timeout,
     ):
         return None
     cost_text = cost.read_text()
@@ -1313,6 +1361,7 @@ def collect_prediction_fixture(
     if values is None:
         return None
     result: Sample = dict(values)
+    attach_rec_res_artifact(result, cost)
     result.update(graph_features_from_neura(source.read_text(), rows, columns))
     add_prediction_features(result)
     result["index"] = f"{name}-{rows}x{columns}"
@@ -2109,6 +2158,10 @@ def main() -> int:
         raise SystemExit("--interval-quantile must be in (0, 1]")
     if not args.opt.is_file():
         raise SystemExit(f"mlir-neura-opt not found: {args.opt}")
+    try:
+        require_opt_argument(args.opt, "--analyze-rec-res-mii")
+    except ValueError as error:
+        raise SystemExit(str(error))
     if args.random_c_samples < 0:
         raise SystemExit("--random-c-samples must be non-negative")
     if args.random_c_samples:
@@ -2337,7 +2390,7 @@ def main() -> int:
             samples.append(result)
             print(
                 f"c-sample={index:03d} lb={result['baseline_lb']} "
-                f"analytical={result['analytical_ii']} "
+                f"rec={result['rec_mii']} res={result['res_mii']} "
                 f"compiled={result['compiled_ii']} nodes={result['nodes']} "
                 f"terms={spec.terms} trip={spec.loop_trip_count}"
             )
@@ -2439,6 +2492,12 @@ def main() -> int:
     for row in samples:
         row.update(sibling_cost_features.get(str(row["index"]), {}))
         add_prediction_features(row)
+        row.setdefault(
+            "rec_res_evidence",
+            "imported_report_unverified"
+            if "input_report_path" in row else
+            "rec_res_analysis_evidence_missing",
+        )
         missing = required_features.difference(row)
         source_family = str(row["family"])
         source = feature_sources.get(source_family)
@@ -2595,7 +2654,7 @@ def main() -> int:
                     prediction_failures.append({
                         "sample": f"{name}-{rows}x{columns}",
                         "stage": "feature_collection",
-                        "error": "analytical cost or feature extraction unavailable",
+                        "error": "Rec/Res analysis or feature extraction unavailable",
                     })
                     print(f"prediction={name}-{rows}x{columns} unavailable",
                           file=sys.stderr)
@@ -2658,7 +2717,8 @@ def main() -> int:
                     if (
                         external_model.artifact_status is not None and
                         ("exploratory" in external_model.artifact_status or
-                         "not_frozen" in external_model.artifact_status)
+                         "not_frozen" in external_model.artifact_status or
+                         "unverified" in external_model.artifact_status)
                     ):
                         prediction_warnings.append(
                             "model_artifact_status:"
@@ -2704,10 +2764,8 @@ def main() -> int:
                     "baseline_lb": features["baseline_lb"],
                     "lower_bound": features["baseline_lb"],
                     "lower_bound_source": features["lower_bound_source"],
-                    "analytical_ii": features["analytical_ii"],
                     "rec_mii": features["rec_mii"],
                     "res_mii": features["res_mii"],
-                    "route_mii": features["route_mii"],
                     "lineage": features.get("lineage"),
                     "leakage_lineage_id": features.get("leakage_lineage_id"),
                     "base_dfg_id": features.get("base_dfg_id"),
@@ -2909,7 +2967,9 @@ def main() -> int:
         "target": "compiled_ii_from_neura_heuristic_mapper",
         "artifact_status": (
             external_model.artifact_status
-            if external_model is not None else "exploratory_not_frozen"
+            if external_model is not None else
+            ("exploratory_imported_rec_res_unverified"
+             if input_report_provenance else "exploratory_not_frozen")
         ),
         "lower_bound_contract": {
             "name": "rec_res_max_v1",

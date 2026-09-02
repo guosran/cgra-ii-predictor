@@ -27,15 +27,13 @@ def write_json(path, value):
 
 def cost_text(rec_mii=1, res_mii=2):
     values = {
-        "analytical_ii": 3,
-        "compute_mii": 1,
-        "mem_mii": 1,
         "rec_mii": rec_mii,
-        "reg_mii": 1,
         "res_mii": res_mii,
-        "route_mii": 1,
     }
-    return " ".join(f"{name} = {value} : i32" for name, value in values.items())
+    attributes = " ".join(
+        f"{name} = {value} : i32" for name, value in values.items()
+    )
+    return f"rec_res_mii_info = {{{attributes}}}"
 
 
 def generated_sample(root, motif, base_index, compiled_ii=3):
@@ -47,6 +45,7 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
     candidate_dir.mkdir()
     source = candidate_dir / "input.mlir"
     architecture = candidate_dir / "architecture.yaml"
+    cost = candidate_dir / "cost.mlir"
     mapped = candidate_dir / "mapped.mlir"
     source_text = neura_motifs.generate_motif_mlir(
         motif, operation_count, base_seed
@@ -55,6 +54,7 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
     neura_motifs.write_architecture(
         architecture, 4, 4, "homogeneous", 16
     )
+    cost.write_text(cost_text())
     mapped.write_text(
         "module attributes {mapping_strategy = \"heuristic\", "
         f"compiled_ii = {compiled_ii} : i32, rec_mii = 1 : i32, "
@@ -103,6 +103,9 @@ def generated_sample(root, motif, base_index, compiled_ii=3):
         "mapper_id": "neura-heuristic",
         "mapper_revision": machsuite_frozen.FROZEN_NEURA_REVISION,
         "mapper_config": "mapping-strategy=heuristic",
+        "rec_res_evidence": "neura_shared_rec_res_analysis_v1",
+        "cost_artifact_path": str(cost),
+        "cost_artifact_sha256": machsuite_frozen.raw_sha256(cost),
     })
     return graph
 
@@ -352,9 +355,9 @@ class MachSuiteFrozenTest(unittest.TestCase):
         )
         joined = "\n".join(" ".join(command) for _, command, _ in commands)
         self.assertEqual([stage for stage, _, _ in commands], [
-            "compile", "extract", "import", "lower", "analytical_cost"
+            "compile", "extract", "import", "lower", "rec_res_analysis"
         ])
-        self.assertIn("--cost-model-analytical=", joined)
+        self.assertIn("--analyze-rec-res-mii=", joined)
         self.assertNotIn("--map-to-accelerator", joined)
 
     def test_freeze_model_accepts_generated_only_primary_contract(self):
@@ -528,6 +531,27 @@ class MachSuiteFrozenTest(unittest.TestCase):
                 machsuite_frozen, "require_clean_revision",
                 return_value={"revision": revision, "dirty": False},
             ), self.assertRaisesRegex(ValueError, "DFG identity"):
+                machsuite_frozen.freeze_random_training_model(
+                    report_path, root / "model.json", allow_small_smoke=True
+                )
+
+    def test_freeze_rejects_rehashed_rec_res_mapper_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report_path = root / "training-report.json"
+            report = generated_report(
+                root, list(neura_motifs.DEFAULT_MOTIFS)
+            )
+            sample = report["samples"][0]
+            cost = Path(sample["cost_artifact_path"])
+            cost.write_text(cost_text(rec_mii=3, res_mii=2))
+            sample["cost_artifact_sha256"] = machsuite_frozen.raw_sha256(cost)
+            write_json(report_path, report)
+            revision = report["provenance"]["predictor_repository"]["revision"]
+            with patch.object(
+                machsuite_frozen, "require_clean_revision",
+                return_value={"revision": revision, "dirty": False},
+            ), self.assertRaisesRegex(ValueError, "facts disagree"):
                 machsuite_frozen.freeze_random_training_model(
                     report_path, root / "model.json", allow_small_smoke=True
                 )

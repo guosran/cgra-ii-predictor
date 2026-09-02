@@ -11,8 +11,8 @@ which makes it possible to group all variants under one leakage-safe lineage.
 Only compute motifs are generated here.  Memory and control coverage remains
 owned by the existing C/frontend generator and by real benchmark fixtures.
 The emitted IR is already in the lowered Neura dataflow dialect and uses only
-constant, data_mov, add, and mul operations, so the normal analytical-cost and
-heuristic mapping passes can consume it directly.
+constant, data_mov, add, and mul operations, so the analysis-only Rec/Res pass
+and heuristic mapper can consume it directly.
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ class MotifCandidate:
         record["ranking_query_id"] = self.canonical_dfg_sha256
         record["training_stratum"] = "generated"
         # Keep this explicit: it is the key used by the adapter to update a
-        # candidate after cost-model/mapper success or censorship.
+        # candidate after Rec/Res-analysis/mapper success or censorship.
         record["id"] = self.candidate_id
         return record
 
@@ -535,9 +535,8 @@ def write_architecture(path: Path, rows: int, columns: int,
     if variant not in DEFAULT_ARCHITECTURE_VARIANTS:
         raise ValueError(f"unknown architecture variant: {variant}")
     if variant == "split-domain":
-        # Main-branch MemMII requires both memory FU classes to exist even for
-        # a compute-only DFG with zero memory operations. They remain uniform
-        # across variants and are not used by the generated compute nodes.
+        # Keep the memory FU classes available so this architecture family can
+        # later host memory motifs. The current compute nodes do not use them.
         tile_defaults = '["constant", "mem", "mem_indexed"]'
         first_compute_column = max(0, columns // 2)
         overrides = "\n".join(

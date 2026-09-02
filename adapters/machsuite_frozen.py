@@ -4,7 +4,7 @@
 The three evaluation phases are deliberately separate:
 
 * ``preflight`` lowers every predeclared MachSuite variant and runs only the
-  analytical cost pass.  It never invokes the mapper and emits no label.
+  RecMII/ResMII analysis pass.  It never invokes the mapper and emits no label.
 * ``predict`` loads an already frozen random-DFG model, writes predictions,
   and seals the model/input/prediction hashes.
 * ``reveal`` verifies that seal before invoking the unchanged heuristic mapper
@@ -67,7 +67,7 @@ FROZEN_MINIMUM_SAMPLES_PER_FAMILY = 200
 FROZEN_SUITE_NAME = "MachSuite"
 FROZEN_SUITE_REPOSITORY = "https://github.com/breagen/MachSuite.git"
 FROZEN_SUITE_REVISION = "6236e593012cb86b0d2f08d9fb9ba0411ff989b4"
-FROZEN_NEURA_REVISION = "a625a3342bb5ef6e44f4e292458505c83159841c"
+FROZEN_NEURA_REVISION = "47b7e3a68c321075293e6fcb45fb3b1cabb93b88"
 FROZEN_ARCHITECTURE_ROWS = 4
 FROZEN_ARCHITECTURE_COLUMNS = 4
 LOWER_BOUND_CONTRACT = {
@@ -361,10 +361,10 @@ def preflight_commands(
             lowered,
         ),
         (
-            "analytical_cost",
+            "rec_res_analysis",
             (
                 str(opt), str(lowered), f"--architecture-spec={architecture}",
-                f"--cost-model-analytical=x-tiles={columns} y-tiles={rows}",
+                f"--analyze-rec-res-mii=x-tiles={columns} y-tiles={rows}",
                 "-o", str(cost),
             ),
             cost,
@@ -432,7 +432,7 @@ def _validate_ready_candidate(
         raise ValueError(f"{spec.benchmark_id}: canonical DFG identity changed")
     values = neura_experiment.parse_cost_features(cost.read_text())
     if values is None:
-        raise ValueError(f"{spec.benchmark_id}: cost facts are unavailable")
+        raise ValueError(f"{spec.benchmark_id}: Rec/Res facts are unavailable")
     recomputed: Dict[str, Any] = dict(values)
     recomputed.update(neura_experiment.graph_features_from_neura(
         lowered_text, rows, columns
@@ -617,7 +617,8 @@ def _validated_generated_sample(
         "candidate_id", "source_path", "source_sha256", "architecture_path",
         "architecture_sha256", "architecture_variant", "mapped_artifact_path",
         "mapped_artifact_sha256", "leakage_lineage_id", "lower_bound_source",
-        "mapper_id", "mapper_revision", "mapper_config",
+        "mapper_id", "mapper_revision", "mapper_config", "cost_artifact_path",
+        "cost_artifact_sha256", "rec_res_evidence",
     )
     for name in required_strings:
         if not isinstance(sample.get(name), str) or not sample[name]:
@@ -626,6 +627,8 @@ def _validated_generated_sample(
         raise ValueError("frozen primary model requires generated-only training")
     if sample.get("source_kind") != "generated":
         raise ValueError(f"{label}: source_kind must be generated")
+    if sample.get("rec_res_evidence") != "neura_shared_rec_res_analysis_v1":
+        raise ValueError(f"{label}: Rec/Res evidence is not compiler-derived")
     motif = str(sample["motif"])
     if motif not in neura_motifs.DEFAULT_MOTIFS:
         raise ValueError(f"{label}: generator motif is not predeclared")
@@ -695,16 +698,22 @@ def _validated_generated_sample(
     mapped_path = Path(str(sample["mapped_artifact_path"])).resolve()
     if raw_sha256(mapped_path) != sample["mapped_artifact_sha256"]:
         raise ValueError(f"{label}: mapped artifact hash changed")
+    cost_path = Path(str(sample["cost_artifact_path"])).resolve()
+    if raw_sha256(cost_path) != sample["cost_artifact_sha256"]:
+        raise ValueError(f"{label}: Rec/Res analysis artifact hash changed")
+    analysis = neura_experiment.parse_cost_features(cost_path.read_text())
+    if analysis is None:
+        raise ValueError(f"{label}: Rec/Res analysis artifact is unavailable")
     mapped_text = mapped_path.read_text()
     if 'mapping_strategy = "heuristic"' not in mapped_text:
         raise ValueError(f"{label}: mapped artifact is not heuristic")
-    compiled_ii = neura_experiment.parse_integer_attribute(
-        mapped_text, "compiled_ii"
+    compiled_ii = neura_experiment.parse_checked_mapper_label(
+        mapped_text, analysis
     )
-    rec_mii = neura_experiment.parse_integer_attribute(mapped_text, "rec_mii")
-    res_mii = neura_experiment.parse_integer_attribute(mapped_text, "res_mii")
-    if None in (compiled_ii, rec_mii, res_mii):
+    if compiled_ii is None:
         raise ValueError(f"{label}: mapped label/RecMII/ResMII is unavailable")
+    rec_mii = int(analysis["rec_mii"])
+    res_mii = int(analysis["res_mii"])
     bound = max(int(rec_mii), int(res_mii))
     expected_numbers = {
         "compiled_ii": int(compiled_ii), "rec_mii": int(rec_mii),
@@ -904,6 +913,7 @@ def preflight_machsuite(
     llvm_extract = resolve_executable(llvm_extract)
     mlir_translate = resolve_executable(mlir_translate)
     opt = resolve_executable(opt)
+    neura_experiment.require_opt_argument(opt, "--analyze-rec-res-mii")
     if output_dir.exists():
         raise ValueError(f"refusing to overwrite preflight directory: {output_dir}")
     output_dir.mkdir(parents=True)
@@ -1008,8 +1018,8 @@ def preflight_machsuite(
         values = neura_experiment.parse_cost_features(cost.read_text())
         if values is None:
             record.update({
-                "status": "censored", "stage": "analytical_cost_parse",
-                "failure": {"status": "required_cost_facts_unavailable"},
+                "status": "censored", "stage": "rec_res_analysis_parse",
+                "failure": {"status": "required_rec_res_facts_unavailable"},
             })
             manifest["summary"] = manifest_summary(records)
             neura_motifs.atomic_write_json(manifest_path, manifest)
@@ -1520,8 +1530,11 @@ def reveal_labels(
                 "status": "mapper_censored",
             })
             continue
-        compiled_ii = neura_experiment.parse_integer_attribute(
-            mapped.read_text(), "compiled_ii"
+        compiled_ii = neura_experiment.parse_checked_mapper_label(
+            mapped.read_text(), {
+                "rec_mii": candidate["rec_mii"],
+                "res_mii": candidate["res_mii"],
+            }
         )
         if compiled_ii is None or compiled_ii < int(candidate["lower_bound"]):
             failure = {

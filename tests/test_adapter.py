@@ -9,18 +9,14 @@ from adapters import neura_experiment as adapter
 
 def cost_text(**overrides):
     values = {
-        "analytical_ii": 9,
-        "compute_mii": 5,
-        "mem_mii": 2,
         "rec_mii": 4,
-        "reg_mii": 8,
         "res_mii": 5,
-        "route_mii": 9,
     }
     values.update(overrides)
-    return " ".join(
+    attributes = " ".join(
         f"{name} = {value} : i32" for name, value in values.items()
     )
+    return f"rec_res_mii_info = {{{attributes}}}"
 
 
 class NeuraAdapterTest(unittest.TestCase):
@@ -36,16 +32,41 @@ class NeuraAdapterTest(unittest.TestCase):
         ):
             self.assertIsNone(adapter.resolve_configured_neura_root())
 
-    def test_cost_parser_accepts_main_branch_analytical_fields(self):
+    def test_cost_parser_accepts_main_branch_rec_res_fields(self):
         parsed = adapter.parse_cost_features(cost_text())
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed["compute_mii"], 5)
+        self.assertEqual(parsed["rec_mii"], 4)
         self.assertEqual(set(parsed), set(adapter.COST_FEATURE_NAMES))
 
-    def test_cost_parser_censors_explicit_infeasible_status(self):
+    def test_cost_parser_rejects_label_contamination(self):
+        for contamination in (
+            "compiled_ii = 7 : i32",
+            "compiled_ii = 7 : i64",
+            'mapping_info = {mapping_strategy = "heuristic"}',
+            "analytical_ii = 9 : i32",
+        ):
+            with self.subTest(contamination=contamination), \
+                    self.assertRaisesRegex(ValueError, "mapping/label tokens"):
+                adapter.parse_cost_features(cost_text() + " " + contamination)
+        with self.assertRaisesRegex(ValueError, "mapping/label tokens"):
+            adapter.parse_cost_features("compiled_ii = 7 : i32")
+
+    def test_cost_parser_requires_analysis_pass_marker(self):
         self.assertIsNone(adapter.parse_cost_features(
-            cost_text() + " infeasible = true"
+            "rec_mii = 4 : i32 res_mii = 5 : i32"
         ))
+
+    def test_mapper_label_must_match_analysis_rec_res(self):
+        analysis = adapter.parse_cost_features(cost_text())
+        mapped = (
+            "compiled_ii = 8 : i32 rec_mii = 4 : i32 "
+            "res_mii = 5 : i32"
+        )
+        self.assertEqual(adapter.parse_checked_mapper_label(mapped, analysis), 8)
+        with self.assertRaisesRegex(ValueError, "facts disagree"):
+            adapter.parse_checked_mapper_label(
+                mapped.replace("rec_mii = 4", "rec_mii = 3"), analysis
+            )
 
     def test_authoritative_bound_is_exactly_rec_res_max(self):
         row = adapter.parse_cost_features(cost_text())
@@ -155,7 +176,7 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertNotIn("rec_mii", model["feature_names"])
         self.assertNotIn("res_mii", model["feature_names"])
 
-    def test_sibling_cost_loader_accepts_legacy_artifact(self):
+    def test_sibling_cost_loader_accepts_rec_res_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             cost_directory = root / "real-kernel-4x4"
@@ -163,7 +184,7 @@ class NeuraAdapterTest(unittest.TestCase):
             (cost_directory / "cost.mlir").write_text(cost_text())
             recovered = adapter.load_sibling_cost_features(root / "report.json")
         self.assertIn("kernel-4x4", recovered)
-        self.assertEqual(recovered["kernel-4x4"]["compute_mii"], 5)
+        self.assertEqual(recovered["kernel-4x4"]["rec_mii"], 4)
 
     def test_portable_input_normalization_preserves_metadata(self):
         raw = {
@@ -175,6 +196,7 @@ class NeuraAdapterTest(unittest.TestCase):
             "metadata": {
                 "lineage": "suite/kernel-template",
                 "candidate_id": "mesh-4x4:heuristic",
+                "rec_res_evidence": "neura_shared_rec_res_analysis_v1",
             },
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -195,6 +217,7 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertEqual(row["input_report_sha256"], "digest")
         self.assertEqual(row["architecture_sha256"], "architecture-digest")
         self.assertEqual(row["mapper_revision"], "revision")
+        self.assertEqual(row["rec_res_evidence"], "imported_report_unverified")
 
     def test_candidate_identity_includes_source_dfg_hash(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -288,7 +311,7 @@ class NeuraAdapterTest(unittest.TestCase):
         finally:
             adapter.INVOCATION_FAILURES[:] = previous
 
-    def test_prediction_fixture_runs_cost_pass_without_mapper(self):
+    def test_prediction_fixture_runs_rec_res_pass_without_mapper(self):
         commands = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -316,7 +339,7 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertNotIn("compiled_ii", result)
         self.assertEqual(len(commands), 1)
         command = " ".join(commands[0])
-        self.assertIn("--cost-model-analytical=", command)
+        self.assertIn("--analyze-rec-res-mii=", command)
         self.assertNotIn("--map-to-accelerator", command)
 
 

@@ -4,18 +4,20 @@ Adapters own all compiler- and mapper-specific behavior. They may invoke an
 external toolchain to lower programs, read architecture descriptions, collect
 pre-mapping features, and obtain labels from an unchanged mapper.
 
-The Neura adapter is migrated from the original analytical-cost-model
-experiment. It remains useful for corpus reproduction, but its textual MLIR
-features are not part of the generic package API.
+The Neura adapter is migrated from the original cost-model experiment. It
+remains useful for corpus reproduction, but its textual MLIR features are not
+part of the generic package API.
 
 The repository pins Neura at `third_party/neura`. Initialize that submodule
 with `git submodule update --init third_party/neura`; the adapter uses it by
 default, while `--neura-root` and `NEURA_ROOT` remain explicit overrides. Neura's
 nested benchmark submodules are not needed for ordinary feature collection.
 
-The pinned `solver-based-mapping` revision is the authoritative producer for
-Model 1. Its fixed lower-bound contract is `max(RecMII, ResMII)`; no unpublished
-placement or route-bound extension is required.
+The pinned Neura `main` revision is the authoritative producer for Model 1.
+Its fixed lower-bound contract is `max(RecMII, ResMII)`; no unpublished
+placement or route-bound extension is required. The analysis-only pass calls
+the mapper's shared C++ recurrence/resource functions rather than reproducing
+their formulas in Python.
 
 An adapter must never turn a timeout into a compiled-II label, and must record
 the source family, architecture identity, compiler revision, mapper revision,
@@ -24,11 +26,11 @@ and mapper configuration needed to reproduce every successful label.
 The Neura adapter recomputes `baseline_lb = max(rec_mii, res_mii)` and records
 `lower_bound_source=rec_res_max_v1`. An explicitly supplied `baseline_lb` or
 portable `lower_bound` must agree exactly. RouteMII, RegMII, MemMII, and
-`analytical_ii` are never silently promoted to hard floors.
+`analytical_ii` are absent from the main-based Model 1 record.
 
 For point inference, `--model-report MODEL --predict-fixture NAME=PATH` loads a
-hash-checked residual-Ridge artifact and runs only the analytical cost pass plus
-static DFG feature extraction. This mode rejects label-collection options,
+hash-checked residual-Ridge artifact and runs only the analysis-only RecMII/
+ResMII pass plus static DFG feature extraction. This mode rejects label-collection options,
 skips every holdout and fit, and never invokes the heuristic mapper. Its report
 contains a continuous compiled-II estimate, the raw/constrained residual,
 authoritative lower-bound source, exact model inputs, model identity, and any
@@ -44,6 +46,12 @@ inside these alternate splits.
 Subprocess diagnostics are written to a disk-backed temporary stream and only
 a bounded head/tail excerpt enters the report. Timeouts and nonzero exits are
 stored under censored/failure records, never as numerical II labels.
+
+Rows imported through the legacy `--input-report` path are always marked
+`rec_res_evidence=imported_report_unverified`, even if the source report claims
+otherwise, and their report is marked unverified/exploratory. The frozen
+training command rejects all input-report reuse; its generated rows must carry
+the hashed `rec_res_mii_info` artifact produced in the same direct run.
 
 ## Deterministic motif corpus
 
@@ -74,7 +82,7 @@ official benchmark suites for those domains.  The full paper protocol is in
 
 `machsuite_frozen.py` consumes the 19-entry inventory in
 `../benchmarks/machsuite-v1.json`. `preflight` compiles, extracts, imports,
-lowers, and runs only analytical cost; `predict` accepts only a generated-only
+lowers, and runs only analysis-only RecMII/ResMII; `predict` accepts only a generated-only
 model sealed by `freeze-model`; `predict` re-derives every feature from the
 recorded artifacts, and `reveal` verifies all hashes before it can run the
 heuristic mapper. Mutated preflight bytes are rejected, and unsupported

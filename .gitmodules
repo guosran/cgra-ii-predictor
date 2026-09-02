@@ -1,7 +1,7 @@
 [submodule "third_party/neura"]
 	path = third_party/neura
 	url = https://github.com/guosran/dataflow.git
-	branch = solver-based-mapping
+	branch = main
 [submodule "third_party/machsuite"]
 	path = third_party/machsuite
 	url = https://github.com/breagen/MachSuite.git

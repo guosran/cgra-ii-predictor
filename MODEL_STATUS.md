@@ -21,12 +21,15 @@ Explicit `lower_bound` or `baseline_lb` aliases must equal the Rec/Res maximum.
 Portable training and prediction loaders require both integer components and
 reject `LB`, `rec_mii`, or `res_mii` if any model artifact selects them as
 features; this is a global contract, not only a Neura-adapter convention.
-MemMII, RegMII, RouteMII, and `analytical_ii` remain diagnostics; placement and
-mandatory-route lower-bound extensions are not part of Model 1.
+The former solver-branch MemMII, RegMII, RouteMII, and `analytical_ii` fields
+have been removed from the Model 1 record. Placement and mandatory-route
+lower-bound extensions are not part of Model 1.
 
-This choice is intentionally narrower than the strongest analytical bound that
-could be implemented. It matches the published/pinned Neura interface and
-keeps the proof contract small. An experimental local implementation of
+This choice is intentionally narrower than the strongest bound that could be
+implemented. It matches Neura `main` and keeps the proof contract small. A
+minimal analysis-only compiler pass calls the same C++ recurrence/resource
+functions as the mapper; the predictor does not reimplement those formulas.
+An experimental local implementation of
 placement-Hall and mandatory-route-cut bounds was found to be genuinely
 stronger than Rec/Res on focused examples, but it was not retained: the
 uncommitted work is recoverable from Neura `stash@{0}` and is absent from every
@@ -115,8 +118,10 @@ allowed; lowering it can only produce a smoke artifact.
 
 Freezing verifies the pinned clean Neura checkout, mapper-binary hash,
 deterministically regenerated source, mapped-artifact hash and embedded
-`compiled_ii`/RecMII/ResMII, then reproduces the selected Ridge model. It does
-not rerun every expensive training mapping a second time; the archived mapped
+`compiled_ii`/RecMII/ResMII, plus the label-free Rec/Res artifact hash and its
+`rec_res_mii_info` marker. It then requires analyzer and mapper Rec/Res facts
+to match exactly before reproducing the selected Ridge model. It does not rerun
+every expensive training mapping a second time; the archived analysis/mapped
 artifacts plus their provenance are the training-label evidence.
 
 ## Frozen MachSuite test
@@ -136,8 +141,9 @@ not inflate the headline sample count.
 
 1. `freeze-model` accepts only a generated-only training report using the
    structure-only feature contract and removes labelled rows from the artifact.
-2. `preflight` compiles/lowers all 19 variants and runs analytical cost only.
-   It contains no mapper invocation and no `compiled_ii`.
+2. `preflight` compiles/lowers all 19 variants and runs only the compiler's
+   analysis-only RecMII/ResMII pass. It contains no mapper invocation and no
+   `compiled_ii`.
 3. `predict` rejects exploratory or mismatched models, emits predictions, and
    seals the model, manifest, candidate-set, predictor, and prediction hashes.
 4. `reveal` verifies every seal plus source, lowered DFG, architecture, Neura,
@@ -195,11 +201,11 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 At this update:
 
 ```text
-Neura source worktree: clean at a625a334; expanded-bound experiment stashed
+Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
 MachSuite submodule: clean at 6236e593
 MachSuite label-free preflight: 19 declared, 11 ready, 8 censored
 generated end-to-end smoke: 18 declared, 16 labels, 2 mapper-censored
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
-predictor unit tests: 84 passed
+predictor unit tests: 87 passed
 ```

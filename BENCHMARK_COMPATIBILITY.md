@@ -36,10 +36,10 @@ assigned an II.
 
 | Asset | Exact local identity | Contents | Allowed role |
 | --- | --- | --- | --- |
-| Neura e2e fixtures | `third_party/neura` / `a625a3342bb5ef6e44f4e292458505c83159841c` | `axpy`, `bicg`, `fft`, `fir`, `gemm`, `gemv`, `histogram`, `relu`, `spmv` | compiler smoke tests and real development only |
+| Neura e2e fixtures | `third_party/neura` / `47b7e3a68c321075293e6fcb45fb3b1cabb93b88` | `axpy`, `bicg`, `fft`, `fir`, `gemm`, `gemv`, `histogram`, `relu`, `spmv` | compiler smoke tests and real development only |
 | CGRA-Bench submodule | Neura `test/benchmark/CGRA-Bench` / `6729aaf225d0320e4e0d3b419e20483069a5a69b` | 15 kernel directories: `adpcm_coder`, `adpcm_decoder`, `bicg`, `blowfish`, `conv`, `dtw`, `fft`, `fir`, `gemm`, `histogram`, `latnrm`, `mvt`, `relu`, `spmv`, `susan` | mapping stress/development; overlap aliases required |
 | Streaming-Bench nested checkout | CGRA-Bench `Streaming-Bench` / `333782f78d5475c8b33b11ff2b9ba9d75c93ca49` | `gcn`, `lu`, and `raytracing` applications with multiple subkernels | external challenge/development, grouped by parent application |
-| Zeonica_Testbench | Neura `test/benchmark/Zeonica_Testbench` / `2cccc700e73f584eb7d4ab4374722b9a7f8ec196` | 13 generated-output/testbench directories synchronized from Neura | fixture validation only; never an independent benchmark set |
+| Zeonica_Testbench | Neura `test/benchmark/Zeonica_Testbench` / `62389ec9f8e4e0f7f4988294213e71c6d2eebc85` | 13 generated-output/testbench directories synchronized from Neura | fixture validation only; never an independent benchmark set |
 | Derived affine MLIR fixtures | sibling repository `neura-cgra-cost-model` / `82138932378a2b3cdd714d342c4751a5b7f8e47c`, `harness/front_affine` | 14 PolyBench-style affine functions: `adi`, `atax`, `bicg`, `doitgen`, `gemm`, `gemver`, `gesummv`, `jacobi_1d`, `mvt`, `nussinov`, `syrk`, `three_mm`, `trisolv`, `two_mm` | frontend development only; not an official PolyBench corpus |
 | Official PolyBench/C | not vendored or version-pinned here | affine linear algebra, stencil, solver, data-mining, and medley kernels | future real transfer/secondary frozen set |
 | Official MachSuite | `third_party/machsuite` / `6236e593012cb86b0d2f08d9fb9ba0411ff989b4` | 19 predeclared accelerator-oriented variants in `benchmarks/machsuite-v1.json` | primary frozen test only |
@@ -53,8 +53,10 @@ must not be labelled “PolyBench suite” results.
 
 The executable preflight uses Clang/LLVM 20 at `-O3` with vectorization,
 unrolling, and lifetime markers disabled, extracts the inventory's named top
-function, imports LLVM MLIR, lowers to Neura, and runs analytical cost on the
-fixed 4×4 architecture. It invokes no mapper and records no `compiled_ii`.
+function, imports LLVM MLIR, lowers to Neura, and runs RecMII/ResMII analysis on the
+fixed 4×4 architecture. The analysis-only pass directly calls the same C++ RecMII/
+ResMII functions as the mapper; it invokes no mapper and records no
+`compiled_ii`.
 
 | Status | Variants |
 | --- | --- |
@@ -66,7 +68,7 @@ declared variants. Adding frontend support later defines a new protocol/tool
 revision; it must not silently change this frozen result.
 
 A local preflight confirmed that all 14 derived affine files reach Neura's
-analytical cost pass. With a deliberately short five-second mapper cap, six
+RecMII/ResMII analysis pass. With a deliberately short five-second mapper cap, six
 completed (`adi`, `bicg`, `gemm`, `jacobi_1d`, `syrk`, `two_mm`) and eight were
 censored by that time limit. This is only a compatibility diagnostic, not a
 supported-kernel declaration or a model result. The sibling repository's nine

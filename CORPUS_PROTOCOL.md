@@ -27,9 +27,9 @@ residual = compiled_ii - lower_bound
 
 No placement, routing, memory, or learned estimate enters the floor. The
 primary feature vector also excludes `lower_bound`, `rec_mii`, and `res_mii`,
-so the analytical floor and learned residual have separate roles. Estimated
-MemMII/RegMII/RouteMII-style values may be retained as diagnostics or training-
-only ablations, but are not labels or pruning bounds.
+so the fixed floor and learned residual have separate roles. Solver-branch
+MemMII/RegMII/RouteMII-style fields are absent from the main-based Model 1
+record.
 
 The manifest keeps four non-interchangeable identities: leakage lineage for
 splitting, base DFG/ranking query for comparing candidates, candidate ID for
@@ -166,15 +166,17 @@ For motif collection, all source and architecture files are materialized and
 `output-dir/corpus-manifest.json` is atomically written in `predeclared` state
 before the first mapper subprocess.  The manifest lists every candidate's
 motif, seed, operation count, shape, architecture parameters, hashes, and
-lineage.  It is updated atomically after each cost-model and mapper stage:
+lineage.  It is updated atomically after each Rec/Res-analysis and mapper stage:
 
 ```text
-declared -> running(cost-model) -> running(mapper) -> success
+declared -> running(rec-res-analysis) -> running(mapper) -> success
                                            \-> censored
 ```
 
-Successful records point to cost/mapped artifacts and the corresponding
-`sample_id`; censored records contain stage/failure status and no label.
+Successful records point to hashed Rec/Res-analysis and mapped artifacts and
+the corresponding `sample_id`; frozen-model validation re-parses both and
+requires identical RecMII/ResMII. Censored records contain stage/failure status
+and no label.
 Interrupted runs may leave `running` records and must be resumed or reported
 as incomplete rather than treated as successful.
 
