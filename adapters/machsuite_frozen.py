@@ -1032,9 +1032,19 @@ def validate_generated_training_report(
         metadata_holdouts.get("generator_family")
         if isinstance(metadata_holdouts, Mapping) else None
     )
+    try:
+        verified_nested = neura_experiment.nested_ridge_family_holdout(
+            training_samples, FROZEN_RIDGE_CANDIDATES,
+            FROZEN_DEAD_ZONE_CANDIDATES,
+        )
+    except ValueError:
+        verified_nested = None
+    verified_improvement = neura_experiment.generated_nested_improvement_gate(
+        verified_nested
+    )
     independently_ready = bool(
-        isinstance(nested, Mapping) and isinstance(nested.get("rows"), list) and
-        bool(nested.get("rows")) and
+        verified_nested is not None and bool(verified_nested.get("rows")) and
+        verified_improvement.get("passed") is True and
         isinstance(generator_holdout, Mapping) and
         generator_holdout.get("status") == "ok" and
         int(generator_holdout.get("group_count", -1)) == len(
@@ -1053,6 +1063,18 @@ def validate_generated_training_report(
     declared_coverage = candidate_gate.get("coverage")
     if declared_coverage != coverage:
         raise ValueError("training candidate gate coverage disagrees with corpus")
+    if candidate_gate.get("generated_nested_improvement") != verified_improvement:
+        raise ValueError(
+            "training candidate gate Ridge improvement disagrees with "
+            "independently recomputed holdout"
+        )
+    if not isinstance(nested, Mapping):
+        raise ValueError("training nested generated-lineage holdout is missing")
+    for metric in ("baseline_macro_family_mae", "ridge_macro_family_mae"):
+        if nested.get(metric) != verified_nested.get(metric):
+            raise ValueError(
+                f"training nested holdout {metric} disagrees with recomputation"
+            )
     expected_gate_fields = {
         "required_generator_families": list(required_generator_families()),
         "required_shape_variant_cells": list(required_shape_variant_cells()),
@@ -1094,9 +1116,9 @@ def validate_generated_training_report(
     retrained = neura_experiment.fit_ridge(
         training_samples, selected_ridge, selected_dead_zone,
     )
-    if isinstance(nested, Mapping) and nested.get("rows"):
+    if verified_nested is not None and verified_nested.get("rows"):
         neura_experiment.calibrate_unseen_family_interval(
-            retrained, nested["rows"], FROZEN_INTERVAL_QUANTILE
+            retrained, verified_nested["rows"], FROZEN_INTERVAL_QUANTILE
         )
     if canonical_model_sha256(retrained) != canonical_model_sha256(model):
         raise ValueError("frozen model cannot be reproduced from training rows")

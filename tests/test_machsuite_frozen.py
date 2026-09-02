@@ -152,7 +152,7 @@ def generated_sample(
 
 def generated_report(
     root, motifs=None, requested_per_family=None, base_count=1,
-    shapes=None, variants=None,
+    shapes=None, variants=None, compiled_ii=3,
 ):
     motifs = tuple(motifs or neura_motifs.DEFAULT_MOTIFS)
     if requested_per_family is None:
@@ -167,7 +167,8 @@ def generated_report(
             for shape in shapes:
                 for variant in variants:
                     samples.append(generated_sample(
-                        root, motif, base_index, shape, variant
+                        root, motif, base_index, shape, variant,
+                        compiled_ii=compiled_ii,
                     ))
     manifest_path = root / "corpus-manifest.json"
     write_json(manifest_path, {
@@ -198,20 +199,22 @@ def generated_report(
     model = neura_experiment.fit_ridge(
         training_samples, selected_ridge, selected_dead_zone
     )
-    interval_rows = [{
-        "family": sample["family"],
-        "prediction": float(sample["compiled_ii"]),
-        "compiled_ii": float(sample["compiled_ii"]),
-    } for sample in training_samples]
+    nested = neura_experiment.nested_ridge_family_holdout(
+        training_samples, machsuite_frozen.FROZEN_RIDGE_CANDIDATES,
+        machsuite_frozen.FROZEN_DEAD_ZONE_CANDIDATES,
+    )
+    interval_rows = nested["rows"]
     neura_experiment.calibrate_unseen_family_interval(
         model, interval_rows, machsuite_frozen.FROZEN_INTERVAL_QUANTILE
     )
+    improvement = neura_experiment.generated_nested_improvement_gate(nested)
     coverage = machsuite_frozen.generated_training_coverage(
         samples, requested_bases_per_family=requested_per_family,
         declared_candidates=json.loads(manifest_path.read_text())["candidates"],
     )
     ready = bool(
         coverage["passed"] and
+        improvement["passed"] and
         requested_per_family == machsuite_frozen.FROZEN_REQUESTED_BASES_PER_FAMILY
     )
     generated_corpus = neura_experiment.motif_corpus_summary(
@@ -289,11 +292,12 @@ def generated_report(
                 requested_per_family
             ),
             "coverage": coverage,
+            "generated_nested_improvement": improvement,
             "training_selection": training_selection,
             "overall_ready_for_machsuite_freeze": ready,
         },
         "selected_model": "ridge",
-        "nested_ridge_family_holdout": {"rows": interval_rows},
+        "nested_ridge_family_holdout": nested,
         "nested_ridge_metadata_holdouts": {
             "generator_family": {
                 "status": "ok",
@@ -482,7 +486,9 @@ class MachSuiteFrozenTest(unittest.TestCase):
                 )
                 write_json(report_path, report)
                 artifact = machsuite_frozen.freeze_random_training_model(
-                    report_path, output_path, minimum_base_dfgs=6,
+                    report_path, output_path, minimum_base_dfgs=len(
+                        machsuite_frozen.FROZEN_MOTIFS
+                    ),
                     minimum_generator_families=len(
                         machsuite_frozen.FROZEN_MOTIFS
                     ),
@@ -513,6 +519,39 @@ class MachSuiteFrozenTest(unittest.TestCase):
             ), self.assertRaisesRegex(ValueError, "candidate gate"):
                     machsuite_frozen.freeze_random_training_model(
                         report_path, root / "frozen.json"
+                    )
+
+    def test_formal_freeze_requires_ridge_to_strictly_improve_on_lb(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report_path = root / "training-report.json"
+            revision = neura_experiment.git_provenance(
+                machsuite_frozen.PROJECT_ROOT
+            )["revision"]
+            with patch.object(
+                machsuite_frozen, "FROZEN_MINIMUM_COMPLETE_BASES_PER_FAMILY", 1
+            ), patch.object(
+                machsuite_frozen, "FROZEN_REQUESTED_BASES_PER_FAMILY", 1
+            ), patch.object(
+                machsuite_frozen, "require_clean_revision",
+                return_value={"revision": revision, "dirty": False},
+            ):
+                # compiled_ii equals the Rec/Res floor for every row.  Ridge
+                # can tie that perfect baseline but cannot strictly improve.
+                report = generated_report(root, compiled_ii=2)
+                self.assertFalse(
+                    report["candidate_gate"]["generated_nested_improvement"]
+                    ["passed"]
+                )
+                write_json(report_path, report)
+                with self.assertRaisesRegex(ValueError, "candidate gate"):
+                    machsuite_frozen.freeze_random_training_model(
+                        report_path, root / "frozen.json",
+                        minimum_base_dfgs=len(machsuite_frozen.FROZEN_MOTIFS),
+                        minimum_generator_families=len(
+                            machsuite_frozen.FROZEN_MOTIFS
+                        ),
+                        minimum_complete_bases_per_family=1,
                     )
 
     def test_small_override_writes_only_a_non_predictable_smoke_artifact(self):

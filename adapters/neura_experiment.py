@@ -1792,6 +1792,50 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
     return result
 
 
+def generated_nested_improvement_gate(
+    nested_holdout: Optional[Mapping[str, object]],
+) -> Dict[str, object]:
+    """Require held-out Ridge MAE to strictly improve on the Rec/Res floor.
+
+    This gate consumes only generated-lineage validation results.  It is
+    deliberately based on macro MAE so every base DFG has equal influence and
+    never inspects MachSuite labels or the diagnostic random-row split.
+    """
+    baseline = None
+    ridge = None
+    if isinstance(nested_holdout, Mapping):
+        baseline = nested_holdout.get("baseline_macro_family_mae")
+        ridge = nested_holdout.get("ridge_macro_family_mae")
+    valid = all(
+        isinstance(value, (int, float)) and not isinstance(value, bool) and
+        math.isfinite(float(value)) and float(value) >= 0.0
+        for value in (baseline, ridge)
+    )
+    baseline_value = float(baseline) if valid else None
+    ridge_value = float(ridge) if valid else None
+    improvement = (
+        baseline_value - ridge_value
+        if baseline_value is not None and ridge_value is not None else None
+    )
+    relative = (
+        improvement / baseline_value
+        if improvement is not None and baseline_value is not None and
+        baseline_value > 0.0 else None
+    )
+    return {
+        "status": "ok" if valid else "unavailable",
+        "source": "generated_nested_base_lineage_holdout",
+        "metric": "macro_mean_absolute_error",
+        "rule": "ridge_macro_mae < rec_res_lower_bound_macro_mae",
+        "baseline_macro_mae": baseline_value,
+        "ridge_macro_mae": ridge_value,
+        "absolute_improvement": improvement,
+        "relative_improvement": relative,
+        "passed": bool(valid and ridge_value < baseline_value),
+        "machsuite_labels_used": False,
+    }
+
+
 def nested_ridge_metadata_holdout(
     samples: Sequence[Sample], metadata_key: str,
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
@@ -3428,11 +3472,15 @@ def main() -> int:
         args.motif_samples_per_family,
         declared_motif_candidates,
     )
+    generated_improvement = generated_nested_improvement_gate(
+        nested_ridge_holdout
+    )
     frozen_model_scale_ready = bool(
         generated_only_training and trained_full_model is not None and
         nested_ridge_holdout is not None and
         generator_family_holdout_available and
-        generated_coverage["passed"] is True
+        generated_coverage["passed"] is True and
+        generated_improvement["passed"] is True
     )
     trained_full_model_sha256 = active_model_sha256
     report_metadata = (
@@ -3529,6 +3577,7 @@ def main() -> int:
                 "every required shape/architecture cell for every complete base",
                 "nested generated-base lineage model selection",
                 "whole-generator-family holdout requested and available",
+                "nested generated-lineage Ridge macro MAE strictly below LB",
                 "structure-only model features disjoint from Rec/Res floor",
             ],
             "required_generator_families": list(required_generator_families),
@@ -3544,6 +3593,7 @@ def main() -> int:
                 if args.motif_samples_per_family > 0 else None
             ),
             "coverage": generated_coverage,
+            "generated_nested_improvement": generated_improvement,
             "training_selection": training_selection,
             "generated_only_training": generated_only_training,
             "generated_distinct_base_dfg_count": generated_base_dfg_count,

@@ -146,6 +146,27 @@ class NeuraAdapterTest(unittest.TestCase):
         forbidden = {"baseline_lb", *adapter.LOWER_BOUND_COMPONENT_NAMES}
         self.assertTrue(forbidden.isdisjoint(adapter.MODEL_FEATURE_NAMES))
 
+    def test_generated_improvement_gate_is_strict_and_label_blind(self):
+        improved = adapter.generated_nested_improvement_gate({
+            "baseline_macro_family_mae": 1.0,
+            "ridge_macro_family_mae": 0.75,
+        })
+        self.assertTrue(improved["passed"])
+        self.assertEqual(improved["absolute_improvement"], 0.25)
+        self.assertFalse(improved["machsuite_labels_used"])
+
+        for ridge in (1.0, 1.25):
+            with self.subTest(ridge=ridge):
+                gate = adapter.generated_nested_improvement_gate({
+                    "baseline_macro_family_mae": 1.0,
+                    "ridge_macro_family_mae": ridge,
+                })
+                self.assertFalse(gate["passed"])
+        self.assertEqual(
+            adapter.generated_nested_improvement_gate(None)["status"],
+            "unavailable",
+        )
+
     def test_duplicate_imports_collapse_only_when_equivalent(self):
         first = {
             "index": "generated/chain/base-0001/3x3",
