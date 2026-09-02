@@ -90,9 +90,11 @@ Cached successes are rebuilt from those artifacts without a compiler
 subprocess, censored candidates are skipped without retrying, and a corrupt
 cache fails before invocation.  A legacy `running` record is normalized to
 `declared` before retry.  If every candidate is terminal, resume neither
-requires nor probes the compiler.  SIGINT stops scheduling, drains at most the
-configured in-flight candidates, checkpoints atomically, exits 130, and does
-not fit a model.
+requires nor probes the compiler. Omitted generator choices are recovered from
+the manifest, while invocation-local training/evaluation options such as
+`--metadata-holdout-key generator_family` must be repeated. SIGINT stops
+scheduling, drains at most the configured in-flight candidates, checkpoints
+atomically, exits 130, and does not fit a model.
 
 This is a single-coordinator/single-writer manifest contract; no cross-process
 lock is provided.  Do not run two fresh or resume processes concurrently

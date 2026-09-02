@@ -224,5 +224,5 @@ v2 smoke nested MAE: LB 0.42593, Ridge 0.42502 (pipeline check, not paper eviden
 terminal resume with a nonexistent compiler path: identical sample/model hashes
 small-corpus scale gate: correctly rejected for a final frozen model
 MachSuite mapper labels revealed: 0
-predictor unit tests: 124 passed after parallel/resume integration
+predictor unit tests: 125 passed after parallel/resume integration and final audit
 ```

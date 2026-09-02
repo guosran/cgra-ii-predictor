@@ -335,6 +335,44 @@ class MotifCollectionTest(unittest.TestCase):
                     opt=opt,
                 )
 
+    def test_partial_resume_records_relocated_identical_compiler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opt, manifest_path, _prepared = self.fresh_corpus(root)
+            relocated_opt = root / "relocated-mlir-neura-opt"
+            relocated_opt.write_bytes(opt.read_bytes())
+
+            resumed = adapter._load_or_create_motif_manifest(
+                root, manifest_path,
+                resume=True,
+                clean=False,
+                count=1,
+                seed=17,
+                motifs=("chain",),
+                shapes=((3, 3),),
+                variants=("homogeneous",),
+                timeout=5,
+                jobs=1,
+                checkpoint_every=1,
+                opt=relocated_opt,
+            )
+
+            resumed_manifest, _candidates, _samples, declared, _prior = resumed
+            self.assertTrue(declared)
+            self.assertEqual(
+                resumed_manifest["collection"]["mlir_neura_opt"],
+                str(relocated_opt.resolve()),
+            )
+            self.assertEqual(
+                resumed_manifest["collection"]["mlir_neura_opt_sha256"],
+                adapter.file_sha256(relocated_opt),
+            )
+            persisted = json.loads(manifest_path.read_text())
+            self.assertEqual(
+                persisted["collection"]["mlir_neura_opt"],
+                str(relocated_opt.resolve()),
+            )
+
     def test_cooperative_stop_drains_only_bounded_inflight_work(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -435,6 +473,7 @@ class MotifCollectionTest(unittest.TestCase):
                 "--output-dir", str(root),
                 "--opt", str(missing_opt),
                 "--real-architecture", str(architecture),
+                "--metadata-holdout-key", "generator_family",
                 "--timeout", "5",
             ]
             adapter.INVOCATION_FAILURES.clear()
@@ -459,6 +498,56 @@ class MotifCollectionTest(unittest.TestCase):
             )
             self.assertTrue(
                 report["provenance"]["experiment_config"]["motif_resume"]
+            )
+            self.assertNotEqual(
+                report["nested_ridge_metadata_holdouts"][
+                    "generator_family"
+                ]["status"],
+                "not_requested",
+            )
+            self.assertEqual(
+                report["candidate_gate"]["requested_bases_per_family"], 2
+            )
+            self.assertEqual(
+                report["candidate_gate"]["coverage"][
+                    "requested_bases_per_family"
+                ],
+                2,
+            )
+
+            # Reusing the directory for an ordinary input-report run must not
+            # attribute its stale corpus manifest to the new invocation.
+            input_report = root / "resumed-report.json"
+            input_report.write_text(json.dumps(report))
+            argv = [
+                "neura_experiment.py",
+                "--input-report", str(input_report),
+                "--output-dir", str(root),
+                "--opt", str(missing_opt),
+                "--real-architecture", str(architecture),
+                "--timeout", "5",
+            ]
+            adapter.INVOCATION_FAILURES.clear()
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(
+                adapter, "require_opt_argument",
+                side_effect=AssertionError("compiler help was probed"),
+            ) as probe, mock.patch.object(
+                adapter, "run_invocation",
+                side_effect=AssertionError("compiler was invoked"),
+            ) as isolated, mock.patch.object(
+                adapter, "invoke",
+                side_effect=AssertionError("legacy compiler path was invoked"),
+            ) as legacy:
+                self.assertEqual(adapter.main(), 0)
+            probe.assert_not_called()
+            isolated.assert_not_called()
+            legacy.assert_not_called()
+            ordinary_report = json.loads((root / "report.json").read_text())
+            self.assertIsNone(
+                ordinary_report["motif_corpus"]["manifest_path"]
+            )
+            self.assertIsNone(
+                ordinary_report["motif_corpus"]["manifest_sha256"]
             )
 
 

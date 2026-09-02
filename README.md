@@ -170,7 +170,8 @@ python3 adapters/neura_experiment.py \
   --motif-shape 3x3 --motif-shape 3x4 --motif-shape 4x4 \
   --metadata-holdout-key generator_family \
   --motif-jobs 4 --motif-checkpoint-every 32 \
-  --timeout 60
+  --timeout 60 \
+  --output-dir /path/to/random-training
 ~~~
 
 This first materializes every source/architecture candidate and atomically
@@ -194,6 +195,7 @@ and omit `--clean`:
 python3 adapters/neura_experiment.py \
   --output-dir /path/to/random-training \
   --motif-resume \
+  --metadata-holdout-key generator_family \
   --motif-jobs 4 --motif-checkpoint-every 32 \
   --timeout 60
 ~~~
@@ -203,8 +205,11 @@ inputs, and cached artifact hashes before invoking a subprocess. It reconstructs
 cached successes without the compiler, skips censored candidates without
 retrying them, and fails before invocation if a cached artifact is corrupt. A
 fully terminal resume needs no compiler probe. `--clean` and `--motif-resume`
-are mutually exclusive; SIGINT exits 130 after draining at most the configured
-in-flight candidates and does not train a model.
+are mutually exclusive. Omitted generator choices are recovered from the
+manifest, but training/evaluation options are not; repeat
+`--metadata-holdout-key generator_family` so the resumed report contains the
+whole-generator-family gate required for freezing. SIGINT exits 130 after
+draining at most the configured in-flight candidates and does not train a model.
 The manifest is a single-coordinator/single-writer contract with no
 cross-process lock; do not run two fresh or resume processes against one
 output directory concurrently.

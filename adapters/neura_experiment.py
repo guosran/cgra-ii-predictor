@@ -531,7 +531,7 @@ def command_stdout_sha256(command: Sequence[str]) -> Optional[str]:
 
 
 def require_opt_argument(opt: Path, argument: str) -> None:
-    """Fail before corpus creation when the selected compiler lacks a pass."""
+    """Fail before label collection when the selected compiler lacks a pass."""
     try:
         completed = subprocess.run(
             (str(opt), "--help"), stdout=subprocess.PIPE,
@@ -1496,9 +1496,16 @@ def _load_or_create_motif_manifest(
                 raise ValueError(
                     "resume compiler SHA-256 does not match the original corpus"
                 )
+            effective_opt_path = str(opt.resolve())
+            effective_opt_sha256 = current_opt_sha256
+        else:
+            # A terminal resume needs no compiler and may run after the
+            # originally recorded executable has moved or disappeared.
+            effective_opt_path = stored_opt_path
+            effective_opt_sha256 = stored_opt_sha256
         manifest["collection"] = _motif_collection_config(
             timeout, jobs, checkpoint_every,
-            opt_path=stored_opt_path, opt_sha256=stored_opt_sha256,
+            opt_path=effective_opt_path, opt_sha256=effective_opt_sha256,
         )
         manifest["summary"] = neura_motifs.manifest_summary(records)
         manifest["status"] = (
@@ -3587,6 +3594,9 @@ def main() -> int:
         if args.clean and args.output_dir.exists():
             shutil.rmtree(args.output_dir)
         args.output_dir.mkdir(parents=True, exist_ok=True)
+    active_motif_manifest_path = (
+        motif_manifest_path if motif_manifest is not None else None
+    )
 
     # This check is deliberately after motif predeclaration/resume validation:
     # a corrupt cached success must fail before any compiler invocation.  A
@@ -4360,7 +4370,9 @@ def main() -> int:
         } for row in training_samples],
         "censored_samples": list(INVOCATION_FAILURES),
     }
-    generated_corpus = motif_corpus_summary(samples, motif_manifest_path)
+    generated_corpus = motif_corpus_summary(
+        samples, active_motif_manifest_path
+    )
     portable_dataset["motif_corpus"] = generated_corpus
     generated_rows = [row for row in samples if is_synthetic_row(row)]
     generated_base_dfg_count = len({
@@ -4388,8 +4400,9 @@ def main() -> int:
         for variant in neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS
     )
     declared_motif_candidates: Sequence[Mapping[str, Any]] = ()
-    if motif_manifest_path is not None and motif_manifest_path.is_file():
-        declared_manifest = json.loads(motif_manifest_path.read_text())
+    if (active_motif_manifest_path is not None and
+            active_motif_manifest_path.is_file()):
+        declared_manifest = json.loads(active_motif_manifest_path.read_text())
         if isinstance(declared_manifest, Mapping) and isinstance(
             declared_manifest.get("candidates"), list
         ):
@@ -4400,7 +4413,7 @@ def main() -> int:
         required_shapes,
         neura_motifs.DEFAULT_ARCHITECTURE_VARIANTS,
         200,
-        args.motif_samples_per_family,
+        motif_count,
         declared_motif_candidates,
     )
     generated_improvement = generated_nested_improvement_gate(
@@ -4513,15 +4526,14 @@ def main() -> int:
             ],
             "required_generator_families": list(required_generator_families),
             "required_shape_variant_cells": list(required_shape_variant_cells),
-            "requested_bases_per_family": args.motif_samples_per_family,
+            "requested_bases_per_family": motif_count,
             "requested_total_bases": (
-                args.motif_samples_per_family * len(required_generator_families)
+                motif_count * len(required_generator_families)
             ),
             "minimum_complete_bases_per_family": 200,
             "minimum_total_complete_bases": 200 * len(required_generator_families),
             "minimum_complete_fraction": (
-                200 / args.motif_samples_per_family
-                if args.motif_samples_per_family > 0 else None
+                200 / motif_count if motif_count > 0 else None
             ),
             "coverage": generated_coverage,
             "generated_nested_improvement": generated_improvement,

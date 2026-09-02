@@ -189,9 +189,10 @@ manifest predeclared; candidate declared -> success
 ```
 
 The stable manifest contains terminal `success` or `censored` records and is
-checkpointed atomically after completion batches in deterministic candidate
-order.  Successful records point to hashed Rec/Res-analysis and mapped
-artifacts and the corresponding `sample_id`; frozen-model validation re-parses
+checkpointed atomically after completion batches; records remain in declaration
+order even though the terminal subset at an intermediate checkpoint depends on
+worker completion timing. Successful records point to hashed Rec/Res-analysis
+and mapped artifacts and the corresponding `sample_id`; frozen-model validation re-parses
 both and requires identical RecMII/ResMII. Censored records contain
 stage/failure status and no label. There is no persistent `running` state in
 the current collector. On `--motif-resume`, a legacy `running` record is
@@ -205,7 +206,10 @@ rebuilt from their hashed source, architecture, Rec/Res-cost, and mapped
 artifacts without invoking the compiler; censored candidates are skipped and
 are never retried. A corrupt cached record fails before any subprocess. If a
 resume has no non-terminal candidates, it neither requires nor probes the
-compiler. `--clean` and `--motif-resume` are mutually exclusive.
+compiler. Omitted generator choices are recovered from the manifest, but
+training/evaluation flags are invocation-local; the formal workflow must repeat
+`--metadata-holdout-key generator_family` when resuming. `--clean` and
+`--motif-resume` are mutually exclusive.
 
 On SIGINT, the coordinator stops scheduling new candidates, drains at most
 `N` in-flight candidates, atomically checkpoints the stable manifest, and exits
