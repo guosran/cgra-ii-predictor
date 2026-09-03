@@ -56,9 +56,9 @@ otherwise, and their report is marked unverified/exploratory. The frozen
 training command rejects all input-report reuse; its generated rows must carry
 the hashed `rec_res_mii_info` artifact produced in the same direct run.
 
-## Deterministic motif corpus
+## Deterministic motif corpora
 
-The opt-in `--motif-samples-per-family N` mode uses
+The historical/default `--motif-generator-version motif-v3` mode uses
 `neura_motifs.py` to generate nine lowered families: `chain`, `fanout`,
 `reduction`, `diamond`, `random_dag`, `recurrence_chain`,
 `predicated_diamond`, `memory_stream`, and `pointer_chase`. By default the
@@ -88,6 +88,26 @@ batches, while the manifest records remain in declaration order. For
 generator-family holdout use
 `--metadata-holdout-key generator_family`.
 
+`--motif-generator-version motif-v4` selects `neura_motifs_v4.py` without
+changing any v3 constants used by the existing MachSuite freezer. V4 has six
+path contexts (`compute`, `recurrence`, `predicated`, `memory`, `pointer`, and
+`mixed`) and crosses each with five topology-pressure profiles and three fixed
+operation bands. Its shape design uses 4x4 plus one balanced secondary block;
+transpose rectangles occur together on the same base DFG. Use
+`--motif-predeclare-only` for the mandatory first phase: it materializes every
+input and writes the complete manifest, then returns before any compiler or
+mapper invocation. Resume the reviewed manifest separately to collect labels.
+
+For v4, the report keeps analysis-valid, `LB <= 20`, mapper-attempted,
+successful-label, and feasible-censored denominators separate. If `LB > 20`,
+the mapper is not invoked and no numeric failure label is invented. Formal
+acceptance additionally requires strict generator-family transfer improvement,
+nonzero positive-residual recall in every family, improved positive-subset and
+shape-balanced MAE, ranking non-degradation, distributed positive mechanisms,
+and 80% complete coverage in every family-by-shape, family-by-profile, and
+family-by-operation-band marginal cell.
+The exact label-blind declaration is `../protocols/motif-v4.json`.
+
 Use `--motif-resume` with the same output directory to continue a partial
 collection; it is incompatible with `--clean`.  Resume validates the
 manifest schema, generator configuration, timeout, compiler SHA-256, candidate
@@ -97,8 +117,8 @@ subprocess, censored candidates are skipped without retrying, and a corrupt
 cache fails before invocation.  A legacy `running` record is normalized to
 `declared` before retry.  If every candidate is terminal, resume neither
 requires nor probes the compiler. Omitted generator choices are recovered from
-the manifest, while invocation-local training/evaluation options such as
-`--metadata-holdout-key generator_family` must be repeated. SIGINT stops
+the manifest. V4 runs the required `generator_family` holdout automatically;
+other invocation-local training/evaluation options must be repeated. SIGINT stops
 scheduling, drains at most the configured in-flight candidates, checkpoints
 atomically, exits 130, and does not fit a model.
 
@@ -106,13 +126,13 @@ This is a single-coordinator/single-writer manifest contract; no cross-process
 lock is provided.  Do not run two fresh or resume processes concurrently
 against the same output directory.
 
-The three v2 additions contain real lowered recurrence, predicated-control,
-and pointer/load structure, but they remain structural generators rather than
-real workload semantics. The formal protocol requests 250 bases per family
-and admits a base to fitting only after all three shapes and both architecture
-variants succeed; partial labels stay auditable outside the fit. Official
-benchmark suites remain necessary for real-program evidence. The full paper
-protocol is in `../CORPUS_PROTOCOL.md`.
+The recurrence, predicated-control, and pointer/load paths remain structural
+generators rather than real workload semantics. V3 requests 250 bases per
+family and admits a base only after both of its declared shape cells succeed.
+V4 also requests 250 per family and admits a base only after every cell in its
+two- or three-shape block succeeds. Partial labels stay auditable outside the
+fit. Official benchmark suites remain necessary for real-program evidence.
+The full paper protocol is in `../CORPUS_PROTOCOL.md`.
 
 ## Frozen MachSuite adapter
 

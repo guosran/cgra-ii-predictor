@@ -154,6 +154,52 @@ usually leaves an unrolled-off static DFG unchanged and is one workload, not a
 new independent graph. All such variants remain in the same algorithm lineage
 even when their canonical DFG hashes differ.
 
+## Predeclared motif-v4 iteration
+
+Motif-v3 remains immutable historical evidence. The next generated protocol is
+separately identified as `motif-v4` / `cgra-ii-motif-corpus-v4`; its complete
+machine-readable declaration is `protocols/motif-v4.json`. It uses the new root
+seed `20260903` and must be materialized with `--motif-predeclare-only` before
+any heuristic-mapper invocation. That phase records the exact compiler hash
+but exits without executing it. Collection begins only through a
+later `--motif-resume` command against the reviewed manifest.
+The byte-identical `corpus-manifest.predeclared.json` snapshot is retained when
+the active `corpus-manifest.json` begins receiving collection checkpoints.
+
+V4 crosses six path contexts—compute, recurrence, predication, memory,
+pointer, and mixed memory/pointer/control—with five independent pressure
+profiles inside every family: layered sparse structure, repeated fork/join
+reconvergence, long-range cutwidth, delayed-use live ranges, and mixed-path
+pressure. Every profile is crossed with fixed low/medium/high arithmetic-count
+bands of 8–11, 12–15, and 16–20 operations. This factorization is declared
+before labels; generator-family identity alone cannot identify the pressure
+mechanism.
+
+Every base uses 4x4 plus one of five balanced blocks:
+
+```text
+4x4 + 2x2
+4x4 + 2x3 + 3x2
+4x4 + 2x4 + 4x2
+4x4 + 3x3
+4x4 + 3x4 + 4x3
+```
+
+Thus each transpose pair has the same source/canonical hash, ranking query,
+and leakage lineage. With 250 requested bases in each of six families, the
+formal declaration contains 1,500 bases and 3,900 candidates. At least 200
+complete bases per family are required, and the 80% complete threshold is
+also applied independently to every family/shape, family/profile, and
+family/operation-band cell. A base enters fitting only when every candidate in
+its declared two- or three-shape block succeeds.
+
+The first v4 protocol does not select candidates using mapper labels or
+MachSuite facts and does not enable adaptive Rec/Res screening. Common
+operation bands are the mapping-free size control; per-family Rec/Res
+distributions and search-interval coverage are reported after collection. If
+those generated-only audits or any acceptance gate fail, no v4 model is
+frozen and the generator is not retuned under the same protocol version.
+
 ## Source-family and variant rules
 
 All compiler/lowering variants of one source algorithm belong to one lineage
@@ -207,9 +253,9 @@ rebuilt from their hashed source, architecture, Rec/Res-cost, and mapped
 artifacts without invoking the compiler; censored candidates are skipped and
 are never retried. A corrupt cached record fails before any subprocess. If a
 resume has no non-terminal candidates, it neither requires nor probes the
-compiler. Omitted generator choices are recovered from the manifest, but
-training/evaluation flags are invocation-local; the formal workflow must repeat
-`--metadata-holdout-key generator_family` when resuming. `--clean` and
+compiler. Omitted generator choices are recovered from the manifest. V4 runs
+its mandatory `generator_family` metadata holdout automatically; other
+invocation-local evaluation flags are not inherited. `--clean` and
 `--motif-resume` are mutually exclusive.
 
 On SIGINT, the coordinator stops scheduling new candidates, drains at most
@@ -263,8 +309,10 @@ stage; do not describe the fitted subset as an unbiased sample of all generated
 graphs. The old `--samples` option remains a legacy narrow random-DAG generator
 and is outside the frozen corpus.
 
-The frozen-model command additionally requires nested base-lineage selection,
-a whole-generator-family holdout that does not degrade the Rec/Res floor, and
-strictly lower generated nested-lineage macro MAE than that floor. A small override produces an
+The historical motif-v3 frozen-model command additionally requires nested
+base-lineage selection, a whole-generator-family holdout that does not degrade
+the Rec/Res floor, and strictly lower generated nested-lineage macro MAE than
+that floor. Motif-v4 replaces the non-degradation condition with strict
+generator-family improvement. A small override produces an
 artifact that the frozen MachSuite predictor refuses. A large row count from
 one template does not substitute for distinct canonical DFGs or lineages.

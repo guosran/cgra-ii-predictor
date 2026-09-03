@@ -85,6 +85,35 @@ floor. A tie is conservative fallback and is not called an improvement.
 All reports produced by this command are marked `exploratory`, with labels
 available at evaluation time and `frozen_test=false`.
 
+### Motif-v4 generated-only acceptance
+
+The v4 thresholds are frozen in `protocols/motif-v4.json`. Hyperparameter
+selection first minimizes shape-balanced validation MAE; the existing
+lineage/stratum macro metrics and deterministic numeric values remain
+tie-breakers. Shape, operation band, mechanism profile, and generator family
+are metadata strata only and are never model inputs.
+
+A v4 report fails closed unless all of the following hold on generated
+held-out predictions:
+
+1. leave-one-generator-family-out Ridge macro MAE is strictly below the
+   Rec/Res-floor macro MAE; a tie is a failure;
+2. at least one positive residual is predicted, and positive-residual recall
+   is nonzero in every generator family;
+3. positive-subset MAE and shape-balanced MAE are strictly below the floor;
+4. macro tie-aware within-DFG shape concordance does not regress;
+5. positive residuals occur in at least 20 base DFGs, two pressure profiles,
+   two operation bands, and two target shapes in every family;
+6. complete-case coverage passes globally and in every predeclared
+   family-by-shape, family-by-profile, and family-by-operation-band marginal
+   cell.
+
+The report separately counts declarations with valid Rec/Res analysis,
+`LB <= 20`, mapper attempts, successful labels, feasible mapper censorship,
+and candidates outside the mapper search interval. `LB > 20` prevents a mapper
+attempt and remains a censored audit record; it is never converted to a
+numeric II label. These gates do not inspect MachSuite labels.
+
 ## Frozen blind evaluation
 
 A frozen claim requires a separate workflow, not a command-line status flag:
@@ -122,10 +151,12 @@ label-provenance record.
 
 The repository now contains the pinned inventory and executable three-stage
 workflow. The label-free compatibility preflight has 11/19 ready and 8/19
-lowering-censored candidates. The formal generated-only report meets the scale,
-coverage, full-rank, nested-improvement, and generator-family non-degradation
-freeze gates. No MachSuite prediction seal or mapper labels have been produced,
-so there is still no frozen accuracy claim.
+lowering-censored candidates. The historical motif-v3 generated-only report
+meets its scale, coverage, full-rank, nested-improvement, and generator-family
+non-degradation freeze gates. Motif-v4's stricter gates remain unmeasured until
+its separately predeclared corpus is collected and fitted. No MachSuite
+prediction seal or mapper labels have been produced, so there is still no
+frozen accuracy claim.
 
 The local seal is tamper-evident, not a trusted timestamp: all files could in
 principle be regenerated after labels were seen. Publish the seal hash to Git,

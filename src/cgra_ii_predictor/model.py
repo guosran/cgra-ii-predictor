@@ -559,6 +559,8 @@ def prediction_rows(model: Mapping[str, Any], samples: Sequence[Sample]) -> List
             "source_family", "source_kind", "leakage_lineage_id",
             "base_dfg_id", "ranking_query_id", "training_stratum",
             "generator_family", "generator_version", "motif",
+            "target_shape", "rows", "columns", "tiles", "operation_count",
+            "mechanism_profile", "operation_band", "shape_block",
         ):
             if name in sample.metadata:
                 row[name] = sample.metadata[name]
@@ -652,6 +654,91 @@ def quality_metrics(rows: Sequence[Prediction], key: str) -> Dict[str, float]:
         "rounded_exact_rate": sum(error == 0 for error in rounded) / len(rounded),
         "within_one_rate": sum(abs(error) <= 1.0 for error in errors) / len(errors),
         "max_absolute_error": max(abs(error) for error in errors),
+    }
+
+
+def positive_residual_metrics(
+    rows: Sequence[Prediction], key: str,
+) -> Dict[str, Any]:
+    """Measure recovery of mapper gaps after floor/dead-zone processing."""
+    tolerance = 1e-12
+    positive_targets = [
+        row for row in rows
+        if float(row["compiled_ii"]) > float(row["lower_bound"]) + tolerance
+    ]
+    positive_predictions = [
+        row for row in rows
+        if float(row[key]) > float(row["lower_bound"]) + tolerance
+    ]
+    true_positives = [
+        row for row in positive_targets
+        if float(row[key]) > float(row["lower_bound"]) + tolerance
+    ]
+    return {
+        "row_count": len(rows),
+        "positive_target_count": len(positive_targets),
+        "positive_prediction_count": len(positive_predictions),
+        "true_positive_count": len(true_positives),
+        "positive_residual_recall": (
+            len(true_positives) / len(positive_targets)
+            if positive_targets else None
+        ),
+        "positive_subset_mae": (
+            mae(positive_targets, key) if positive_targets else None
+        ),
+        "all_predictions_equal_lower_bound": bool(rows) and not positive_predictions,
+    }
+
+
+def stratified_quality_metrics(
+    rows: Sequence[Prediction], key: str, metadata_key: str,
+) -> Dict[str, Any]:
+    """Report held-out quality in predeclared, label-independent strata."""
+    missing = [
+        str(row.get("sample_id", "")) for row in rows
+        if row.get(metadata_key) in (None, "")
+    ]
+    if missing:
+        return {
+            "status": "unavailable_missing_metadata",
+            "metadata_key": metadata_key,
+            "row_count": len(rows),
+            "missing_row_count": len(missing),
+        }
+    grouped: Dict[str, List[Prediction]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row[metadata_key])].append(row)
+    groups = {
+        group: {
+            "row_count": len(group_rows),
+            "quality": quality_metrics(group_rows, key),
+            "positive_residual": positive_residual_metrics(group_rows, key),
+        }
+        for group, group_rows in sorted(grouped.items())
+    }
+    return {
+        "status": "ok" if groups else "unavailable_no_rows",
+        "metadata_key": metadata_key,
+        "group_count": len(groups),
+        "groups": groups,
+        "balanced_mae": (
+            sum(float(value["quality"]["mae"]) for value in groups.values()) /
+            len(groups) if groups else None
+        ),
+        "macro_positive_subset_mae": (
+            sum(
+                float(value["positive_residual"]["positive_subset_mae"])
+                for value in groups.values()
+                if value["positive_residual"]["positive_subset_mae"] is not None
+            ) / sum(
+                value["positive_residual"]["positive_subset_mae"] is not None
+                for value in groups.values()
+            )
+            if any(
+                value["positive_residual"]["positive_subset_mae"] is not None
+                for value in groups.values()
+            ) else None
+        ),
     }
 
 
@@ -888,6 +975,7 @@ def _validation_group_folds(
 def select_ridge_hyperparameters(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
+    *, balance_metadata_key: Optional[str] = None,
 ) -> Tuple[float, float]:
     _validate_samples(samples, feature_names)
     ridge_candidates = _validated_control_grid(
@@ -898,7 +986,16 @@ def select_ridge_hyperparameters(
     )
     selection_samples = distinct_observations(samples, feature_names)
     folds = _validation_group_folds(selection_samples)
-    best: Tuple[float, float, float, float, float] = None  # type: ignore[assignment]
+    if balance_metadata_key is not None:
+        missing = [
+            sample.sample_id for sample in selection_samples
+            if sample.metadata.get(balance_metadata_key) in (None, "")
+        ]
+        if missing:
+            raise ValueError(
+                f"shape-balanced selection lacks metadata.{balance_metadata_key}"
+            )
+    best: Optional[Tuple[float, ...]] = None
     for ridge in ridge_candidates:
         raw: List[Tuple[Sample, float]] = []
         for held_out_groups in folds:
@@ -922,6 +1019,7 @@ def select_ridge_hyperparameters(
         for dead_zone in dead_zone_candidates:
             group_errors: Dict[str, List[float]] = defaultdict(list)
             stratum_groups: Dict[str, set[str]] = defaultdict(set)
+            balanced_errors: Dict[str, List[float]] = defaultdict(list)
             all_errors: List[float] = []
             for sample, raw_residual in raw:
                 residual = max(0.0, raw_residual)
@@ -936,6 +1034,10 @@ def select_ridge_hyperparameters(
                     "training_stratum", "__all__"
                 ))
                 stratum_groups[stratum].add(sample.group)
+                if balance_metadata_key is not None:
+                    balanced_errors[str(sample.metadata[balance_metadata_key])].append(
+                        error
+                    )
             group_maes = {
                 group: sum(errors) / len(errors)
                 for group, errors in group_errors.items()
@@ -945,7 +1047,13 @@ def select_ridge_hyperparameters(
                 sum(group_maes[group] for group in groups) / len(groups)
                 for groups in stratum_groups.values()
             ) / len(stratum_groups)
+            balanced = (
+                sum(sum(errors) / len(errors) for errors in balanced_errors.values()) /
+                len(balanced_errors)
+                if balanced_errors else stratified_macro
+            )
             score = (
+                *((balanced,) if balance_metadata_key is not None else ()),
                 stratified_macro,
                 macro,
                 sum(all_errors) / len(all_errors),
@@ -954,12 +1062,15 @@ def select_ridge_hyperparameters(
             )
             if best is None or score < best:
                 best = score
-    return best[3], best[4]
+    if best is None:
+        raise ValueError("no Ridge hyperparameter candidate was evaluated")
+    return best[-2], best[-1]
 
 
 def nested_group_holdout(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
+    *, selection_balance_metadata_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Evaluate unseen lineages; tune only inside each outer training split."""
     _validate_samples(samples, feature_names)
@@ -977,7 +1088,8 @@ def nested_group_holdout(
         evaluation_input_count += len(test)
         test = distinct_observations(test, feature_names)
         ridge, dead_zone = select_ridge_hyperparameters(
-            train, feature_names, ridge_candidates, dead_zone_candidates
+            train, feature_names, ridge_candidates, dead_zone_candidates,
+            balance_metadata_key=selection_balance_metadata_key,
         )
         model = fit_ridge(
             train, feature_names, ridge, dead_zone,
@@ -1002,8 +1114,24 @@ def nested_group_holdout(
         "evaluation_distinct_observation_count": len(rows),
         "evaluation_duplicate_rows_collapsed": evaluation_input_count - len(rows),
         "chosen_hyperparameters_by_held_out_group": chosen,
+        "hyperparameter_selection_balance_metadata_key": (
+            selection_balance_metadata_key
+        ),
         "lower_bound_metrics": quality_metrics(rows, "lower_bound"),
         "model_metrics": quality_metrics(rows, "prediction"),
+        "lower_bound_positive_residual_metrics": positive_residual_metrics(
+            rows, "lower_bound"
+        ),
+        "model_positive_residual_metrics": positive_residual_metrics(
+            rows, "prediction"
+        ),
+        "stratified_metrics": {
+            key: {
+                "lower_bound": stratified_quality_metrics(rows, "lower_bound", key),
+                "model": stratified_quality_metrics(rows, "prediction", key),
+            }
+            for key in ("generator_family", "target_shape", "operation_band")
+        },
         "lower_bound_group_ranking": group_ranking_metrics(rows, "lower_bound"),
         "model_group_ranking": group_ranking_metrics(rows, "prediction"),
         "raw_residual_metrics": raw_residual_metrics(rows),
@@ -1013,8 +1141,10 @@ def nested_group_holdout(
 def fit_calibrated_model(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
+    *, selection_balance_metadata_key: Optional[str] = None,
 ) -> Model:
     ridge, dead_zone = select_ridge_hyperparameters(
-        samples, feature_names, ridge_candidates, dead_zone_candidates
+        samples, feature_names, ridge_candidates, dead_zone_candidates,
+        balance_metadata_key=selection_balance_metadata_key,
     )
     return fit_ridge(samples, feature_names, ridge, dead_zone)

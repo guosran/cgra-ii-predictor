@@ -1,4 +1,5 @@
 {
+  "example_note": "Legacy motif-v1 format example; not the motif-v3 or motif-v4 formal protocol.",
   "schema_version": "cgra-ii-motif-corpus-v1",
   "status": "predeclared",
   "generator": {

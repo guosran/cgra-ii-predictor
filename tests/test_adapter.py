@@ -4,7 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from adapters import machsuite_frozen, neura_experiment as adapter, neura_motifs
+from adapters import (
+    machsuite_frozen, neura_experiment as adapter, neura_motifs,
+    neura_motifs_v4,
+)
 
 
 def cost_text(**overrides):
@@ -20,6 +23,21 @@ def cost_text(**overrides):
 
 
 class NeuraAdapterTest(unittest.TestCase):
+    def test_portable_metadata_preserves_v4_strata(self):
+        row = {
+            "rows": 2, "columns": 3, "tiles": 6, "links": 14,
+            "source_kind": "generated", "target_shape": "2x3",
+            "target_config_id": "prefix-2x3",
+            "mechanism_profile": "long_range_cutwidth",
+            "operation_band": "medium", "shape_block": "transpose-2x3-3x2",
+        }
+        metadata = adapter.portable_sample_metadata(row)
+        for name in (
+            "columns", "target_shape", "target_config_id",
+            "mechanism_profile", "operation_band", "shape_block",
+        ):
+            self.assertEqual(metadata[name], row[name])
+
     def test_one_by_one_features_have_no_network_division(self):
         source = neura_motifs.generate_motif_mlir("chain", 8, 11)
         features = adapter.graph_features_from_neura(source, 1, 1)
@@ -516,6 +534,261 @@ class NeuraAdapterTest(unittest.TestCase):
                 machsuite_frozen._validated_generated_sample(
                     sample, 0, machsuite_frozen.FROZEN_NEURA_REVISION
                 )
+
+    def test_motif_skips_mapper_when_lower_bound_exceeds_search_ceiling(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidate = neura_motifs_v4.make_candidates(
+                neura_motifs_v4.make_base_specs(
+                    1, seed=17, motifs=("compute",)
+                ),
+                root, ((3, 3),), ("neura-main",),
+            )[0]
+            commands = []
+
+            def fake_invocation(command, timeout):
+                commands.append(tuple(command))
+                Path(command[-1]).write_text(cost_text(rec_mii=21, res_mii=3))
+                return True
+
+            outcome = adapter.collect_motif_candidate(
+                Path("opt"), candidate, 5, fake_invocation
+            )
+        self.assertEqual(outcome.status, "censored")
+        self.assertEqual(outcome.stage, "mapper-search-interval")
+        self.assertEqual(outcome.failure, "lower-bound-above-mapper-ceiling")
+        self.assertEqual(outcome.analysis_facts["rec_mii"], 21)
+        self.assertEqual(len(commands), 1)
+        self.assertIn("--analyze-rec-res-mii", " ".join(commands[0]))
+        self.assertNotIn("--map-to-accelerator", " ".join(commands[0]))
+
+    def test_historical_v3_high_lower_bound_still_uses_original_mapper_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidate = neura_motifs.make_candidates(
+                neura_motifs.make_base_specs(
+                    1, seed=17, motifs=("chain",)
+                ),
+                root, ((3, 3),), ("neura-main",),
+            )[0]
+            commands = []
+
+            def fake_invocation(command, timeout):
+                commands.append(tuple(command))
+                output = Path(command[-1])
+                if "--analyze-rec-res-mii" in " ".join(command):
+                    output.write_text(cost_text(rec_mii=21, res_mii=3))
+                else:
+                    output.write_text(
+                        'mapping_info = {mapping_strategy = "heuristic", '
+                        'x_tiles = 3 : i32, y_tiles = 3 : i32} '
+                        "compiled_ii = 22 : i32 rec_mii = 21 : i32 "
+                        "res_mii = 3 : i32"
+                    )
+                return True
+
+            outcome = adapter.collect_motif_candidate(
+                Path("opt"), candidate, 5, fake_invocation
+            )
+        self.assertEqual(outcome.status, "success")
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--map-to-accelerator", " ".join(commands[1]))
+
+    def test_feasibility_coverage_keeps_distinct_denominators(self):
+        common = {
+            "rec_mii": 2, "res_mii": 3, "lower_bound": 3,
+            "mapper_ii_ceiling": 20,
+            "cost_artifact_path": "cost.mlir",
+            "cost_artifact_sha256": "0" * 64,
+        }
+        records = [
+            {**common, "generator_family": "f", "rows": 2, "columns": 2,
+             "operation_band": "low", "analysis_status": "success",
+             "lower_bound_within_mapper_search_interval": True,
+             "mapper_attempted": True, "status": "success"},
+            {**common, "generator_family": "f", "rows": 2, "columns": 2,
+             "operation_band": "low", "analysis_status": "success",
+             "lower_bound_within_mapper_search_interval": True,
+             "mapper_attempted": True, "status": "censored"},
+            {**common, "rec_mii": 21, "lower_bound": 21,
+             "generator_family": "f", "rows": 1, "columns": 1,
+             "operation_band": "high", "analysis_status": "success",
+             "lower_bound_within_mapper_search_interval": False,
+             "mapper_attempted": False, "status": "censored"},
+        ]
+        result = adapter.motif_feasibility_coverage(records)
+        overall = result["overall"]
+        self.assertEqual(overall["declared_count"], 3)
+        self.assertEqual(overall["feasible_search_interval_count"], 2)
+        self.assertEqual(overall["outside_search_interval_count"], 1)
+        self.assertEqual(overall["successful_label_count"], 1)
+        self.assertEqual(overall["censored_feasible_count"], 1)
+        self.assertEqual(overall["label_coverage_on_feasible"], 0.5)
+        self.assertTrue(result["passed"])
+
+        malformed = adapter.motif_feasibility_coverage([{
+            "lower_bound_within_mapper_search_interval": True,
+            "mapper_attempted": True,
+            "status": "success",
+        }])
+        self.assertEqual(malformed["overall"]["analysis_valid_count"], 0)
+        self.assertEqual(
+            malformed["overall"]["feasible_search_interval_count"], 0
+        )
+        self.assertFalse(malformed["passed"])
+
+    def test_v4_stratum_coverage_requires_complete_transpose_profile_band_cells(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v4.make_candidates(
+                neura_motifs_v4.make_base_specs(
+                    15, seed=neura_motifs_v4.DEFAULT_SEED,
+                    motifs=("compute",),
+                ),
+                root,
+            )
+            records = []
+            for candidate in candidates:
+                record = candidate.manifest_record()
+                record["status"] = "success"
+                records.append(record)
+            family = "generated/motif/compute"
+            result = adapter.motif_v4_stratum_coverage(records, (family,))
+            self.assertTrue(result["passed"])
+            self.assertEqual(result["cell_count"], result["expected_cell_count"])
+            records[0]["status"] = "censored"
+            strict = adapter.motif_v4_stratum_coverage(
+                records, (family,), minimum_fraction=1.0
+            )
+            self.assertFalse(strict["passed"])
+
+    def test_v4_acceptance_requires_strict_transfer_positive_signal_and_ranking(self):
+        families = ("f0", "f1", "f2")
+        family_groups = {
+            family: {
+                "quality": {"mae": 1.0},
+                "positive_residual": {
+                    "positive_residual_recall": 0.5,
+                    "positive_subset_mae": 0.5,
+                }
+            }
+            for family in families
+        }
+        evaluation = {
+            "families": list(families),
+            "outer_split_protocol": "leave_one_leakage_group_out",
+            "baseline_macro_family_mae": 1.0,
+            "ridge_macro_family_mae": 0.8,
+            "baseline_positive_residual_metrics": {
+                "positive_subset_mae": 2.0,
+            },
+            "ridge_positive_residual_metrics": {
+                "positive_target_count": 3,
+                "positive_prediction_count": 2,
+                "positive_subset_mae": 0.5,
+                "all_predictions_equal_lower_bound": False,
+            },
+            "stratified_metrics": {
+                "generator_family": {
+                    "lower_bound": {
+                        "status": "ok",
+                        "balanced_mae": 1.0,
+                        "groups": family_groups,
+                        "macro_positive_subset_mae": 2.0,
+                    },
+                    "model": {
+                        "status": "ok",
+                        "balanced_mae": 0.8,
+                        "groups": family_groups,
+                        "macro_positive_subset_mae": 0.5,
+                    },
+                },
+                "target_shape": {
+                    "lower_bound": {
+                        "status": "ok", "balanced_mae": 1.0,
+                        "groups": {"2x2": {"quality": {"mae": 1.0}}},
+                    },
+                    "model": {
+                        "status": "ok", "balanced_mae": 0.75,
+                        "groups": {"2x2": {"quality": {"mae": 0.75}}},
+                    },
+                },
+                "operation_band": {
+                    "lower_bound": {
+                        "status": "ok", "balanced_mae": 1.0,
+                        "groups": {"low": {"quality": {"mae": 1.0}}},
+                    },
+                    "model": {
+                        "status": "ok", "balanced_mae": 0.8,
+                        "groups": {"low": {"quality": {"mae": 0.8}}},
+                    },
+                },
+            },
+            "baseline_group_ranking": {
+                "status": "ok",
+                "candidate_identity_status": "complete",
+                "missing_ranking_query_row_count": 0,
+                "duplicate_candidate_rows_collapsed": 0,
+                "macro_pairwise_concordance": 0.75,
+                "eligible_ranking_query_count": 1,
+                "groups": {"q": {"status": "eligible"}},
+            },
+            "ridge_group_ranking": {
+                "status": "ok",
+                "candidate_identity_status": "complete",
+                "missing_ranking_query_row_count": 0,
+                "duplicate_candidate_rows_collapsed": 0,
+                "macro_pairwise_concordance": 0.8,
+                "eligible_ranking_query_count": 1,
+                "groups": {"q": {"status": "eligible"}},
+            },
+        }
+        labelled = [
+            {"generator_family": family, "compiled_ii": 3,
+             "baseline_lb": 2, "base_dfg_id": family,
+             "mechanism_profile": "profile", "operation_band": "low",
+             "target_shape": "2x2"}
+            for family in families
+        ]
+        policy = {
+            "policy_version": "test-v4",
+            "positive_residual_distribution": {
+                "minimum_positive_base_dfgs_per_family": 1,
+                "minimum_positive_mechanism_profiles_per_family": 1,
+                "minimum_positive_operation_bands_per_family": 1,
+                "minimum_positive_target_shapes_per_family": 1,
+            },
+        }
+        result = adapter.generated_v4_acceptance_gates(
+            {"status": "ok", "evaluation": evaluation}, labelled,
+            {"passed": True}, {"passed": True, "overall": {"passed": True}},
+            families, policy,
+        )
+        self.assertTrue(result["overall_passed"])
+        evaluation["ridge_macro_family_mae"] = 1.0
+        failed = adapter.generated_v4_acceptance_gates(
+            {"status": "ok", "evaluation": evaluation}, labelled,
+            {"passed": True}, {"passed": True, "overall": {"passed": True}},
+            families, policy,
+        )
+        self.assertFalse(failed["overall_passed"])
+        self.assertFalse(
+            failed["gates"]["strict_generator_family_logo_improvement"]["passed"]
+        )
+
+        evaluation["ridge_macro_family_mae"] = 0.8
+        family_groups["f0"]["positive_residual"][
+            "positive_residual_recall"
+        ] = "bogus"
+        malformed = adapter.generated_v4_acceptance_gates(
+            {"status": "ok", "evaluation": evaluation}, labelled,
+            {"passed": True}, {"passed": True, "overall": {"passed": True}},
+            families, policy,
+        )
+        self.assertFalse(malformed["overall_passed"])
+        self.assertFalse(
+            malformed["gates"]["positive_residual_quality"]["passed"]
+        )
 
 
 if __name__ == "__main__":

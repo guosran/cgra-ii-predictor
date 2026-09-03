@@ -30,6 +30,7 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 GENERATOR_VERSION = "motif-v3"
+GENERATOR_TYPE = "generated/motif"
 MANIFEST_SCHEMA_VERSION = "cgra-ii-motif-corpus-v3"
 DATA_TYPE = "!neura.data<i32, i1>"
 I64_DATA_TYPE = "!neura.data<i64, i1>"
@@ -133,6 +134,10 @@ class MotifBaseSpec:
     generator_family: str = "generated/motif"
     generator_type: str = "generated/motif"
     generator_version: str = GENERATOR_VERSION
+    # v4 adds orthogonal, pre-label structural strata.  Empty values preserve
+    # the byte-for-byte v3 manifest contract and are omitted from v3 records.
+    mechanism_profile: str = ""
+    operation_band: str = ""
 
     @property
     def base_id(self) -> str:
@@ -181,6 +186,9 @@ class MotifCandidate:
     status: str = "declared"
     stage: str = "predeclared"
     failure: Optional[str] = None
+    mechanism_profile: str = ""
+    operation_band: str = ""
+    shape_block: str = ""
 
     @property
     def architecture_id(self) -> str:
@@ -188,6 +196,11 @@ class MotifCandidate:
 
     def manifest_record(self) -> Dict[str, object]:
         record = asdict(self)
+        for optional_field in (
+            "mechanism_profile", "operation_band", "shape_block",
+        ):
+            if not record[optional_field]:
+                record.pop(optional_field)
         record["architecture_id"] = self.architecture_id
         # Keep all identity layers explicit before labels exist.  The
         # canonical hash denotes one exact DFG/ranking query; ``lineage`` is
@@ -1250,7 +1263,7 @@ def make_manifest(
         "status": "predeclared",
         "generator": {
             "family": "generated/motif",
-            "type": "generated/motif",
+            "type": GENERATOR_TYPE,
             "version": GENERATOR_VERSION,
             "seed": seed,
             "motifs": list(motifs),
@@ -1330,7 +1343,8 @@ def update_manifest_candidate(
 __all__ = [
     "DEFAULT_ARCHITECTURE_VARIANTS", "DEFAULT_MOTIFS", "DEFAULT_SHAPES",
     "PREDICTION_SHAPES",
-    "DIRECT_OPERATION_LIMITS", "FAMILY_OPERATION_BANDS", "GENERATOR_VERSION",
+    "DIRECT_OPERATION_LIMITS", "FAMILY_OPERATION_BANDS", "GENERATOR_TYPE",
+    "GENERATOR_VERSION",
     "MANIFEST_SCHEMA_VERSION",
     "MotifBaseSpec",
     "MotifCandidate", "OPERATION_BANDS", "atomic_write_json",

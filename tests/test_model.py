@@ -8,11 +8,13 @@ from cgra_ii_predictor.model import (
     group_balanced_sample_weights,
     group_ranking_metrics,
     nested_group_holdout,
+    positive_residual_metrics,
     predict_compiled_ii,
     prediction_rows,
     predict_ridge,
     raw_residual_metrics,
     select_ridge_hyperparameters,
+    stratified_quality_metrics,
 )
 
 
@@ -522,6 +524,76 @@ class ModelTest(unittest.TestCase):
             result["raw_residual_metrics"],
             raw_residual_metrics(result["rows"]),
         )
+
+    def test_positive_residual_metrics_reject_an_all_floor_prediction(self):
+        rows = [
+            {"sample_id": "a", "group": "a", "lower_bound": 3,
+             "compiled_ii": 3, "prediction": 3},
+            {"sample_id": "b", "group": "b", "lower_bound": 4,
+             "compiled_ii": 6, "prediction": 4},
+            {"sample_id": "c", "group": "c", "lower_bound": 5,
+             "compiled_ii": 8, "prediction": 5},
+        ]
+        metrics = positive_residual_metrics(rows, "prediction")
+        self.assertEqual(metrics["positive_target_count"], 2)
+        self.assertEqual(metrics["positive_prediction_count"], 0)
+        self.assertEqual(metrics["positive_residual_recall"], 0.0)
+        self.assertTrue(metrics["all_predictions_equal_lower_bound"])
+        self.assertEqual(metrics["positive_subset_mae"], 2.5)
+
+        rows[1]["prediction"] = 5
+        metrics = positive_residual_metrics(rows, "prediction")
+        self.assertEqual(metrics["positive_residual_recall"], 0.5)
+        self.assertFalse(metrics["all_predictions_equal_lower_bound"])
+
+    def test_stratified_quality_metrics_balance_shapes(self):
+        rows = [
+            {"sample_id": "small", "group": "a", "target_shape": "2x2",
+             "lower_bound": 2, "compiled_ii": 4, "prediction": 3},
+            {"sample_id": "large0", "group": "b", "target_shape": "4x4",
+             "lower_bound": 2, "compiled_ii": 2, "prediction": 2},
+            {"sample_id": "large1", "group": "c", "target_shape": "4x4",
+             "lower_bound": 2, "compiled_ii": 2, "prediction": 2},
+        ]
+        result = stratified_quality_metrics(rows, "prediction", "target_shape")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["group_count"], 2)
+        self.assertEqual(result["groups"]["2x2"]["quality"]["mae"], 1.0)
+        self.assertEqual(result["groups"]["4x4"]["quality"]["mae"], 0.0)
+        self.assertEqual(result["balanced_mae"], 0.5)
+
+    def test_nested_holdout_can_predeclare_shape_balanced_selection(self):
+        shaped = [
+            Sample(
+                sample_id=row.sample_id,
+                group=row.group,
+                lower_bound=row.lower_bound,
+                compiled_ii=row.compiled_ii,
+                features=row.features,
+                metadata={
+                    **row.metadata,
+                    "target_shape": "2x2" if index % 2 == 0 else "4x4",
+                },
+            )
+            for index, row in enumerate(self.samples)
+        ]
+        result = nested_group_holdout(
+            shaped, ["pressure", "depth"], [1.0], [0.0],
+            selection_balance_metadata_key="target_shape",
+        )
+        self.assertEqual(
+            result["hyperparameter_selection_balance_metadata_key"],
+            "target_shape",
+        )
+        self.assertEqual(
+            result["stratified_metrics"]["target_shape"]["model"]["status"],
+            "ok",
+        )
+        with self.assertRaisesRegex(ValueError, "lacks metadata.target_shape"):
+            nested_group_holdout(
+                self.samples, ["pressure", "depth"], [1.0], [0.0],
+                selection_balance_metadata_key="target_shape",
+            )
 
 
 if __name__ == "__main__":

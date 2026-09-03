@@ -1,0 +1,39 @@
+{
+  "schema_version": "cgra-ii-motif-predeclaration-attestation-v1",
+  "status": "materialized_label_free_before_mapper_collection",
+  "date": "2026-09-03",
+  "predictor_base_revision": "7e1a2ddf240795dd904425cb73815ee37a1d84b0",
+  "protocol": {
+    "path": "protocols/motif-v4.json",
+    "sha256": "a31ef26b0da920c2e8753bf415bdac527c8d211842446dd7be664749c0aa5a67"
+  },
+  "implementation": {
+    "generator_path": "adapters/neura_motifs_v4.py",
+    "generator_sha256": "bfd46a799ba0549ace7c98c8fa11c011a502929a2db9b932f995ba24315fcd60",
+    "adapter_path": "adapters/neura_experiment.py",
+    "adapter_sha256": "dc445b50b412dbe408998bd895050bc6de8bc65a7bf88f214a98e5db1d27ce67"
+  },
+  "manifest": {
+    "path": "corpora/motif-v4-formal-seed-20260903/corpus-manifest.predeclared.json",
+    "sha256": "834278ae9ae40dc5aa2e0f09c834d19eeda17f63e10aab9f09d485231defb868",
+    "schema_version": "cgra-ii-motif-corpus-v4",
+    "status": "predeclared",
+    "base_count": 1500,
+    "candidate_count": 3900,
+    "non_declared_candidate_count": 0,
+    "records_with_label_or_analysis_artifact_fields": 0,
+    "source_hash_mismatch_count": 0
+  },
+  "toolchain": {
+    "neura_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "mlir_neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49"
+  },
+  "label_boundary": {
+    "compiler_or_mapper_executed_by_predeclaration_command": false,
+    "compiled_ii_fields_present": 0,
+    "machsuite_mapper_labels_used": false,
+    "mapper_collection_started": false
+  },
+  "trusted_external_timestamp": false
+}

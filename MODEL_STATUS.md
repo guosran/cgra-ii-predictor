@@ -284,8 +284,21 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 
 ## Remaining work before a paper result
 
-1. Run MachSuite `predict` with the generated-only frozen artifact and publish
-   or externally timestamp the resulting seal.
+The corrective generated-data protocol is now implemented and predeclared as
+`motif-v4`, but no v4 mapper collection or model fit has been run. It keeps the
+v3 generator/frozen artifact immutable, crosses six path contexts with five
+pressure profiles and three operation bands, preserves transpose rectangles
+on the same base lineage, and provides a manifest-only first phase. Its gates
+require strict generator-family transfer improvement, positive-residual
+recovery, shape-balanced improvement, ranking non-degradation, and versioned
+coverage. Passing those gates remains future empirical work; code availability
+is not evidence that the current Ridge limitation has been solved.
+
+The following three steps apply only to the historical motif-v3 frozen
+artifact. They do not authorize revealing labels for an unfitted v4 model.
+
+1. Run MachSuite `predict` with the historical generated-only v3 artifact and
+   publish or externally timestamp the resulting seal.
 2. Only after publication, run `reveal` and report accuracy over scored
    candidates and coverage over all 19 declarations,
    with every mapper timeout/failure retained as censored.
@@ -294,7 +307,7 @@ accelerator, whereas this Model 1 predicts one mapper's final II residual.
 
 ## Verification snapshot
 
-At this update:
+Historical motif-v3 snapshot at this update:
 
 ```text
 Neura source worktree: clean at 47b7e3a6 (main plus shared Rec/Res analysis pass)
@@ -308,3 +321,11 @@ leave-one-generator-family-out macro MAE: LB 0.17393, Ridge 0.17393 (tie, not im
 MachSuite mapper labels revealed: 0
 predictor unit tests: 130 passed
 ```
+
+Motif-v4 protocol state is separate: the 1,500 bases and 3,900 candidates have
+been materialized locally as a label-free manifest with SHA-256
+`834278ae9ae40dc5aa2e0f09c834d19eeda17f63e10aab9f09d485231defb868`;
+`protocols/motif-v4-predeclaration.json` records the associated implementation
+and toolchain hashes. No v4 mapper label has been collected and no v4 model
+has been fitted. The historical counts above are not v4 results, and the local
+attestation is not an external trusted timestamp.

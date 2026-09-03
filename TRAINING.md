@@ -132,14 +132,25 @@ does not make evaluation blind. A paper claim still requires the frozen
 MachSuite manifest whose labels did not influence features, model class,
 hyperparameters, or generators.
 
+For the separately versioned motif-v4 protocol, each inner validation choice
+first minimizes the equal-weight mean of per-target-shape MAEs. Stratified
+macro-lineage MAE, ordinary macro-lineage MAE, row MAE, Ridge strength, and
+dead zone remain deterministic tie breakers in that order. This changes only
+v4 selection; the historical v3 fit and artifact continue to use the frozen
+selection rule above. Target shape remains metadata and is not added to the
+13-feature vector.
+
 The final-freeze utility gate is also generated-only: the independently
 recomputed outer nested-lineage Ridge macro MAE must be strictly less than the
 corresponding prediction `max(RecMII, ResMII)`. Equality or degradation leaves
 the artifact smoke-only. This gate uses neither random-row diagnostics nor
 MachSuite labels and does not by itself establish cross-suite generalization.
-The independently recomputed leave-one-generator-family-out macro MAE must
-also be no worse than the Rec/Res floor; equality is reported as conservative
-fallback, not as evidence of topology-transfer improvement.
+For the historical motif-v3 freeze only, the independently recomputed
+leave-one-generator-family-out macro MAE must also be no worse than the
+Rec/Res floor; equality is reported as conservative fallback, not as evidence
+of topology-transfer improvement. Motif-v4 overrides that historical rule:
+its generator-family holdout runs automatically and must be strictly better
+than the floor.
 The fitted 13-feature matrix plus intercept must be full rank; a redundant
 feature therefore fails the gate instead of being hidden by Ridge regularization.
 Formal runs set `tree_depth=0`: the tree is only a constant-residual reporting

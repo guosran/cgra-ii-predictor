@@ -161,11 +161,12 @@ git submodule update --init third_party/neura third_party/machsuite
 python3 adapters/neura_experiment.py --help
 ~~~
 
-To collect the fixed generated-training stratum (the default is zero, so
-ordinary invocations do not run it):
+To reproduce the historical motif-v3 generated-training stratum (the default
+count is zero, so ordinary invocations do not run it):
 
 ~~~sh
 python3 adapters/neura_experiment.py \
+  --motif-generator-version motif-v3 \
   --motif-samples-per-family 250 \
   --metadata-holdout-key generator_family \
   --motif-jobs 12 --motif-checkpoint-every 32 \
@@ -191,6 +192,61 @@ Ridge, so an exhaustive threshold tree is not needed at formal scale. See
 [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
 
+The next protocol is `motif-v4`, machine-readably frozen in
+[`protocols/motif-v4.json`](protocols/motif-v4.json). It must be predeclared in
+a separate command before any mapper label is collected. Predeclaration does
+not execute the compiler, but it requires an already built `mlir-neura-opt`
+(resolved under `--neura-root`, or supplied explicitly with `--opt`) so the
+binary identity can be frozen in the manifest:
+
+~~~sh
+python3 adapters/neura_experiment.py \
+  --neura-root /path/to/pinned/neura \
+  --motif-generator-version motif-v4 \
+  --motif-samples-per-family 250 \
+  --motif-predeclare-only \
+  --seed 20260903 \
+  --timeout 60 \
+  --output-dir /path/to/motif-v4-formal
+~~~
+
+This writes all inputs and a 1,500-base/3,900-candidate label-free manifest,
+then exits before executing the compiler or invoking the mapper. Six path
+contexts are each crossed with layered/sparse, reconvergent, long-range
+cutwidth, live-range, and mixed-path pressure profiles. The balanced blocks
+keep 4x4 on every base and keep 2x3/3x2, 2x4/4x2, and 3x4/4x3 together on the
+same source hash, ranking query, and leakage lineage.
+
+The materialized local declaration and its exact protocol/generator/adapter,
+toolchain, and manifest hashes are recorded in
+[`protocols/motif-v4-predeclaration.json`](protocols/motif-v4-predeclaration.json).
+The attested `corpus-manifest.predeclared.json` remains immutable while resume
+updates the active `corpus-manifest.json`. The attestation explicitly is not
+an external trusted timestamp.
+
+After reviewing and preserving that manifest, collection is a separate resume:
+
+~~~sh
+python3 adapters/neura_experiment.py \
+  --neura-root /path/to/pinned/neura \
+  --output-dir /path/to/motif-v4-formal \
+  --motif-resume \
+  --metadata-holdout-key generator_family \
+  --motif-jobs 12 --motif-checkpoint-every 32 \
+  --tree-depth 0 --timeout 60
+~~~
+
+V4 fails closed unless generator-family LOGO MAE strictly improves on the
+Rec/Res floor, held-out predictions recover positive residuals in every
+family, positive-subset and shape-balanced MAE improve, tie-aware shape
+ranking does not regress, and every family-by-shape, family-by-profile, and
+family-by-operation-band marginal cell passes coverage. Rec/Res analysis
+facts, the mapper-II ceiling, mapper-attempt
+status, successful labels, and feasible censorship have separate denominators;
+an `LB > 20` candidate is recorded outside the search interval and never
+fabricated as `II=21`. Formal mapper collection has intentionally not been
+started by this code/protocol change.
+
 To resume that collection after an interruption, use the same output directory
 and omit `--clean`:
 
@@ -210,9 +266,9 @@ cached successes without the compiler, skips censored candidates without
 retrying them, and fails before invocation if a cached artifact is corrupt. A
 fully terminal resume needs no compiler probe. `--clean` and `--motif-resume`
 are mutually exclusive. Omitted generator choices are recovered from the
-manifest, but training/evaluation options are not; repeat
-`--metadata-holdout-key generator_family` so the resumed report contains the
-whole-generator-family gate required for freezing. SIGINT exits 130 after
+manifest. Motif-v4 runs the required generator-family holdout automatically;
+historical v3 commands must still repeat
+`--metadata-holdout-key generator_family`. SIGINT exits 130 after
 draining at most the configured in-flight candidates and does not train a model.
 The manifest is a single-coordinator/single-writer contract with no
 cross-process lock; do not run two fresh or resume processes against one
@@ -255,6 +311,7 @@ observation's weight.
 ~~~sh
 # Train/select only on generated motif and random-DFG data.
 python3 adapters/neura_experiment.py \
+  --motif-generator-version motif-v3 \
   --motif-samples-per-family 250 \
   --metadata-holdout-key generator_family \
   --motif-jobs 12 --motif-checkpoint-every 32 \
@@ -290,7 +347,9 @@ python3 adapters/machsuite_frozen.py reveal \
   --output-dir /path/to/machsuite-revealed
 ~~~
 
-The formal contract predeclares exactly 250 bases in each of nine families:
+The currently implemented MachSuite freezer deliberately remains tied to the
+historical motif-v3 evidence. That formal contract predeclares exactly 250
+bases in each of nine families:
 2,250 bases and 4,500 paired shape candidates. At least 200 complete bases per
 family must remain, giving at least 1,800 fitted lineages and 3,600 rows.
 The 13-feature design plus intercept must also be full rank before freezing.

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from adapters import neura_experiment as adapter
-from adapters import neura_motifs
+from adapters import neura_motifs, neura_motifs_v4
 
 
 COST_TEXT = (
@@ -340,6 +340,59 @@ class MotifCollectionTest(unittest.TestCase):
                     opt=opt,
                 )
 
+    def test_resume_rejects_corrupt_out_of_interval_analysis(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opt, manifest_path, prepared = self.fresh_corpus(root)
+            manifest, candidates, cached, _declared, failures = prepared
+            candidate = candidates[0]
+            high_cost_text = (
+                "rec_res_mii_info = {rec_mii = 21 : i32 res_mii = 2 : i32}"
+            )
+            analysis_call = adapter.InvocationResult(
+                True, "success", "rec-res-analysis", 5,
+                (str(opt), "--analyze-rec-res-mii"),
+            )
+
+            def out_of_interval(_opt, current, _timeout, _invocation):
+                (Path(current.source_path).parent / "cost.mlir").write_text(
+                    high_cost_text
+                )
+                return adapter.MotifCollectionResult(
+                    current.candidate_id,
+                    "censored",
+                    "mapper-search-interval",
+                    "lower-bound-above-mapper-ceiling",
+                    invocations=(analysis_call,),
+                    analysis_facts={"rec_mii": 21, "res_mii": 2},
+                )
+
+            with mock.patch.object(
+                adapter, "collect_motif_candidate", side_effect=out_of_interval
+            ):
+                adapter.MotifCollectionCoordinator(
+                    opt, candidates, manifest_path, manifest, 5, 1, 1,
+                    cached, failures,
+                ).run()
+
+            cost = Path(candidate.source_path).parent / "cost.mlir"
+            cost.write_text(high_cost_text + " tampered")
+            with self.assertRaisesRegex(ValueError, "cost artifact hash mismatch"):
+                adapter._load_or_create_motif_manifest(
+                    root, manifest_path,
+                    resume=True,
+                    clean=False,
+                    count=1,
+                    seed=17,
+                    motifs=("chain",),
+                    shapes=((3, 3),),
+                    variants=("neura-main",),
+                    timeout=5,
+                    jobs=1,
+                    checkpoint_every=1,
+                    opt=opt,
+                )
+
     def test_partial_resume_records_relocated_identical_compiler(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -555,6 +608,124 @@ class MotifCollectionTest(unittest.TestCase):
             self.assertIsNone(
                 ordinary_report["motif_corpus"]["manifest_sha256"]
             )
+
+    def test_v4_manifest_resume_reconstructs_transpose_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opt = root / "mlir-neura-opt"
+            opt.write_bytes(b"test-opt-v4")
+            manifest_path = root / "corpus-manifest.json"
+            prepared = adapter._load_or_create_motif_manifest(
+                root, manifest_path, resume=False, clean=False, count=5,
+                seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",),
+                shapes=neura_motifs_v4.DEFAULT_SHAPES,
+                variants=("neura-main",), timeout=5, jobs=2,
+                checkpoint_every=1, opt=opt, protocol=neura_motifs_v4,
+            )
+            manifest, candidates = prepared[0], prepared[1]
+            self.assertEqual(manifest["schema_version"], "cgra-ii-motif-corpus-v4")
+            self.assertEqual(len(candidates), 13)
+            self.assertTrue(all(
+                candidate.mechanism_profile for candidate in candidates
+            ))
+            resumed = adapter._load_or_create_motif_manifest(
+                root, manifest_path, resume=True, clean=False, count=5,
+                seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",),
+                shapes=neura_motifs_v4.DEFAULT_SHAPES,
+                variants=("neura-main",), timeout=5, jobs=2,
+                checkpoint_every=1, opt=opt, protocol=neura_motifs_v4,
+            )
+            self.assertEqual(
+                [candidate.candidate_id for candidate in resumed[1]],
+                [candidate.candidate_id for candidate in candidates],
+            )
+            tampered = json.loads(manifest_path.read_text())
+            tampered["acceptance_policy"]["policy_version"] = "tampered"
+            manifest_path.write_text(json.dumps(tampered))
+            with self.assertRaisesRegex(ValueError, "acceptance_policy mismatch"):
+                adapter._load_or_create_motif_manifest(
+                    root, manifest_path, resume=True, clean=False, count=5,
+                    seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",),
+                    shapes=neura_motifs_v4.DEFAULT_SHAPES,
+                    variants=("neura-main",), timeout=5, jobs=2,
+                    checkpoint_every=1, opt=opt, protocol=neura_motifs_v4,
+                )
+
+    def test_coordinator_observes_manifest_before_first_mapper_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opt, manifest_path, prepared = self.fresh_corpus(
+                root, count=1, shapes=((3, 3), (4, 4)), jobs=1
+            )
+            manifest, candidates = prepared[0], prepared[1]
+            observations = []
+
+            def inspect_then_succeed(_opt, candidate, _timeout, _invocation):
+                current = json.loads(manifest_path.read_text())
+                observations.append({
+                    "status": current["status"],
+                    "candidate_count": len(current["candidates"]),
+                    "all_declared": all(
+                        record["status"] == "declared"
+                        for record in current["candidates"]
+                    ),
+                    "has_label": any(
+                        "compiled_ii" in record for record in current["candidates"]
+                    ),
+                })
+                return self.successful_result(candidate)
+
+            coordinator = adapter.MotifCollectionCoordinator(
+                opt, candidates, manifest_path, manifest, 5, jobs=1,
+                checkpoint_every=1,
+            )
+            with mock.patch.object(
+                adapter, "collect_motif_candidate", side_effect=inspect_then_succeed
+            ):
+                result = coordinator.run()
+            self.assertEqual(len(result.samples), len(candidates))
+            self.assertEqual(observations[0]["status"], "predeclared")
+            self.assertEqual(observations[0]["candidate_count"], len(candidates))
+            self.assertTrue(observations[0]["all_declared"])
+            self.assertFalse(observations[0]["has_label"])
+
+    def test_v4_predeclare_only_cli_never_invokes_compiler_or_mapper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "corpus"
+            opt = root / "mlir-neura-opt"
+            opt.write_bytes(b"test-opt-v4")
+            argv = [
+                "neura_experiment.py",
+                "--opt", str(opt),
+                "--real-architecture", str(neura_motifs.default_pinned_architecture()),
+                "--motif-generator-version", "motif-v4",
+                "--motif-samples-per-family", "1",
+                "--motif", "compute",
+                "--motif-predeclare-only",
+                "--output-dir", str(output),
+                "--clean",
+            ]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(
+                adapter, "require_opt_argument",
+                side_effect=AssertionError("compiler was probed"),
+            ), mock.patch.object(
+                adapter, "collect_motif_candidate",
+                side_effect=AssertionError("mapper worker was invoked"),
+            ):
+                self.assertEqual(adapter.main(), 0)
+            manifest = json.loads((output / "corpus-manifest.json").read_text())
+            snapshot_path = output / adapter.MOTIF_PREDECLARATION_SNAPSHOT
+            snapshot = json.loads(snapshot_path.read_text())
+            self.assertEqual(snapshot, manifest)
+            self.assertEqual(manifest["generator"]["version"], "motif-v4")
+            self.assertEqual(manifest["status"], "predeclared")
+            self.assertTrue(all(
+                record["status"] == "declared" for record in manifest["candidates"]
+            ))
+            self.assertFalse(any(
+                "compiled_ii" in record for record in manifest["candidates"]
+            ))
 
 
 if __name__ == "__main__":

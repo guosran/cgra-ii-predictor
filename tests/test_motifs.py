@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import tempfile
@@ -5,10 +6,215 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from adapters import neura_experiment, neura_motifs
+from adapters import neura_experiment, neura_motifs, neura_motifs_v4
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v4_predeclaration_attestation_matches_frozen_sources(self):
+        project_root = Path(neura_motifs_v4.__file__).resolve().parents[1]
+        attestation = json.loads(
+            (project_root / "protocols/motif-v4-predeclaration.json").read_text()
+        )
+        for section, path_key, hash_key in (
+            (attestation["protocol"], "path", "sha256"),
+            (attestation["implementation"], "generator_path", "generator_sha256"),
+            (attestation["implementation"], "adapter_path", "adapter_sha256"),
+        ):
+            path = project_root / section[path_key]
+            self.assertEqual(
+                hashlib.sha256(path.read_bytes()).hexdigest(), section[hash_key]
+            )
+        manifest = project_root / attestation["manifest"]["path"]
+        if manifest.is_file():
+            self.assertEqual(
+                hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                attestation["manifest"]["sha256"],
+            )
+
+    def test_v4_machine_protocol_matches_runtime_constants_and_scale(self):
+        protocol_path = (
+            Path(neura_motifs_v4.__file__).resolve().parents[1] /
+            "protocols" / "motif-v4.json"
+        )
+        protocol = json.loads(protocol_path.read_text())
+        self.assertEqual(
+            protocol["generator_version"], neura_motifs_v4.GENERATOR_VERSION
+        )
+        self.assertEqual(
+            protocol["manifest_schema_version"],
+            neura_motifs_v4.MANIFEST_SCHEMA_VERSION,
+        )
+        self.assertEqual(protocol["root_seed"], neura_motifs_v4.DEFAULT_SEED)
+        self.assertEqual(
+            protocol["families"], list(neura_motifs_v4.DEFAULT_MOTIFS)
+        )
+        self.assertEqual(
+            protocol["mechanism_profiles_per_family"],
+            list(neura_motifs_v4.MECHANISM_PROFILES),
+        )
+        self.assertEqual(
+            protocol["operation_bands"], {
+                name: list(bounds) for name, bounds in zip(
+                    ("low", "medium", "high"),
+                    neura_motifs_v4.OPERATION_BANDS,
+                )
+            },
+        )
+        blocks = neura_motifs_v4.shape_blocks(neura_motifs_v4.DEFAULT_SHAPES)
+        self.assertEqual(protocol["shape_blocks"], [
+            [f"{rows}x{columns}" for rows, columns in block]
+            for block in blocks
+        ])
+        self.assertEqual(
+            protocol["stratification_schedule"],
+            neura_motifs_v4.STRATIFICATION_SCHEDULE,
+        )
+        requested = protocol["population"]["requested_bases_per_family"]
+        base_count = requested * len(neura_motifs_v4.DEFAULT_MOTIFS)
+        candidate_count = len(neura_motifs_v4.DEFAULT_MOTIFS) * sum(
+            len(blocks[index % len(blocks)]) for index in range(requested)
+        )
+        self.assertEqual(protocol["population"]["requested_base_count"], base_count)
+        self.assertEqual(
+            protocol["population"]["predeclared_candidate_count"],
+            candidate_count,
+        )
+        self.assertEqual((base_count, candidate_count), (1500, 3900))
+        self.assertEqual(
+            protocol["architecture"]["yaml_sha256"],
+            neura_motifs_v4.PINNED_ARCHITECTURE_SHA256,
+        )
+        self.assertEqual(
+            protocol["architecture"]["neura_revision"],
+            neura_motifs_v4.PINNED_NEURA_REVISION,
+        )
+        self.assertEqual(
+            protocol["collection_contract"], {
+                "analysis_argument": "--analyze-rec-res-mii",
+                "mapping_strategy": "heuristic",
+                "mapper_ii_ceiling": neura_experiment.MAPPER_II_CEILING,
+                "outside_mapper_search_interval": (
+                    "censored_without_mapper_attempt"
+                ),
+            },
+        )
+        runtime_policy = neura_motifs_v4.ACCEPTANCE_POLICY
+        self.assertEqual(
+            protocol["population"][
+                "minimum_complete_fraction_per_declared_marginal_cell"
+            ],
+            runtime_policy["coverage"][
+                "minimum_complete_fraction_per_declared_marginal_cell"
+            ],
+        )
+        self.assertEqual(
+            protocol["population"]["marginal_dimensions"],
+            runtime_policy["coverage"]["marginal_dimensions"],
+        )
+        for name, value in runtime_policy["positive_residual_distribution"].items():
+            self.assertEqual(protocol["acceptance_gates"][name], value)
+
+    def test_v3_contract_remains_the_default(self):
+        self.assertEqual(neura_motifs.GENERATOR_VERSION, "motif-v3")
+        self.assertEqual(
+            neura_motifs.MANIFEST_SCHEMA_VERSION, "cgra-ii-motif-corpus-v3"
+        )
+        base = neura_motifs.make_base_specs(1, seed=17, motifs=("chain",))[0]
+        self.assertEqual(base.generator_version, "motif-v3")
+        self.assertEqual(base.mechanism_profile, "")
+
+    def test_v4_crosses_profiles_operation_bands_and_transpose_shape_blocks(self):
+        bases = neura_motifs_v4.make_base_specs(
+            15, seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",)
+        )
+        self.assertEqual(
+            {base.mechanism_profile for base in bases},
+            set(neura_motifs_v4.MECHANISM_PROFILES),
+        )
+        self.assertEqual(
+            {base.operation_band for base in bases}, {"low", "medium", "high"}
+        )
+        for profile in neura_motifs_v4.MECHANISM_PROFILES:
+            profile_bases = [base for base in bases if base.mechanism_profile == profile]
+            self.assertEqual(
+                {base.operation_band for base in profile_bases},
+                {"low", "medium", "high"},
+            )
+
+        crossed_bases = neura_motifs_v4.make_base_specs(
+            75, seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",)
+        )
+        self.assertEqual(len({
+            (
+                base.mechanism_profile,
+                base.operation_band,
+                base.base_index % 5,
+            )
+            for base in crossed_bases
+        }), 75)
+
+        with tempfile.TemporaryDirectory() as directory:
+            candidates = neura_motifs_v4.make_candidates(bases, Path(directory))
+            by_base = {}
+            for candidate in candidates:
+                by_base.setdefault(candidate.base_id, []).append(candidate)
+            transpose_blocks = 0
+            for block in by_base.values():
+                shapes = {(candidate.rows, candidate.columns) for candidate in block}
+                self.assertIn((4, 4), shapes)
+                secondary = shapes - {(4, 4)}
+                if len(secondary) == 2:
+                    left, right = tuple(secondary)
+                    self.assertEqual(left, right[::-1])
+                    transpose_blocks += 1
+                self.assertEqual(len({candidate.source_sha256 for candidate in block}), 1)
+                self.assertEqual(
+                    len({candidate.canonical_dfg_sha256 for candidate in block}), 1
+                )
+                self.assertEqual(len({candidate.lineage for candidate in block}), 1)
+            self.assertGreater(transpose_blocks, 0)
+
+    def test_v4_mixed_context_has_memory_pointer_and_control_paths(self):
+        text = neura_motifs_v4.generate_motif_mlir(
+            "mixed", 12, 123,
+            neura_motifs_v4.MECHANISM_PROFILES[-1],
+        )
+        self.assertGreaterEqual(text.count('"neura.gep"'), 3)
+        self.assertGreaterEqual(text.count('"neura.load"'), 3)
+        self.assertIn('"neura.icmp"', text)
+        self.assertIn("neura.grant_predicate", text)
+        self.assertEqual(
+            text.count('"neura.add"') + text.count('"neura.mul"'), 12
+        )
+        features = neura_experiment.semantic_features_from_neura(text)
+        self.assertGreater(features["memory_path"], 0)
+        self.assertGreater(features["pointer_path"], 0)
+        self.assertGreater(features["control_path"], 0)
+
+    def test_v4_manifest_is_label_free_and_records_frozen_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bases = neura_motifs_v4.make_base_specs(
+                1, seed=neura_motifs_v4.DEFAULT_SEED, motifs=("compute",)
+            )
+            candidates = neura_motifs_v4.make_candidates(bases, root)
+            manifest = neura_motifs_v4.make_manifest(
+                candidates, root, neura_motifs_v4.DEFAULT_SEED,
+                ("compute",), neura_motifs_v4.DEFAULT_SHAPES,
+            )
+            self.assertEqual(manifest["schema_version"], "cgra-ii-motif-corpus-v4")
+            self.assertEqual(manifest["generator"]["version"], "motif-v4")
+            self.assertTrue(manifest["label_boundary"]["manifest_written_before_mapper"])
+            self.assertFalse(
+                manifest["label_boundary"]["candidate_generation_uses_compiled_ii"]
+            )
+            for record in manifest["candidates"]:
+                self.assertNotIn("compiled_ii", record)
+                self.assertNotIn("mapped_artifact_path", record)
+                self.assertIn("mechanism_profile", record)
+                self.assertIn("operation_band", record)
+                self.assertIn("shape_block", record)
+
     def test_balanced_shape_design_pairs_full_array_with_one_secondary(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
