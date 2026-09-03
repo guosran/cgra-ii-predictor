@@ -66,6 +66,11 @@ declared shape population is every rectangle from 2x2 through 4x4; each base
 runs on 4x4 plus one balanced secondary shape. Repeat `--motif-shape ROWSxCOLS`
 to narrow this population. Every candidate references the exact pinned Neura
 4x4 YAML, and shape is applied through the existing pass dimension options.
+This nine-shape population remains the frozen training contract. Prediction
+also accepts 1x1 and a canonical 1x2 strip as stress candidates. They are not
+training-supported or automatically ranked: the pinned mapper searches only
+through II 20, and tiny targets frequently have a Rec/Res lower bound above
+that ceiling. Such attempts are censored, never converted into numeric labels.
 
 The old `--samples` switch remains a legacy narrow random DAG and is not
 implicitly folded into the motif corpus.  Motif source files are materialized

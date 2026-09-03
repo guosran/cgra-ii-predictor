@@ -179,12 +179,23 @@ In this mode:
 
 ## Per-task target-shape selection
 
-Without `--predict-shape`, the adapter evaluates all nine prefix rectangles
-`R x C` with `R,C in {2,3,4}`. Every candidate uses the same byte-exact Neura
-4x4 YAML; both the Rec/Res analysis and later mapper verification receive the
-same existing `x-tiles=C y-tiles=R` override. Non-rectangular `valid-tiles`
-masks are not used because that path is not reliable in the pinned Neura
-revision.
+Without `--predict-shape`, the adapter evaluates 1x1, a canonical 1x2 strip,
+and all nine prefix rectangles `R x C` with `R,C in {2,3,4}`. Every candidate
+uses the same byte-exact Neura 4x4 YAML; both the Rec/Res analysis and later
+mapper verification receive the same existing `x-tiles=C y-tiles=R` override.
+The pinned architecture is symmetric for the 1x2 and 2x1 two-tile strips under
+the current features and measured mapper results, so only 1x2 is retained as
+the canonical orientation. Non-rectangular `valid-tiles` masks are not used
+because that path is not reliable in the pinned Neura revision.
+
+The frozen v3 corpus contains only the nine 2x2-through-4x4 rectangles.
+Consequently 1x1/1x2 predictions are labelled
+`stress_only_untrained_shape`: they remain in the audit output but are excluded
+from the automatic Pareto frontier and verification order. The report records
+the mapper II ceiling of 20 and separately rejects automatic ranking when the
+Rec/Res lower bound already exceeds it. A future claim of trained tiny-shape
+support requires a new predeclared corpus and censor-aware feasibility
+protocol; a failed mapping must not be fabricated as II 21.
 
 For each task, the report contains:
 
@@ -207,8 +218,9 @@ The final fitted artifact stores each feature's observed min, 1st percentile,
 diagnostics; values outside the observed min/max produce a hard OOD warning.
 This is a feature-wise support check, not proof of multivariate in-distribution
 generalization.
-Hard-OOD shape candidates remain in the prediction audit record but are
-excluded from the automatic Pareto frontier and mapper-verification order.
+Hard-OOD, untrained-shape, and empty-mapper-search candidates remain in the
+prediction audit record but are excluded from the automatic Pareto frontier
+and mapper-verification order.
 
 Historical Model 1 artifacts use an earlier feature contract and are not valid
 for the primary frozen MachSuite workflow. A final artifact must be trained on

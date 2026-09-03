@@ -226,10 +226,14 @@ python3 adapters/neura_experiment.py \
   --predict-fixture kernel=/path/to/lowered-kernel.mlir
 ~~~
 
-With no `--predict-shape`, inference scans all nine 2x2-through-4x4
-rectangles and records both the area/II Pareto frontier and the order in which
-the unchanged Neura mapper should verify candidates. A single final shape is
-objective-dependent; the predictor itself never treats a ranking as proof of
+With no `--predict-shape`, inference records 1x1, a canonical 1x2 two-tile
+strip, and all nine 2x2-through-4x4 rectangles. The frozen v3 corpus trained
+only on the nine larger rectangles, so 1x1/1x2 are explicitly marked
+`stress_only_untrained_shape` and excluded from the automatic Pareto frontier
+and mapper-verification order. They remain useful audit records. The report
+also flags a candidate when `max(RecMII, ResMII) > 20`, because the pinned
+mapper then has an empty II search interval. A single final shape is
+objective-dependent; the predictor never treats a ranking as proof of
 feasibility.
 
 The current model is residual Ridge regression above the fixed floor

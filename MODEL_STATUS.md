@@ -127,9 +127,12 @@ reported as a possible selection bias.
 `valid-tiles` masks are deliberately excluded: Neura main currently applies
 false entries before true overrides can restore them. Rectangular dimension
 overrides are shared by the analysis and mapping passes and are the reusable,
-verified path. At inference the predictor scans all nine rectangles, reports
-the active-tile-count/predicted-II Pareto frontier, and orders candidates for
-mapper verification. It does not declare a predicted candidate feasible.
+verified path. At inference the predictor records 1x1, a canonical 1x2 strip,
+and all nine trained rectangles. The tiny shapes are marked as untrained
+stress candidates and excluded from the automatic Pareto frontier; they do not
+retroactively change the frozen v3 corpus or artifact. It also records whether
+the Rec/Res floor fits below the pinned mapper's II ceiling of 20. The
+predictor does not declare a predicted candidate feasible.
 
 The same direct, clean-checkout run must use the predeclared Ridge/dead-zone
 grid and whole-generator-family holdout. The generated nested-lineage Ridge
@@ -149,6 +152,59 @@ floor to 0.13030 for Ridge, a 24.46% relative reduction. Leave-one-generator-
 family-out macro MAE tied the floor at 0.17393. That tie passes the declared
 non-degradation gate but is not evidence that the residual transfers to an
 unseen topology family.
+
+## Why the current improvement is limited
+
+The 24.46% headline reduction is real under the declared nested lineage split,
+but it is narrow rather than broadly portable:
+
+- 3,888 of 4,464 fitted rows (87.10%) have exactly zero residual. Of the 576
+  positive rows, 334 (58.0%) are `random_dag`; recurrence has no positive row.
+- Almost all gain comes from `random_dag` (macro MAE 1.0776 to 0.6965). Chain,
+  diamond, memory, pointer, predicated, recurrence, and reduction are ties;
+  fanout improves only from 0.1169 to 0.1137.
+- `random_dag` accounts for 99.14% of the total absolute-error reduction. In
+  leave-one-generator-family-out validation, all 4,464 Ridge predictions are
+  reduced to the Rec/Res floor by the selected dead zones, missing every one
+  of the 576 positive residuals.
+- Ridge improves the larger 3x3-through-4x4 shapes, but degrades 2x2, 2x3,
+  2x4, and 3x2. For example 2x2 MAE rises from 0.0253 to 0.0446, whereas 4x4
+  falls from 0.2599 to 0.1846.
+- Tie-aware within-DFG shape-ranking accuracy changes from 0.97413 for the
+  Rec/Res floor to 0.97350 for Ridge. Point-MAE selection therefore did not
+  improve the actual shape-ranking objective.
+- Raw Ridge residuals are negative on 37.86% of rows and must be clipped. This
+  is a symptom of fitting one linear mean to a zero-inflated, heterogeneous
+  target, not additional lower-bound information.
+
+The immediate cause is the dataset/model interaction. Current motif templates
+make congestion residuals rare and strongly correlated with generator family;
+the 13 scalar summaries lose the local reconvergence, placement conflict, and
+route competition that create the mapper gap. Half the fitted rows are 4x4,
+while each secondary shape is sparse, so the loss is not shape-balanced.
+Nested lineage validation prevents duplicate leakage, but it cannot create
+topology diversity that the generator does not contain. The leave-one-family-
+out tie confirms this limitation. The current predeclared transfer gate allows
+a tie, so it certifies non-degradation only; the next protocol should require
+strict transfer improvement and reject a model that predicts the floor for
+every held-out-family row.
+
+Adding tiny shapes directly to fitting would worsen the problem. A 54-base
+pilot across nine families and three operation-count strata produced no
+positive residual on any successful 1x1/1x2/2x1 mapping, while 71 of 162
+attempts had no mapper label. For the full 250-base distribution, only 0/250
+pointer-chase bases on 1x1 and 122/250 on a two-tile strip even have
+`LB <= 20`; other families are also non-randomly censored. These shapes are
+therefore prediction/stress records, not new training evidence.
+
+The next model iteration should first create a predeclared mapping-free v4
+generator that varies cutwidth, reconvergence, fanout, live ranges, control,
+and memory pressure within every family at comparable Rec/Res floors. Selection
+must use shape-balanced metrics and require ranking not to regress. Only after
+positive residuals are distributed across families is it meaningful to compare
+a hurdle model (feasibility/zero-gap classification plus conditional residual
+regression) or a graph model against Ridge. Increasing model complexity before
+fixing the missing signal would mostly learn generator identity more sharply.
 
 Freezing verifies the pinned clean Neura checkout, mapper-binary hash,
 deterministically regenerated source, mapped-artifact hash and embedded
@@ -250,5 +306,5 @@ selected model: residual Ridge, lambda=3, dead-zone=0.75, design rank 14/14, con
 nested unseen-lineage macro MAE: LB 0.17249, Ridge 0.13030 (24.46% lower)
 leave-one-generator-family-out macro MAE: LB 0.17393, Ridge 0.17393 (tie, not improvement)
 MachSuite mapper labels revealed: 0
-predictor unit tests: 127 passed
+predictor unit tests: 130 passed
 ```

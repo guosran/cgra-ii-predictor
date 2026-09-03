@@ -65,6 +65,11 @@ DEFAULT_SHAPES = tuple(
     for rows in range(2, 5)
     for columns in range(2, 5)
 )
+# Tiny targets are useful deployment/stress candidates, but they are not part
+# of the frozen training population until every family passes the same
+# predeclared coverage gate.  1x2 is the canonical representative of the
+# orientation-symmetric two-tile strip on the pinned mesh.
+PREDICTION_SHAPES = ((1, 1), (1, 2)) + DEFAULT_SHAPES
 PRIMARY_SHAPE = (4, 4)
 SHAPE_DESIGN = "full-4x4-plus-balanced-secondary-v1"
 # Three strata make the operation-count distribution explicit and reproducible.
@@ -1104,10 +1109,12 @@ def candidate_shapes_for_base(
     selected = tuple(dict.fromkeys(shapes))
     if not selected:
         raise ValueError("at least one target shape is required")
-    for rows, columns in selected:
-        if not (2 <= rows <= PINNED_ARCHITECTURE_ROWS and
-                2 <= columns <= PINNED_ARCHITECTURE_COLUMNS):
-            raise ValueError("Model 1 target shapes must lie between 2x2 and 4x4")
+    for shape in selected:
+        if shape not in PREDICTION_SHAPES:
+            raise ValueError(
+                "target shape is not in the supported shape set: "
+                f"{shape[0]}x{shape[1]}"
+            )
     primary = PRIMARY_SHAPE if PRIMARY_SHAPE in selected else max(
         selected, key=lambda shape: (shape[0] * shape[1], shape[0], shape[1])
     )
@@ -1322,6 +1329,7 @@ def update_manifest_candidate(
 
 __all__ = [
     "DEFAULT_ARCHITECTURE_VARIANTS", "DEFAULT_MOTIFS", "DEFAULT_SHAPES",
+    "PREDICTION_SHAPES",
     "DIRECT_OPERATION_LIMITS", "FAMILY_OPERATION_BANDS", "GENERATOR_VERSION",
     "MANIFEST_SCHEMA_VERSION",
     "MotifBaseSpec",

@@ -38,6 +38,21 @@ class MotifCorpusTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive"):
             neura_motifs.parse_shape("0x8")
 
+    def test_tiny_prediction_shapes_are_explicit_stress_candidates(self):
+        self.assertIn((1, 1), neura_motifs.PREDICTION_SHAPES)
+        self.assertIn((1, 2), neura_motifs.PREDICTION_SHAPES)
+        self.assertNotIn((1, 1), neura_motifs.DEFAULT_SHAPES)
+        self.assertNotIn((1, 2), neura_motifs.DEFAULT_SHAPES)
+        base = neura_motifs.MotifBaseSpec("chain", 0, 1, 8)
+        self.assertEqual(
+            neura_motifs.candidate_shapes_for_base(
+                base, ((1, 1), (1, 2), (4, 4))
+            ),
+            ((4, 4), (1, 1)),
+        )
+        with self.assertRaisesRegex(ValueError, "supported shape set"):
+            neura_motifs.candidate_shapes_for_base(base, ((1, 3), (4, 4)))
+
     def test_generated_architectures_satisfy_main_branch_memory_contract(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

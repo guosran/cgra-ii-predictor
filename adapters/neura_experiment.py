@@ -2183,9 +2183,11 @@ def graph_features_from_neura(
     result = semantic_features_from_neura(text)
     tile_count = len(active_tiles)
     memory_tiles = sum(x == 0 or y == 0 for x, y in active_tiles)
-    # For the supported rectangular prefix targets, the minimum directed
+    # For a multi-tile rectangular prefix target, the minimum directed
     # bisection contains two directed links per tile on the shorter boundary.
-    bisection_links = 2 * min(rows, columns)
+    # A 1x1 target has no network or bisection; local producer/consumer values
+    # do not consume a mesh link.
+    bisection_links = 0 if tile_count == 1 else 2 * min(rows, columns)
     total_registers = tile_count * neura_motifs.PINNED_REGISTERS_PER_TILE
     result.update({
         "tiles": tile_count,
@@ -2202,9 +2204,13 @@ def graph_features_from_neura(
     result.update({
         "compute_fu_peak_pressure": result["fu_class_peak_ops"] / tile_count,
         "memory_fu_pressure": result["memory_ops"] / memory_tiles,
-        "routing_edge_pressure": result["semantic_edges"] / result["links"],
+        "routing_edge_pressure": (
+            result["semantic_edges"] / result["links"]
+            if result["links"] else 0.0
+        ),
         "routing_cut_pressure": (
             result["semantic_cutwidth"] / bisection_links
+            if bisection_links else 0.0
         ),
         "register_pressure": result["live_value_peak"] / total_registers,
         "semantic_branch_density": (
@@ -2486,15 +2492,30 @@ def shape_selection_summary(
             grouped.setdefault(task, []).append(prediction)
     summaries: List[Dict[str, object]] = []
     for task, candidates in grouped.items():
-        supported = [
+        out_of_range = [
             candidate for candidate in candidates
-            if not (
+            if (
                 isinstance(candidate.get("feature_support"), Mapping) and
                 candidate["feature_support"].get("outside_observed_range")
             )
         ]
-        unsupported = [
-            candidate for candidate in candidates if candidate not in supported
+        untrained_shapes = [
+            candidate for candidate in candidates
+            if candidate.get("shape_training_support") == (
+                "stress_only_untrained_shape"
+            )
+        ]
+        no_mapper_search_interval = [
+            candidate for candidate in candidates
+            if candidate.get("lower_bound_within_mapper_search_interval") is False
+        ]
+        supported = [
+            candidate for candidate in candidates
+            if (
+                candidate not in out_of_range and
+                candidate not in untrained_shapes and
+                candidate not in no_mapper_search_interval
+            )
         ]
         ordered = sorted(
             supported,
@@ -2534,11 +2555,17 @@ def shape_selection_summary(
             "throughput_first_shape": ordered[0]["shape"] if ordered else None,
             "mapper_verification_order": [row["sample"] for row in ordered],
             "unsupported_out_of_range_candidate_ids": [
-                row["sample"] for row in unsupported
+                row["sample"] for row in out_of_range
+            ],
+            "unsupported_untrained_shape_candidate_ids": [
+                row["sample"] for row in untrained_shapes
+            ],
+            "unsupported_empty_mapper_search_candidate_ids": [
+                row["sample"] for row in no_mapper_search_interval
             ],
             "selection_status": (
                 "prediction_ranking_requires_mapper_verification"
-                if ordered else "no_candidate_within_training_feature_range"
+                if ordered else "no_candidate_inside_prediction_support"
             ),
         })
     return summaries
@@ -3719,7 +3746,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--motif-shape", action="append", default=[], metavar="ROWSxCOLS",
         help=("Target rectangles covered by the balanced design (default: "
-              "all 2x2 through 4x4 shapes)."),
+              "all 2x2 through 4x4 shapes). 1x1/1x2 may be requested for "
+              "a censored stress pilot but are outside the frozen corpus."),
     )
     parser.add_argument(
         "--motif-architecture-variant", action="append", default=[],
@@ -3834,8 +3862,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--predict-shape", action="append", default=[], metavar="ROWSxCOLS",
-        help=("Shape(s) for --predict-fixture (default: scan every rectangle "
-              "from 2x2 through 4x4 and report the area/II Pareto frontier)."),
+        help=("Shape(s) for --predict-fixture (default: scan 1x1, the "
+              "canonical 1x2 two-tile strip, and every rectangle from 2x2 "
+              "through 4x4, then report the "
+              "area/II Pareto frontier)."),
     )
     parser.add_argument(
         "--real-shape", action="append", default=[],
@@ -4470,7 +4500,7 @@ def main() -> int:
         prediction_shapes: List[Tuple[int, int]] = []
         default_prediction_shapes = [
             f"{rows}x{columns}"
-            for rows, columns in neura_motifs.DEFAULT_SHAPES
+            for rows, columns in neura_motifs.PREDICTION_SHAPES
         ]
         for value in args.predict_shape or default_prediction_shapes:
             match = re.fullmatch(r"(\d+)x(\d+)", value)
@@ -4479,9 +4509,10 @@ def main() -> int:
                     "invalid --predict-shape (expected ROWSxCOLS): " + value
                 )
             rows, columns = (int(component) for component in match.groups())
-            if not (2 <= rows <= 4 and 2 <= columns <= 4):
+            if (rows, columns) not in neura_motifs.PREDICTION_SHAPES:
                 raise SystemExit(
-                    "--predict-shape must be a rectangle from 2x2 through 4x4"
+                    "--predict-shape is outside the supported Model-1 "
+                    "shape set"
                 )
             if (rows, columns) not in prediction_shapes:
                 prediction_shapes.append((rows, columns))
@@ -4540,6 +4571,24 @@ def main() -> int:
                     prediction_warnings.append(
                         "feature_outside_training_range:" +
                         ",".join(str(value) for value in outside_range)
+                    )
+                shape_training_support = (
+                    "frozen_training_population"
+                    if (rows, columns) in neura_motifs.DEFAULT_SHAPES
+                    else "stress_only_untrained_shape"
+                )
+                if shape_training_support != "frozen_training_population":
+                    prediction_warnings.append(
+                        "shape_outside_frozen_training_population"
+                    )
+                mapper_ii_ceiling = neura_motifs.PINNED_CTRL_MEM_ITEMS
+                lower_bound_within_mapper_search_interval = (
+                    int(features["baseline_lb"]) <= mapper_ii_ceiling
+                )
+                if not lower_bound_within_mapper_search_interval:
+                    prediction_warnings.append(
+                        "lower_bound_exceeds_mapper_ii_ceiling:"
+                        f"lb={features['baseline_lb']},ceiling={mapper_ii_ceiling}"
                     )
                 if external_model is not None:
                     training_neura = external_model.provenance.get("neura")
@@ -4611,6 +4660,11 @@ def main() -> int:
                     "rows": rows,
                     "columns": columns,
                     "tile_count": rows * columns,
+                    "shape_training_support": shape_training_support,
+                    "mapper_ii_ceiling": mapper_ii_ceiling,
+                    "lower_bound_within_mapper_search_interval": (
+                        lower_bound_within_mapper_search_interval
+                    ),
                     "predicted_compiled_ii": predicted_ii,
                     "prediction_kind": "continuous_point_estimate",
                     "raw_predicted_residual": raw_residual,
@@ -4957,7 +5011,7 @@ def main() -> int:
                 "generated-only training rows with source/canonical identities",
                 "at least 200 complete distinct base DFGs per generator family",
                 "both declared shape cells for every complete base",
-                "balanced global coverage of all 2x2-through-4x4 rectangles",
+                "balanced global coverage of the predeclared target shapes",
                 "per-family per-shape complete rate at the 200/250 threshold",
                 "nested generated-base lineage model selection",
                 "whole-generator-family holdout requested and available",

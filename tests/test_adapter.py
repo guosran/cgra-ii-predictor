@@ -20,8 +20,32 @@ def cost_text(**overrides):
 
 
 class NeuraAdapterTest(unittest.TestCase):
+    def test_one_by_one_features_have_no_network_division(self):
+        source = neura_motifs.generate_motif_mlir("chain", 8, 11)
+        features = adapter.graph_features_from_neura(source, 1, 1)
+        self.assertEqual(features["tiles"], 1)
+        self.assertEqual(features["links"], 0)
+        self.assertEqual(features["bisection_links"], 0)
+        self.assertEqual(features["memory_tiles"], 1)
+        self.assertEqual(features["routing_edge_pressure"], 0.0)
+        self.assertEqual(features["routing_cut_pressure"], 0.0)
+
+    def test_one_by_two_is_canonical_for_symmetric_two_tile_features(self):
+        source = neura_motifs.generate_motif_mlir("memory_stream", 8, 11)
+        horizontal = adapter.graph_features_from_neura(source, 1, 2)
+        vertical = adapter.graph_features_from_neura(source, 2, 1)
+        self.assertEqual(horizontal["tiles"], 2)
+        self.assertEqual(horizontal["links"], 2)
+        self.assertEqual(horizontal["memory_tiles"], 2)
+        for name in adapter.MODEL_FEATURE_NAMES:
+            self.assertEqual(horizontal[name], vertical[name], name)
+
     def test_shape_selection_reports_area_ii_pareto_and_verification_order(self):
         predictions = [
+            {"task": "k", "sample": "k-1x1", "shape": "1x1",
+             "tile_count": 1, "predicted_compiled_ii": 12.0,
+             "shape_training_support": "stress_only_untrained_shape",
+             "lower_bound_within_mapper_search_interval": False},
             {"task": "k", "sample": "k-2x2", "shape": "2x2",
              "tile_count": 4, "predicted_compiled_ii": 8.0},
             {"task": "k", "sample": "k-3x3", "shape": "3x3",
@@ -42,6 +66,12 @@ class NeuraAdapterTest(unittest.TestCase):
         self.assertEqual(summary["mapper_verification_order"][0], "k-4x4")
         self.assertEqual(
             summary["unsupported_out_of_range_candidate_ids"], ["k-4x3"]
+        )
+        self.assertEqual(
+            summary["unsupported_untrained_shape_candidate_ids"], ["k-1x1"]
+        )
+        self.assertEqual(
+            summary["unsupported_empty_mapper_search_candidate_ids"], ["k-1x1"]
         )
 
     def test_neura_root_prefers_environment_then_initialized_submodule(self):
