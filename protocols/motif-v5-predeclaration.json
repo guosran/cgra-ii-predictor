@@ -3,6 +3,7 @@
   "status": "materialized_label_free_before_mapper_collection",
   "date": "2026-09-03",
   "predictor_base_revision": "766a28a74212fbf5726459342b8b46bb84d690e9",
+  "predictor_declaration_revision": "4110fca0070dddd364eb40c197f014da648adfec",
   "protocol": {
     "path": "protocols/motif-v5.json",
     "sha256": "6e04dc21ad855f8706f37cb30e278121219dea84b65b81f23439818ceeb614b8"

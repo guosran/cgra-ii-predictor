@@ -9,17 +9,75 @@ from unittest import mock
 
 from adapters import (
     neura_experiment, neura_motifs, neura_motifs_v4, neura_motifs_v5,
+    neura_motifs_v6,
 )
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v6_declares_every_oriented_rectangle_and_top1_primary_metric(self):
+        expected = tuple(
+            (rows, columns) for rows in range(1, 5) for columns in range(1, 5)
+        )
+        self.assertEqual(neura_motifs_v6.DEFAULT_SHAPES, expected)
+        project_root = Path(neura_motifs_v6.__file__).resolve().parents[1]
+        protocol = json.loads((project_root / "protocols/motif-v6.json").read_text())
+        self.assertEqual(protocol["shape_block"], [
+            f"{rows}x{columns}" for rows, columns in expected
+        ])
+        self.assertEqual(protocol["population"]["candidates_per_base"], 16)
+        self.assertEqual(
+            protocol["population"]["predeclared_candidate_count"], 24000
+        )
+        self.assertEqual(
+            protocol["shape_selection"]["primary_metric"],
+            "strict_top1_accuracy",
+        )
+        self.assertEqual(
+            protocol["point_model"][
+                "hyperparameter_selection_primary_metric"
+            ],
+            neura_motifs_v6.ACCEPTANCE_POLICY["point_model"][
+                "hyperparameter_selection_primary_metric"
+            ],
+        )
+        self.assertEqual(
+            protocol["supersedes"]["motif_v5_mapper_labels_collected"], 0
+        )
+
+    def test_v6_one_base_materializes_a_complete_16_shape_block(self):
+        base = neura_motifs_v6.make_base_specs(
+            1, seed=neura_motifs_v6.DEFAULT_SEED, motifs=("compute",)
+        )[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v6.make_candidates((base,), root)
+            manifest = neura_motifs_v6.make_manifest(
+                candidates, root, neura_motifs_v6.DEFAULT_SEED,
+                ("compute",), neura_motifs_v6.DEFAULT_SHAPES,
+            )
+        self.assertEqual(len(candidates), 16)
+        self.assertEqual(
+            {(row["rows"], row["columns"]) for row in manifest["candidates"]},
+            set(neura_motifs_v6.DEFAULT_SHAPES),
+        )
+        self.assertTrue(all(
+            row["shape_block"] == "all-16-rectangles"
+            for row in manifest["candidates"]
+        ))
+        self.assertTrue(all("compiled_ii" not in row for row in manifest["candidates"]))
+
     def test_v5_predeclaration_attestation_matches_frozen_sources(self):
         project_root = Path(neura_motifs_v5.__file__).resolve().parents[1]
         attestation = json.loads(
             (project_root / "protocols/motif-v5-predeclaration.json").read_text()
         )
-        source_records = (
-            (attestation["protocol"], "path", "sha256"),
+        self.assertEqual(
+            hashlib.sha256((
+                project_root / attestation["protocol"]["path"]
+            ).read_bytes()).hexdigest(),
+            attestation["protocol"]["sha256"],
+        )
+        implementation_records = (
             (attestation["implementation"], "generator_path", "generator_sha256"),
             (
                 attestation["implementation"], "base_generator_path",
@@ -36,9 +94,16 @@ class MotifCorpusTest(unittest.TestCase):
                 "prediction_loader_sha256",
             ),
         )
-        for section, path_key, hash_key in source_records:
+        revision = attestation["predictor_declaration_revision"]
+        for section, path_key, hash_key in implementation_records:
+            historical = subprocess.run(
+                ["git", "show", f"{revision}:{section[path_key]}"],
+                cwd=project_root,
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
             self.assertEqual(
-                hashlib.sha256((project_root / section[path_key]).read_bytes()).hexdigest(),
+                hashlib.sha256(historical).hexdigest(),
                 section[hash_key],
             )
         manifest = project_root / attestation["manifest"]["path"]

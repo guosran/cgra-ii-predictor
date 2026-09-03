@@ -31,6 +31,12 @@ Reports include two kinds of diagnostics:
 - tie-aware within-`ranking_query_id` pairwise concordance for architecture/DSE
   ranking.
 
+Motif-v6 additionally makes exact deterministic Top-1 shape accuracy the
+primary selection metric. Both oracle and predictor minimize II, then break
+ties by tile count, rows, columns, and candidate ID. Pairwise concordance
+remains a secondary diagnostic because a good global ordering can still miss
+the single shape that will actually be selected.
+
 A base-DFG query with one candidate or constant `compiled_ii` has no ranking
 signal and is excluded with an explicit reason. Candidate IDs are scoped to
 their query. A query spanning multiple leakage groups is invalid because its
@@ -67,7 +73,7 @@ manifest must be written
 atomically before mapper execution and must retain every timeout/nonzero exit
 as a censored candidate.
 
-The frozen design has two cells per base on the same pinned Neura YAML: 4x4
+The historical motif-v3/v4 design has two cells per base on the same pinned Neura YAML: 4x4
 plus one secondary rectangle balanced across the other eight 2x2-through-4x4
 shapes. Only a lineage with exactly one successful row in both declared cells
 enters a fit or holdout. Partial successes stay in the labelled audit record,
@@ -140,6 +146,21 @@ is assigned a numeric II.
 The local v5 manifest is label-free. MachSuite remains a held-out real-program
 test and cannot select the v5 gate, feature list, hyperparameters, or acceptance
 thresholds.
+
+### Motif-v6 full-rectangle Top-1 acceptance
+
+V6 supersedes v5 before any v5 mapper label was collected. It reuses the
+still-label-free v5 base-DFG draw, but crosses every one of the 1,500 bases with
+all 16 oriented rectangles whose row and column counts are each in `1..4`.
+Point fitting still uses every successful mapper result; Top-1 and pairwise
+metrics use only complete 16-shape blocks.
+
+Inside each training boundary, Ridge and dead-zone hyperparameters are selected
+first by strict Top-1 shape accuracy, then by compiled-II regret and the existing
+point-error criteria. V6 passes only if held-out hybrid Top-1 accuracy is
+strictly greater than the analytical Rec/Res-floor Top-1 accuracy. The v5
+transfer, point-quality, coverage, model-rank, and separate timeout-risk gates
+remain in force. The exact contract is `protocols/motif-v6.json`.
 
 ## Frozen blind evaluation
 

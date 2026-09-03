@@ -40,11 +40,14 @@ from typing import (
 import numpy as np
 
 try:
-    from adapters import neura_motifs, neura_motifs_v4, neura_motifs_v5
+    from adapters import (
+        neura_motifs, neura_motifs_v4, neura_motifs_v5, neura_motifs_v6,
+    )
 except ImportError:  # Running the file directly from its adapters directory.
     import neura_motifs  # type: ignore
     import neura_motifs_v4  # type: ignore
     import neura_motifs_v5  # type: ignore
+    import neura_motifs_v6  # type: ignore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -55,10 +58,12 @@ MOTIF_PROTOCOLS = {
     neura_motifs.GENERATOR_VERSION: neura_motifs,
     neura_motifs_v4.GENERATOR_VERSION: neura_motifs_v4,
     neura_motifs_v5.GENERATOR_VERSION: neura_motifs_v5,
+    neura_motifs_v6.GENERATOR_VERSION: neura_motifs_v6,
 }
 STRICT_MOTIF_GENERATOR_VERSIONS = frozenset({
     neura_motifs_v4.GENERATOR_VERSION,
     neura_motifs_v5.GENERATOR_VERSION,
+    neura_motifs_v6.GENERATOR_VERSION,
 })
 
 
@@ -3076,6 +3081,8 @@ def select_ridge_hyperparameters(
     balance_metadata_key: Optional[str] = None,
     feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
     prediction_policy: Optional[Mapping[str, object]] = None,
+    selection_primary_metric: str = "point_error",
+    ranking_sample_ids: Optional[Sequence[str]] = None,
 ) -> Tuple[float, float]:
     """Choose Ridge calibration through the compiler-agnostic core."""
     families = sorted({str(row["family"]) for row in train})
@@ -3087,6 +3094,8 @@ def select_ridge_hyperparameters(
         ridge_candidates, dead_zone_candidates,
         balance_metadata_key=balance_metadata_key,
         prediction_policy=prediction_policy,
+        selection_primary_metric=selection_primary_metric,
+        ranking_sample_ids=ranking_sample_ids,
     )
 
 
@@ -3097,6 +3106,7 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
                                 feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
                                 prediction_policy: Optional[Mapping[str, object]] = None,
                                 ranking_sample_ids: Optional[Sequence[str]] = None,
+                                selection_primary_metric: str = "point_error",
                                 ) -> Dict[str, object]:
     """Outer family holdout with calibration chosen only from outer training."""
     core_result = core_nested_group_holdout(
@@ -3105,6 +3115,7 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
         selection_balance_metadata_key=selection_balance_metadata_key,
         prediction_policy=prediction_policy,
         ranking_sample_ids=ranking_sample_ids,
+        selection_primary_metric=selection_primary_metric,
     )
     rows: List[Dict[str, object]] = []
     for row in core_result["rows"]:
@@ -3151,12 +3162,15 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
         "hyperparameter_selection_balance_metadata_key": (
             selection_balance_metadata_key
         ),
+        "hyperparameter_selection_primary_metric": selection_primary_metric,
         "baseline_mae": mean_absolute_error(rows, "baseline"),
         "ridge_mae": mean_absolute_error(rows, "prediction"),
         "baseline_macro_family_mae": macro_family_mae(rows, "baseline"),
         "ridge_macro_family_mae": macro_family_mae(rows, "prediction"),
         "baseline_group_ranking": core_result["lower_bound_group_ranking"],
         "ridge_group_ranking": core_result["model_group_ranking"],
+        "baseline_top1_shape": core_result["lower_bound_top1_shape"],
+        "ridge_top1_shape": core_result["model_top1_shape"],
         "baseline_positive_residual_metrics": (
             core_result["lower_bound_positive_residual_metrics"]
         ),
@@ -4102,6 +4116,100 @@ def generated_v5_acceptance_gates(
     }
 
 
+def generated_v6_acceptance_gates(
+    metadata_holdout: Optional[Mapping[str, object]],
+    labelled_samples: Sequence[Sample], coverage: Mapping[str, object],
+    feasibility_coverage: Mapping[str, object],
+    required_families: Sequence[str], policy: Mapping[str, object],
+    training_selection: Mapping[str, object],
+    timeout_risk: Mapping[str, object],
+) -> Dict[str, object]:
+    """Make exact full-rectangle Top-1 accuracy the primary v6 ranking gate."""
+    result = generated_v5_acceptance_gates(
+        metadata_holdout, labelled_samples, coverage, feasibility_coverage,
+        required_families, policy, training_selection, timeout_risk,
+    )
+    evaluation = (
+        metadata_holdout.get("evaluation", {})
+        if isinstance(metadata_holdout, Mapping) else {}
+    )
+    baseline = (
+        evaluation.get("baseline_top1_shape", {})
+        if isinstance(evaluation, Mapping) else {}
+    )
+    model = (
+        evaluation.get("ridge_top1_shape", {})
+        if isinstance(evaluation, Mapping) else {}
+    )
+    baseline_accuracy = baseline.get("top1_accuracy") if isinstance(
+        baseline, Mapping
+    ) else None
+    model_accuracy = model.get("top1_accuracy") if isinstance(
+        model, Mapping
+    ) else None
+    numeric = all(
+        isinstance(value, (int, float)) and not isinstance(value, bool) and
+        math.isfinite(float(value)) and 0.0 <= float(value) <= 1.0
+        for value in (baseline_accuracy, model_accuracy)
+    )
+    def eligible_query_ids(section: object) -> Optional[Set[str]]:
+        if (
+            not isinstance(section, Mapping) or section.get("status") != "ok" or
+            section.get("missing_ranking_query_row_count") != 0 or
+            section.get("excluded_queries") not in ({}, None)
+        ):
+            return None
+        queries = section.get("queries")
+        if not isinstance(queries, Mapping):
+            return None
+        eligible = {
+            str(query_id) for query_id, record in queries.items()
+            if isinstance(record, Mapping) and
+            record.get("status") == "eligible" and
+            record.get("candidate_count") == len(neura_motifs_v6.DEFAULT_SHAPES)
+        }
+        count = section.get("eligible_query_count")
+        if (
+            not isinstance(count, int) or isinstance(count, bool) or
+            count <= 0 or count != len(eligible) or len(eligible) != len(queries)
+        ):
+            return None
+        return eligible
+
+    baseline_eligible = eligible_query_ids(baseline)
+    model_eligible = eligible_query_ids(model)
+    gates = dict(result["gates"])
+    gates["strict_top1_shape_accuracy"] = {
+        "rule": "hybrid_top1_accuracy > analytical_lower_bound_top1_accuracy",
+        "selection_order": (
+            "minimum_ii_then_tile_count_then_rows_then_columns"
+        ),
+        "baseline": baseline,
+        "hybrid": model,
+        "eligible_query_count": (
+            len(model_eligible) if model_eligible is not None else 0
+        ),
+        "baseline_and_model_query_sets_match": bool(
+            baseline_eligible is not None and
+            baseline_eligible == model_eligible
+        ),
+        "passed": bool(
+            numeric and baseline_eligible is not None and
+            baseline_eligible == model_eligible and
+            float(model_accuracy) > float(baseline_accuracy)
+        ),
+    }
+    return {
+        **result,
+        "policy_version": policy.get("policy_version"),
+        "gates": gates,
+        "primary_metric": "strict_top1_shape_accuracy",
+        "overall_passed": all(
+            gate.get("passed") is True for gate in gates.values()
+        ),
+    }
+
+
 def nested_ridge_metadata_holdout(
     samples: Sequence[Sample], metadata_key: str,
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
@@ -4109,6 +4217,7 @@ def nested_ridge_metadata_holdout(
     feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
     prediction_policy: Optional[Mapping[str, object]] = None,
     ranking_sample_ids: Optional[Sequence[str]] = None,
+    selection_primary_metric: str = "point_error",
 ) -> Dict[str, object]:
     """Hold out a metadata-defined domain while weighting source lineages."""
     missing = [str(row["index"]) for row in samples if not row.get(metadata_key)]
@@ -4142,6 +4251,7 @@ def nested_ridge_metadata_holdout(
             regrouped, ridge_candidates, dead_zone_candidates,
             selection_balance_metadata_key,
             feature_names, prediction_policy, ranking_sample_ids,
+            selection_primary_metric,
         ),
     }
 
@@ -4939,9 +5049,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--motif-shape", action="append", default=[], metavar="ROWSxCOLS",
-        help=("Target rectangles covered by the balanced design (default: "
-              "all 2x2 through 4x4 shapes). 1x1/1x2 may be requested for "
-              "a censored stress pilot but are outside the frozen corpus."),
+        help=("Target rectangles permitted by the selected motif protocol. "
+              "V6 defaults to all 16 oriented rectangles from 1x1 through "
+              "4x4; earlier protocols retain their historical defaults."),
     )
     parser.add_argument(
         "--motif-architecture-variant", action="append", default=[],
@@ -5643,7 +5753,7 @@ def main() -> int:
         suite = family_suites.get(source_family, family_suites.get(effective_lineage))
         if suite is not None:
             row["suite"] = suite
-    # V4 keeps its historical complete-case fitting contract.  V5 separates
+    # V4 keeps its historical complete-case fitting contract.  V5/V6 separate
     # the two statistical units: every successful mapper result trains the
     # point expert, while only complete declared blocks enter shape ranking.
     required_training_shapes = tuple(
@@ -5668,7 +5778,12 @@ def main() -> int:
         active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v5.GENERATOR_VERSION
     )
-    if v5_active:
+    v6_active = (
+        active_motif_protocol.GENERATOR_VERSION ==
+        neura_motifs_v6.GENERATOR_VERSION
+    )
+    hybrid_active = v5_active or v6_active
+    if hybrid_active:
         training_samples = list(samples)
         training_selection = {
             "point_training_policy": "all_successful_mapper_results",
@@ -5683,13 +5798,17 @@ def main() -> int:
         training_selection = complete_ranking_selection
     ranking_sample_ids = (
         [str(row["index"]) for row in complete_ranking_samples]
-        if v5_active else None
+        if hybrid_active else None
     )
     active_model_feature_names = (
-        MODEL_FEATURE_NAMES_V5 if v5_active else MODEL_FEATURE_NAMES
+        MODEL_FEATURE_NAMES_V5 if hybrid_active else MODEL_FEATURE_NAMES
     )
     active_prediction_policy = (
-        neura_motifs_v5.HYBRID_PREDICTION_POLICY if v5_active else None
+        active_motif_protocol.HYBRID_PREDICTION_POLICY
+        if hybrid_active else None
+    )
+    selection_primary_metric = (
+        "strict_top1_shape_accuracy" if v6_active else "point_error"
     )
     row_holdout: Optional[Dict[str, object]] = None
     family_holdout: Optional[Dict[str, object]] = None
@@ -5745,6 +5864,7 @@ def main() -> int:
                 selection_balance_metadata_key,
                 active_model_feature_names, active_prediction_policy,
                 ranking_sample_ids,
+                selection_primary_metric,
             )
         except ValueError:
             nested_ridge_holdout = None
@@ -5754,6 +5874,7 @@ def main() -> int:
                 selection_balance_metadata_key,
                 active_model_feature_names, active_prediction_policy,
                 ranking_sample_ids,
+                selection_primary_metric,
             )
         if nested_ridge_holdout is not None:
             # Model 1 is predeclared as residual Ridge. Tree/row-split results
@@ -5764,6 +5885,7 @@ def main() -> int:
                 training_samples, ridge_candidates, dead_zone_candidates,
                 selection_balance_metadata_key,
                 active_model_feature_names, active_prediction_policy,
+                selection_primary_metric, ranking_sample_ids,
             )
             trained_full_model = fit_ridge(
                 training_samples, selected_ridge, selected_dead_zone,
@@ -5788,7 +5910,7 @@ def main() -> int:
         prediction_shapes: List[Tuple[int, int]] = []
         default_prediction_shapes = [
             f"{rows}x{columns}"
-            for rows, columns in neura_motifs.PREDICTION_SHAPES
+            for rows, columns in active_motif_protocol.PREDICTION_SHAPES
         ]
         for value in args.predict_shape or default_prediction_shapes:
             match = re.fullmatch(r"(\d+)x(\d+)", value)
@@ -5797,7 +5919,7 @@ def main() -> int:
                     "invalid --predict-shape (expected ROWSxCOLS): " + value
                 )
             rows, columns = (int(component) for component in match.groups())
-            if (rows, columns) not in neura_motifs.PREDICTION_SHAPES:
+            if (rows, columns) not in active_motif_protocol.PREDICTION_SHAPES:
                 raise SystemExit(
                     "--predict-shape is outside the supported Model-1 "
                     "shape set"
@@ -5862,7 +5984,7 @@ def main() -> int:
                     )
                 shape_training_support = (
                     "frozen_training_population"
-                    if (rows, columns) in neura_motifs.DEFAULT_SHAPES
+                    if (rows, columns) in active_motif_protocol.DEFAULT_SHAPES
                     else "stress_only_untrained_shape"
                 )
                 if shape_training_support != "frozen_training_population":
@@ -6107,6 +6229,9 @@ def main() -> int:
             "hyperparameter_selection_balance_metadata_key": (
                 selection_balance_metadata_key
             ),
+            "hyperparameter_selection_primary_metric": (
+                selection_primary_metric
+            ),
             "interval_empirical_quantile": interval_quantile,
             "tree_depth": args.tree_depth,
             "tree_min_samples": args.tree_min_samples,
@@ -6209,16 +6334,16 @@ def main() -> int:
         if active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v4.GENERATOR_VERSION else None
     )
-    v5_population_coverage = (
+    hybrid_population_coverage = (
         motif_v5_population_coverage(
             declared_motif_candidates, required_generator_families,
             active_motif_protocol.ACCEPTANCE_POLICY,
         )
-        if v5_active else None
+        if hybrid_active else None
     )
     protocol_coverage: Mapping[str, object] = (
-        v5_population_coverage
-        if v5_population_coverage is not None else generated_coverage
+        hybrid_population_coverage
+        if hybrid_population_coverage is not None else generated_coverage
     )
     if v4_stratum_coverage is not None:
         protocol_coverage = {
@@ -6249,7 +6374,7 @@ def main() -> int:
     )
     timeout_risk_model = (
         mapper_timeout_risk_model(declared_motif_candidates)
-        if v5_active else None
+        if hybrid_active else None
     )
     v5_acceptance = (
         generated_v5_acceptance_gates(
@@ -6261,6 +6386,17 @@ def main() -> int:
             timeout_risk_model or {},
         )
         if v5_active else None
+    )
+    v6_acceptance = (
+        generated_v6_acceptance_gates(
+            metadata_holdouts["generator_family"], generated_rows,
+            protocol_coverage, feasibility_coverage,
+            required_generator_families,
+            active_motif_protocol.ACCEPTANCE_POLICY,
+            training_selection,
+            timeout_risk_model or {},
+        )
+        if v6_active else None
     )
     model_design_full_rank = bool(
         isinstance(trained_full_model, Mapping) and
@@ -6279,8 +6415,10 @@ def main() -> int:
         generated_improvement["passed"] is True
     )
     protocol_model_scale_ready = bool(
-        (v5_acceptance or v4_acceptance) is not None and
-        (v5_acceptance or v4_acceptance)["overall_passed"] is True and
+        (v6_acceptance or v5_acceptance or v4_acceptance) is not None and
+        (v6_acceptance or v5_acceptance or v4_acceptance)[
+            "overall_passed"
+        ] is True and
         generated_only_training and trained_full_model is not None and
         model_design_full_rank
     )
@@ -6374,10 +6512,26 @@ def main() -> int:
         "motif_corpus": generated_corpus,
         "motif_feasibility_coverage": feasibility_coverage,
         "motif_v4_stratum_coverage": v4_stratum_coverage,
-        "motif_v5_population_coverage": v5_population_coverage,
+        "motif_v5_population_coverage": (
+            hybrid_population_coverage if v5_active else None
+        ),
+        "motif_v6_population_coverage": (
+            hybrid_population_coverage if v6_active else None
+        ),
+        "motif_hybrid_population_coverage": hybrid_population_coverage,
         "mapper_timeout_risk_model": timeout_risk_model,
         "candidate_gate": {
             "requires": ([
+                "all 16 rectangular shapes from 1x1 through 4x4 declared for every DFG",
+                "strict deterministic Top-1 shape accuracy is the primary ranking metric",
+                "Top-1 ties prefer minimum tile count, then rows and columns",
+                "all successful mapper labels train the point expert",
+                "only complete 16-shape blocks enter Top-1 and pairwise ranking metrics",
+                "fixed analytical-safe / ML-risk gate selected before v6 labels",
+                "mapper timeout risk remains separate from numeric II prediction",
+                "minimum successful point-training and complete ranking bases in every family",
+                "full-rank intercept-plus-feature training design",
+            ] if v6_active else [
                 "all successful mapper labels train the point expert, including partial shape blocks",
                 "only complete declared shape blocks enter ranking metrics",
                 "fixed analytical-safe / ML-risk gate selected before v5 labels",
@@ -6422,19 +6576,19 @@ def main() -> int:
             "minimum_complete_bases_per_family": (
                 active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
                     "minimum_complete_ranking_bases_per_family", 200
-                ) if v5_active else 200
+                ) if hybrid_active else 200
             ),
             "minimum_total_complete_bases": (
                 active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
                     "minimum_complete_ranking_bases_per_family", 200
                 ) * len(required_generator_families)
-                if v5_active else 200 * len(required_generator_families)
+                if hybrid_active else 200 * len(required_generator_families)
             ),
             "minimum_complete_fraction": (
                 (
                     active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
                         "minimum_complete_ranking_bases_per_family", 200
-                    ) if v5_active else 200
+                    ) if hybrid_active else 200
                 ) / motif_count if motif_count > 0 else None
             ),
             "coverage": protocol_coverage,
@@ -6442,6 +6596,7 @@ def main() -> int:
             "generator_family_transfer": generator_family_transfer,
             "motif_v4_acceptance": v4_acceptance,
             "motif_v5_acceptance": v5_acceptance,
+            "motif_v6_acceptance": v6_acceptance,
             "model_design_full_rank": model_design_full_rank,
             "model_design_rank": (
                 trained_full_model.get("training_design_rank")
@@ -6465,10 +6620,17 @@ def main() -> int:
                 ["eligible_group_count"]
                 if nested_ridge_holdout is not None else 0
             ),
+            "top1_shape_eligible_query_count": (
+                nested_ridge_holdout["ridge_top1_shape"][
+                    "eligible_query_count"
+                ] if nested_ridge_holdout is not None else 0
+            ),
             "overall_ready_for_machsuite_freeze": frozen_model_scale_ready,
             "overall_ready_for_protocol_model_freeze": (
                 protocol_model_scale_ready
-                if (v4_acceptance is not None or v5_acceptance is not None)
+                if any(value is not None for value in (
+                    v4_acceptance, v5_acceptance, v6_acceptance,
+                ))
                 else frozen_model_scale_ready
             ),
         },

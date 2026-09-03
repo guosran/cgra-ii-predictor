@@ -7,6 +7,7 @@ from cgra_ii_predictor.model import (
     fit_ridge,
     group_balanced_sample_weights,
     group_ranking_metrics,
+    group_top1_shape_metrics,
     nested_group_holdout,
     positive_residual_metrics,
     predict_compiled_ii,
@@ -40,6 +41,66 @@ def sample(name, group, lower_bound, compiled_ii, pressure):
 
 
 class ModelTest(unittest.TestCase):
+    def test_top1_shape_accuracy_uses_minimum_area_tie_break(self):
+        rows = []
+        for query, predictions in (
+            ("q1", {(2, 2): (5, 5), (3, 3): (4, 4.2), (4, 4): (4, 4)}),
+            ("q2", {(2, 2): (7, 7), (3, 3): (5, 5), (4, 4): (5, 5.1)}),
+        ):
+            for (height, width), (compiled, prediction) in predictions.items():
+                rows.append({
+                    "sample_id": f"{query}-{height}x{width}",
+                    "group": "g",
+                    "ranking_query_id": query,
+                    "candidate_id": f"{query}/{height}x{width}",
+                    "rows": height,
+                    "columns": width,
+                    "tiles": height * width,
+                    "compiled_ii": compiled,
+                    "prediction": prediction,
+                })
+        result = group_top1_shape_metrics(rows, "prediction")
+        self.assertEqual(result["eligible_query_count"], 2)
+        self.assertEqual(result["top1_accuracy"], 0.5)
+        self.assertEqual(result["queries"]["q1"]["oracle_shape"], "3x3")
+        self.assertEqual(result["queries"]["q1"]["selected_shape"], "4x4")
+        self.assertEqual(result["queries"]["q1"]["compiled_ii_regret"], 0.0)
+
+    def test_top1_can_drive_hyperparameter_selection(self):
+        rows = []
+        for group_index, group in enumerate(("a", "b", "c")):
+            for columns, lower_bound, compiled_ii, pressure in (
+                (1, 5, 6, 1.0 + group_index),
+                (2, 4, 4, 2.0 + group_index),
+            ):
+                rows.append(Sample(
+                    sample_id=f"{group}-{columns}",
+                    group=group,
+                    lower_bound=lower_bound,
+                    compiled_ii=compiled_ii,
+                    features={"pressure": pressure, "depth": pressure + 1},
+                    metadata={
+                        **contract(lower_bound),
+                        "ranking_query_id": group,
+                        "candidate_id": f"{group}/1x{columns}",
+                        "rows": 1,
+                        "columns": columns,
+                        "tiles": columns,
+                    },
+                ))
+        selected = select_ridge_hyperparameters(
+            rows, ("pressure", "depth"), (0.1, 1.0), (0.0, 0.5),
+            selection_primary_metric="strict_top1_shape_accuracy",
+            ranking_sample_ids=[row.sample_id for row in rows],
+        )
+        self.assertIn(selected[0], (0.1, 1.0))
+        self.assertIn(selected[1], (0.0, 0.5))
+        with self.assertRaisesRegex(ValueError, "complete ranking samples"):
+            select_ridge_hyperparameters(
+                rows, ("pressure", "depth"), (0.1,), (0.0,),
+                selection_primary_metric="strict_top1_shape_accuracy",
+            )
+
     def setUp(self):
         self.samples = [
             sample("a0", "a", 3, 3, 1),

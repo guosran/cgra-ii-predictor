@@ -307,15 +307,25 @@ ranking is evaluated only on complete declared shape blocks. Mapper timeout or
 nonzero exit is a separate binary risk target and never an imputed II.
 
 The label-free v5 declaration contains 1,500 bases and 3,900 candidates under
-`corpora/motif-v5-formal-seed-20260904`. No v5 mapper collection has started,
-and no MachSuite mapper label has been revealed. An offline replay on the
+`corpora/motif-v5-formal-seed-20260904`. No v5 mapper collection was started;
+v5 was superseded by v6 while still label-free, and no MachSuite mapper label
+has been revealed. An offline replay on the
 already disclosed v4 diagnostic labels verified the implementation path only:
 it recovered 617 successful rows excluded by v4 complete-case fitting, reduced
 generator-family macro MAE from 2.6496 to 1.8000, reduced shape-balanced MAE
 from 2.6025 to 1.6695, and changed complete-block concordance from 0.7831 to
 0.7889. These are design diagnostics, not v5 results.
 
-If the predeclared v5 gates fail, the next backup is a mapping-aware graph model
+Motif-v6 is frozen in `protocols/motif-v6.json`. It uses the same unlabelled
+1,500 base DFGs but evaluates every base on all 16 oriented rectangular shapes
+from 1x1 through 4x4, for 24,000 predeclared candidates. Exact deterministic
+Top-1 shape accuracy is the primary held-out metric and hyperparameter-selection
+criterion; ties prefer minimum tile count, then rows, columns, and candidate ID.
+Compiled-II regret and pairwise concordance are secondary diagnostics. Point
+training still uses every successful label, while ranking uses only complete
+16-shape blocks.
+
+If the predeclared v6 gates fail, the next backup is a mapping-aware graph model
 inspired by `references/TCAD-2026-1434_Proof_hi.pdf`; reinforcement learning is
 deferred until a supervised or bandit-warm-start baseline exists.
 

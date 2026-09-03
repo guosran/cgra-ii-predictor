@@ -23,6 +23,50 @@ def cost_text(**overrides):
 
 
 class NeuraAdapterTest(unittest.TestCase):
+    def test_v6_top1_gate_is_strict_and_requires_complete_matching_queries(self):
+        inherited = {"gates": {"inherited": {"passed": True}}}
+        complete_query = {
+            "status": "eligible", "candidate_count": 16,
+        }
+        evaluation = {
+            "baseline_top1_shape": {
+                "status": "ok", "top1_accuracy": 0.4,
+                "missing_ranking_query_row_count": 0,
+                "excluded_queries": {}, "eligible_query_count": 1,
+                "queries": {"q": complete_query},
+            },
+            "ridge_top1_shape": {
+                "status": "ok", "top1_accuracy": 0.5,
+                "missing_ranking_query_row_count": 0,
+                "excluded_queries": {}, "eligible_query_count": 1,
+                "queries": {"q": complete_query},
+            },
+        }
+        with patch.object(
+            adapter, "generated_v5_acceptance_gates", return_value=inherited,
+        ):
+            passed = adapter.generated_v6_acceptance_gates(
+                {"evaluation": evaluation}, (), {}, {}, (),
+                {"policy_version": "test-v6"}, {}, {},
+            )
+            self.assertTrue(passed["overall_passed"])
+            self.assertEqual(passed["primary_metric"], "strict_top1_shape_accuracy")
+            evaluation["ridge_top1_shape"]["top1_accuracy"] = 0.4
+            tied = adapter.generated_v6_acceptance_gates(
+                {"evaluation": evaluation}, (), {}, {}, (),
+                {"policy_version": "test-v6"}, {}, {},
+            )
+            self.assertFalse(tied["overall_passed"])
+            evaluation["ridge_top1_shape"]["top1_accuracy"] = 0.5
+            evaluation["ridge_top1_shape"]["queries"]["q"][
+                "candidate_count"
+            ] = 15
+            incomplete = adapter.generated_v6_acceptance_gates(
+                {"evaluation": evaluation}, (), {}, {}, (),
+                {"policy_version": "test-v6"}, {}, {},
+            )
+            self.assertFalse(incomplete["overall_passed"])
+
     def test_portable_metadata_preserves_v4_strata(self):
         row = {
             "rows": 2, "columns": 3, "tiles": 6, "links": 14,

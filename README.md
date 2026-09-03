@@ -250,21 +250,31 @@ DFG/CGRA modeling, motivated by `references/TCAD-2026-1434_Proof_hi.pdf`, is a
 backup if the simple hybrid fails; online RL remains deferred until after a
 supervised or bandit-warm-start baseline.
 
-The v5 label-free corpus is materialized locally at
+The v5 label-free corpus was materialized locally at
 `corpora/motif-v5-formal-seed-20260904`: 1,500 bases and 3,900 declared
 candidates, with zero label or Rec/Res artifact fields. Its local hashes are in
 [`protocols/motif-v5-predeclaration.json`](protocols/motif-v5-predeclaration.json).
-Formal mapper collection has not started. Reproduce the declaration with:
+No v5 mapper collection was started; v6 superseded it while it was still
+label-free.
+
+The active experiment is
+[`protocols/motif-v6.json`](protocols/motif-v6.json). V6 retains the fixed
+hybrid predictor and the same unlabelled 1,500 base DFGs, but crosses each DFG
+with all 16 oriented rectangles from 1x1 through 4x4. Exact Top-1 shape
+accuracy is primary: oracle and prediction minimize II, then break ties by tile
+count, rows, columns, and candidate ID. Hyperparameters are selected by Top-1
+accuracy first; compiled-II regret, shape-balanced error, and pairwise
+concordance are secondary. Reproduce the 24,000-candidate declaration with:
 
 ~~~sh
 python3 adapters/neura_experiment.py \
   --neura-root /path/to/pinned/neura \
-  --motif-generator-version motif-v5 \
+  --motif-generator-version motif-v6 \
   --motif-samples-per-family 250 \
   --motif-predeclare-only \
   --seed 20260904 \
   --timeout 60 \
-  --output-dir /path/to/motif-v5-formal
+  --output-dir /path/to/motif-v6-formal
 ~~~
 
 After reviewing and preserving that manifest, collection is a separate resume:
@@ -272,7 +282,8 @@ After reviewing and preserving that manifest, collection is a separate resume:
 ~~~sh
 python3 adapters/neura_experiment.py \
   --neura-root /path/to/pinned/neura \
-  --output-dir /path/to/motif-v4-formal \
+  --output-dir /path/to/motif-v6-formal \
+  --motif-generator-version motif-v6 \
   --motif-resume \
   --metadata-holdout-key generator_family \
   --motif-jobs 12 --motif-checkpoint-every 32 \

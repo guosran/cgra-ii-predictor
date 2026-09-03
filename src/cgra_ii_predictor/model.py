@@ -989,6 +989,110 @@ def group_ranking_metrics(
     }
 
 
+def group_top1_shape_metrics(
+    rows: Sequence[Prediction], key: str,
+) -> Dict[str, Any]:
+    """Measure exact deterministic Top-1 shape selection within each DFG.
+
+    Both oracle and predictor minimize II first, then tile count, rows, columns,
+    and candidate identity.  The tie-break makes the metric reproducible and
+    rewards the smallest rectangle when several shapes have the same II.
+    """
+    grouped: Dict[str, List[Prediction]] = defaultdict(list)
+    missing_query = 0
+    for row in rows:
+        query = row.get("ranking_query_id")
+        if query in (None, ""):
+            missing_query += 1
+        else:
+            grouped[str(query)].append(row)
+    results: Dict[str, Dict[str, Any]] = {}
+    correct = 0
+    eligible = 0
+    total_regret = 0.0
+    exclusions: Dict[str, int] = defaultdict(int)
+
+    def identity(row: Prediction) -> Optional[Tuple[int, int, int, str]]:
+        raw_rows = row.get("rows")
+        raw_columns = row.get("columns")
+        raw_tiles = row.get("tiles")
+        candidate = row.get("candidate_id")
+        if any(isinstance(value, bool) for value in (raw_rows, raw_columns, raw_tiles)):
+            return None
+        if not all(isinstance(value, (int, float)) for value in (
+            raw_rows, raw_columns, raw_tiles,
+        )) or candidate in (None, ""):
+            return None
+        numeric = tuple(int(value) for value in (raw_rows, raw_columns, raw_tiles))
+        if (
+            any(float(value) != integer or integer < 1 for value, integer in zip(
+                (raw_rows, raw_columns, raw_tiles), numeric
+            )) or numeric[0] * numeric[1] != numeric[2]
+        ):
+            return None
+        return numeric[2], numeric[0], numeric[1], str(candidate)
+
+    for query, query_rows in sorted(grouped.items()):
+        leakage_groups = {str(row["group"]) for row in query_rows}
+        if len(leakage_groups) != 1:
+            exclusions["ranking_query_spans_multiple_leakage_groups"] += 1
+            results[query] = {"status": "ranking_query_spans_multiple_leakage_groups"}
+            continue
+        identities = [identity(row) for row in query_rows]
+        if any(value is None for value in identities):
+            exclusions["invalid_shape_or_candidate_identity"] += 1
+            results[query] = {"status": "invalid_shape_or_candidate_identity"}
+            continue
+        candidate_ids = [value[3] for value in identities if value is not None]
+        if len(candidate_ids) != len(set(candidate_ids)):
+            exclusions["duplicate_candidate_identity"] += 1
+            results[query] = {"status": "duplicate_candidate_identity"}
+            continue
+        oracle = min(query_rows, key=lambda row: (
+            float(row["compiled_ii"]), *identity(row),
+        ))
+        selected = min(query_rows, key=lambda row: (
+            float(row[key]), *identity(row),
+        ))
+        oracle_shape = f"{int(oracle['rows'])}x{int(oracle['columns'])}"
+        selected_shape = f"{int(selected['rows'])}x{int(selected['columns'])}"
+        hit = str(selected["candidate_id"]) == str(oracle["candidate_id"])
+        regret = float(selected["compiled_ii"]) - float(oracle["compiled_ii"])
+        eligible += 1
+        correct += int(hit)
+        total_regret += regret
+        results[query] = {
+            "status": "eligible",
+            "candidate_count": len(query_rows),
+            "oracle_candidate_id": oracle["candidate_id"],
+            "oracle_shape": oracle_shape,
+            "oracle_compiled_ii": oracle["compiled_ii"],
+            "selected_candidate_id": selected["candidate_id"],
+            "selected_shape": selected_shape,
+            "selected_compiled_ii": selected["compiled_ii"],
+            "top1_correct": hit,
+            "compiled_ii_regret": regret,
+        }
+    return {
+        "status": "ok" if eligible else "unavailable_no_eligible_queries",
+        "selection_order": [
+            key, "tile_count", "rows", "columns", "candidate_id",
+        ],
+        "target_order": [
+            "compiled_ii", "tile_count", "rows", "columns", "candidate_id",
+        ],
+        "tie_break_policy": "minimum_area_then_rows_then_columns",
+        "input_row_count": len(rows),
+        "missing_ranking_query_row_count": missing_query,
+        "eligible_query_count": eligible,
+        "correct_query_count": correct,
+        "top1_accuracy": correct / eligible if eligible else None,
+        "mean_compiled_ii_regret": total_regret / eligible if eligible else None,
+        "excluded_queries": dict(sorted(exclusions.items())),
+        "queries": results,
+    }
+
+
 def raw_residual_metrics(rows: Sequence[Prediction]) -> Dict[str, float]:
     raw = [float(row["raw_predicted_residual"]) for row in rows]
     negative = [-value for value in raw if value < 0.0]
@@ -1057,6 +1161,8 @@ def select_ridge_hyperparameters(
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     *, balance_metadata_key: Optional[str] = None,
     prediction_policy: Optional[Mapping[str, Any]] = None,
+    selection_primary_metric: str = "point_error",
+    ranking_sample_ids: Optional[Sequence[str]] = None,
 ) -> Tuple[float, float]:
     _validate_samples(samples, feature_names)
     ridge_candidates = _validated_control_grid(
@@ -1067,6 +1173,24 @@ def select_ridge_hyperparameters(
     )
     selection_samples = distinct_observations(samples, feature_names)
     folds = _validation_group_folds(selection_samples)
+    if selection_primary_metric not in {
+        "point_error", "strict_top1_shape_accuracy",
+    }:
+        raise ValueError(
+            "selection_primary_metric must be point_error or "
+            "strict_top1_shape_accuracy"
+        )
+    ranking_ids = (
+        {str(value) for value in ranking_sample_ids}
+        if ranking_sample_ids is not None else None
+    )
+    if (
+        selection_primary_metric == "strict_top1_shape_accuracy" and
+        not ranking_ids
+    ):
+        raise ValueError(
+            "strict Top-1 hyperparameter selection needs complete ranking samples"
+        )
     if balance_metadata_key is not None:
         missing = [
             sample.sample_id for sample in selection_samples
@@ -1106,6 +1230,7 @@ def select_ridge_hyperparameters(
             stratum_groups: Dict[str, set[str]] = defaultdict(set)
             balanced_errors: Dict[str, List[float]] = defaultdict(list)
             all_errors: List[float] = []
+            top1_rows: List[Prediction] = []
             for sample, raw_residual in raw:
                 decision = prediction_policy_decision(
                     ({"prediction_policy": prediction_policy}
@@ -1132,6 +1257,21 @@ def select_ridge_hyperparameters(
                     balanced_errors[str(sample.metadata[balance_metadata_key])].append(
                         error
                     )
+                if ranking_ids is not None and sample.sample_id in ranking_ids:
+                    top1_row: Prediction = {
+                        "sample_id": sample.sample_id,
+                        "group": sample.group,
+                        "lower_bound": sample.lower_bound,
+                        "prediction": sample.lower_bound + residual,
+                        "compiled_ii": sample.compiled_ii,
+                    }
+                    for name in (
+                        "ranking_query_id", "candidate_id", "rows", "columns",
+                        "tiles",
+                    ):
+                        if name in sample.metadata:
+                            top1_row[name] = sample.metadata[name]
+                    top1_rows.append(top1_row)
             group_maes = {
                 group: sum(errors) / len(errors)
                 for group, errors in group_errors.items()
@@ -1146,7 +1286,26 @@ def select_ridge_hyperparameters(
                 len(balanced_errors)
                 if balanced_errors else stratified_macro
             )
+            top1_score: Tuple[float, ...] = ()
+            if selection_primary_metric == "strict_top1_shape_accuracy":
+                top1 = group_top1_shape_metrics(top1_rows, "prediction")
+                if (
+                    top1["status"] != "ok" or
+                    top1["missing_ranking_query_row_count"] != 0 or
+                    top1["excluded_queries"] or
+                    top1["top1_accuracy"] is None or
+                    top1["mean_compiled_ii_regret"] is None
+                ):
+                    raise ValueError(
+                        "strict Top-1 hyperparameter selection has an invalid "
+                        "complete-block population"
+                    )
+                top1_score = (
+                    1.0 - float(top1["top1_accuracy"]),
+                    float(top1["mean_compiled_ii_regret"]),
+                )
             score = (
+                *top1_score,
                 *((balanced,) if balance_metadata_key is not None else ()),
                 stratified_macro,
                 macro,
@@ -1167,6 +1326,7 @@ def nested_group_holdout(
     *, selection_balance_metadata_key: Optional[str] = None,
     prediction_policy: Optional[Mapping[str, Any]] = None,
     ranking_sample_ids: Optional[Sequence[str]] = None,
+    selection_primary_metric: str = "point_error",
 ) -> Dict[str, Any]:
     """Evaluate unseen lineages; tune only inside each outer training split."""
     _validate_samples(samples, feature_names)
@@ -1183,10 +1343,20 @@ def nested_group_holdout(
         test = [sample for sample in samples if sample.group in held_out]
         evaluation_input_count += len(test)
         test = distinct_observations(test, feature_names)
+        train_ids = {sample.sample_id for sample in train}
+        inner_ranking_sample_ids = (
+            [
+                str(sample_id) for sample_id in ranking_sample_ids
+                if str(sample_id) in train_ids
+            ]
+            if ranking_sample_ids is not None else None
+        )
         ridge, dead_zone = select_ridge_hyperparameters(
             train, feature_names, ridge_candidates, dead_zone_candidates,
             balance_metadata_key=selection_balance_metadata_key,
             prediction_policy=prediction_policy,
+            selection_primary_metric=selection_primary_metric,
+            ranking_sample_ids=inner_ranking_sample_ids,
         )
         model = fit_ridge(
             train, feature_names, ridge, dead_zone,
@@ -1223,6 +1393,7 @@ def nested_group_holdout(
         "hyperparameter_selection_balance_metadata_key": (
             selection_balance_metadata_key
         ),
+        "hyperparameter_selection_primary_metric": selection_primary_metric,
         "lower_bound_metrics": quality_metrics(rows, "lower_bound"),
         "model_metrics": quality_metrics(rows, "prediction"),
         "lower_bound_positive_residual_metrics": positive_residual_metrics(
@@ -1244,6 +1415,12 @@ def nested_group_holdout(
         "model_group_ranking": group_ranking_metrics(
             ranking_rows, "prediction"
         ),
+        "lower_bound_top1_shape": group_top1_shape_metrics(
+            ranking_rows, "lower_bound"
+        ),
+        "model_top1_shape": group_top1_shape_metrics(
+            ranking_rows, "prediction"
+        ),
         "ranking_population": (
             "explicit_complete_candidate_subset"
             if ranking_ids is not None else "all_evaluation_rows"
@@ -1258,11 +1435,15 @@ def fit_calibrated_model(
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     *, selection_balance_metadata_key: Optional[str] = None,
     prediction_policy: Optional[Mapping[str, Any]] = None,
+    selection_primary_metric: str = "point_error",
+    ranking_sample_ids: Optional[Sequence[str]] = None,
 ) -> Model:
     ridge, dead_zone = select_ridge_hyperparameters(
         samples, feature_names, ridge_candidates, dead_zone_candidates,
         balance_metadata_key=selection_balance_metadata_key,
         prediction_policy=prediction_policy,
+        selection_primary_metric=selection_primary_metric,
+        ranking_sample_ids=ranking_sample_ids,
     )
     model = fit_ridge(samples, feature_names, ridge, dead_zone)
     if prediction_policy is not None:
