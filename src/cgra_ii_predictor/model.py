@@ -491,9 +491,76 @@ def constrained_predicted_residual(
     return float(residual)
 
 
+def validate_prediction_policy(policy: Mapping[str, Any]) -> Dict[str, Any]:
+    """Validate the deterministic analytical/ML routing contract."""
+    if not isinstance(policy, Mapping):
+        raise ValueError("prediction policy must be an object")
+    if policy.get("type") != "analytical_safe_ml_risk_v1":
+        raise ValueError("unsupported prediction policy type")
+    learned = policy.get("learned_residual_when")
+    if not isinstance(learned, Mapping):
+        raise ValueError("prediction policy learned_residual_when must be an object")
+    if set(learned) != {"maximum_tile_count", "res_mii_at_least_rec_mii"}:
+        raise ValueError("prediction policy learned-residual gate fields changed")
+    maximum_tiles = learned.get("maximum_tile_count")
+    if (
+        isinstance(maximum_tiles, bool) or not isinstance(maximum_tiles, int) or
+        maximum_tiles < 1
+    ):
+        raise ValueError("prediction policy maximum_tile_count must be positive")
+    if learned.get("res_mii_at_least_rec_mii") is not True:
+        raise ValueError("prediction policy must require res_mii >= rec_mii")
+    if policy.get("otherwise") != "analytical_lower_bound":
+        raise ValueError("prediction policy fallback must be analytical_lower_bound")
+    return {
+        "type": "analytical_safe_ml_risk_v1",
+        "learned_residual_when": {
+            "maximum_tile_count": maximum_tiles,
+            "res_mii_at_least_rec_mii": True,
+        },
+        "otherwise": "analytical_lower_bound",
+    }
+
+
+def prediction_policy_decision(
+    model: Mapping[str, Any], *, rec_mii: float, res_mii: float,
+    gate_facts: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Choose the residual expert using only prediction-time analytical facts."""
+    raw_policy = model.get("prediction_policy")
+    if raw_policy is None:
+        return {
+            "policy_type": "learned_residual_only",
+            "branch": "learned_residual",
+            "learned_residual_used": True,
+        }
+    policy = validate_prediction_policy(raw_policy)
+    facts = gate_facts or {}
+    raw_tiles = facts.get("tiles", facts.get("tile_count"))
+    if (
+        isinstance(raw_tiles, bool) or not isinstance(raw_tiles, (int, float)) or
+        not math.isfinite(float(raw_tiles)) or float(raw_tiles) < 1.0 or
+        not float(raw_tiles).is_integer()
+    ):
+        raise ValueError("hybrid prediction requires a positive integer tile count")
+    maximum_tiles = int(
+        policy["learned_residual_when"]["maximum_tile_count"]
+    )
+    learned = int(raw_tiles) <= maximum_tiles and float(res_mii) >= float(rec_mii)
+    return {
+        "policy_type": policy["type"],
+        "branch": "learned_residual" if learned else "analytical_lower_bound",
+        "learned_residual_used": learned,
+        "tile_count": int(raw_tiles),
+        "maximum_ml_tile_count": maximum_tiles,
+        "res_mii_at_least_rec_mii": float(res_mii) >= float(rec_mii),
+    }
+
+
 def predict_compiled_ii(
     model: Mapping[str, Any], lower_bound: float,
     features: Mapping[str, float], *, rec_mii: float, res_mii: float,
+    gate_facts: Optional[Mapping[str, Any]] = None,
 ) -> float:
     """Predict compiled II after independently checking the Rec/Res floor."""
     if isinstance(lower_bound, bool) or not isinstance(lower_bound, (int, float)):
@@ -518,8 +585,15 @@ def predict_compiled_ii(
             "prediction lower bound must equal "
             f"max(rec_mii,res_mii)={expected_bound}"
         )
+    decision = prediction_policy_decision(
+        model, rec_mii=components["rec_mii"], res_mii=components["res_mii"],
+        gate_facts=gate_facts,
+    )
     raw_residual = raw_ridge_residual_from_features(model, features)
-    residual = constrained_predicted_residual(model, raw_residual)
+    residual = (
+        constrained_predicted_residual(model, raw_residual)
+        if decision["learned_residual_used"] else 0.0
+    )
     prediction = lower_bound + residual
     if not math.isfinite(prediction):
         raise ValueError("predicted compiled II is not finite")
@@ -538,6 +612,7 @@ def predict_ridge(model: Mapping[str, Any], sample: Sample) -> float:
         model, sample.lower_bound, sample.features,
         rec_mii=sample.metadata["rec_mii"],
         res_mii=sample.metadata["res_mii"],
+        gate_facts=sample.metadata,
     )
 
 
@@ -546,6 +621,10 @@ def prediction_rows(model: Mapping[str, Any], samples: Sequence[Sample]) -> List
     radius = model.get("unseen_group_absolute_error_radius")
     for sample in samples:
         prediction = predict_ridge(model, sample)
+        policy_decision = prediction_policy_decision(
+            model, rec_mii=sample.metadata["rec_mii"],
+            res_mii=sample.metadata["res_mii"], gate_facts=sample.metadata,
+        )
         row: Prediction = {
             "sample_id": sample.sample_id,
             "group": sample.group,
@@ -553,6 +632,7 @@ def prediction_rows(model: Mapping[str, Any], samples: Sequence[Sample]) -> List
             "prediction": prediction,
             "compiled_ii": sample.compiled_ii,
             "raw_predicted_residual": raw_ridge_residual(model, sample),
+            "prediction_policy_decision": policy_decision,
         }
         for name in (
             "candidate_id", "architecture_id", "architecture_variant",
@@ -976,6 +1056,7 @@ def select_ridge_hyperparameters(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     *, balance_metadata_key: Optional[str] = None,
+    prediction_policy: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[float, float]:
     _validate_samples(samples, feature_names)
     ridge_candidates = _validated_control_grid(
@@ -1012,6 +1093,10 @@ def select_ridge_hyperparameters(
                 train, feature_names, ridge,
                 include_training_diagnostics=False,
             )
+            if prediction_policy is not None:
+                model["prediction_policy"] = validate_prediction_policy(
+                    prediction_policy
+                )
             raw.extend(
                 (sample, raw_ridge_residual(model, sample))
                 for sample in test
@@ -1022,9 +1107,18 @@ def select_ridge_hyperparameters(
             balanced_errors: Dict[str, List[float]] = defaultdict(list)
             all_errors: List[float] = []
             for sample, raw_residual in raw:
-                residual = max(0.0, raw_residual)
-                if residual < dead_zone:
-                    residual = 0.0
+                decision = prediction_policy_decision(
+                    ({"prediction_policy": prediction_policy}
+                     if prediction_policy is not None else {}),
+                    rec_mii=sample.metadata["rec_mii"],
+                    res_mii=sample.metadata["res_mii"],
+                    gate_facts=sample.metadata,
+                )
+                residual = 0.0
+                if decision["learned_residual_used"]:
+                    residual = max(0.0, raw_residual)
+                    if residual < dead_zone:
+                        residual = 0.0
                 error = abs(
                     sample.lower_bound + residual - sample.compiled_ii
                 )
@@ -1071,6 +1165,8 @@ def nested_group_holdout(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     *, selection_balance_metadata_key: Optional[str] = None,
+    prediction_policy: Optional[Mapping[str, Any]] = None,
+    ranking_sample_ids: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """Evaluate unseen lineages; tune only inside each outer training split."""
     _validate_samples(samples, feature_names)
@@ -1090,16 +1186,26 @@ def nested_group_holdout(
         ridge, dead_zone = select_ridge_hyperparameters(
             train, feature_names, ridge_candidates, dead_zone_candidates,
             balance_metadata_key=selection_balance_metadata_key,
+            prediction_policy=prediction_policy,
         )
         model = fit_ridge(
             train, feature_names, ridge, dead_zone,
             include_training_diagnostics=False,
         )
+        if prediction_policy is not None:
+            model["prediction_policy"] = validate_prediction_policy(
+                prediction_policy
+            )
         rows.extend(prediction_rows(model, test))
         for group in held_out_groups:
             chosen[group] = {
                 "ridge": ridge, "residual_dead_zone": dead_zone,
             }
+    ranking_ids = set(ranking_sample_ids) if ranking_sample_ids is not None else None
+    ranking_rows = (
+        [row for row in rows if row["sample_id"] in ranking_ids]
+        if ranking_ids is not None else rows
+    )
     return {
         "groups": groups,
         "outer_split_protocol": (
@@ -1132,8 +1238,17 @@ def nested_group_holdout(
             }
             for key in ("generator_family", "target_shape", "operation_band")
         },
-        "lower_bound_group_ranking": group_ranking_metrics(rows, "lower_bound"),
-        "model_group_ranking": group_ranking_metrics(rows, "prediction"),
+        "lower_bound_group_ranking": group_ranking_metrics(
+            ranking_rows, "lower_bound"
+        ),
+        "model_group_ranking": group_ranking_metrics(
+            ranking_rows, "prediction"
+        ),
+        "ranking_population": (
+            "explicit_complete_candidate_subset"
+            if ranking_ids is not None else "all_evaluation_rows"
+        ),
+        "ranking_input_row_count": len(ranking_rows),
         "raw_residual_metrics": raw_residual_metrics(rows),
     }
 
@@ -1142,9 +1257,14 @@ def fit_calibrated_model(
     samples: Sequence[Sample], feature_names: Sequence[str],
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     *, selection_balance_metadata_key: Optional[str] = None,
+    prediction_policy: Optional[Mapping[str, Any]] = None,
 ) -> Model:
     ridge, dead_zone = select_ridge_hyperparameters(
         samples, feature_names, ridge_candidates, dead_zone_candidates,
         balance_metadata_key=selection_balance_metadata_key,
+        prediction_policy=prediction_policy,
     )
-    return fit_ridge(samples, feature_names, ridge, dead_zone)
+    model = fit_ridge(samples, feature_names, ridge, dead_zone)
+    if prediction_policy is not None:
+        model["prediction_policy"] = validate_prediction_policy(prediction_policy)
+    return model

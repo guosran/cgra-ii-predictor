@@ -10,6 +10,7 @@ from cgra_ii_predictor.model import (
     nested_group_holdout,
     positive_residual_metrics,
     predict_compiled_ii,
+    prediction_policy_decision,
     prediction_rows,
     predict_ridge,
     raw_residual_metrics,
@@ -76,6 +77,44 @@ class ModelTest(unittest.TestCase):
             predict_compiled_ii(
                 model, 5, self.samples[0].features,
                 rec_mii=3, res_mii=4,
+            )
+
+    def test_hybrid_policy_routes_only_small_resource_dominant_shapes_to_ml(self):
+        model = fit_ridge([
+            Sample(
+                "fit", "g", 1, 4, {"pressure": 1.0},
+                contract(1, tiles=4),
+            ),
+        ], ["pressure"], ridge=1.0)
+        model["prediction_policy"] = {
+            "type": "analytical_safe_ml_risk_v1",
+            "learned_residual_when": {
+                "maximum_tile_count": 9,
+                "res_mii_at_least_rec_mii": True,
+            },
+            "otherwise": "analytical_lower_bound",
+        }
+        risky = predict_compiled_ii(
+            model, 2, {"pressure": 1.0}, rec_mii=1, res_mii=2,
+            gate_facts={"tiles": 4},
+        )
+        safe_large = predict_compiled_ii(
+            model, 2, {"pressure": 1.0}, rec_mii=1, res_mii=2,
+            gate_facts={"tiles": 16},
+        )
+        safe_recurrence = predict_compiled_ii(
+            model, 2, {"pressure": 1.0}, rec_mii=2, res_mii=1,
+            gate_facts={"tiles": 4},
+        )
+        self.assertGreater(risky, 2.0)
+        self.assertEqual(safe_large, 2.0)
+        self.assertEqual(safe_recurrence, 2.0)
+        self.assertFalse(prediction_policy_decision(
+            model, rec_mii=1, res_mii=2, gate_facts={"tiles": 16}
+        )["learned_residual_used"])
+        with self.assertRaisesRegex(ValueError, "tile count"):
+            predict_compiled_ii(
+                model, 2, {"pressure": 1.0}, rec_mii=1, res_mii=2,
             )
 
     def test_direct_sample_api_rejects_invalid_values_and_scoped_conflicts(self):

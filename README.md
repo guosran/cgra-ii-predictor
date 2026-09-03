@@ -233,6 +233,40 @@ be retried under v4, and MachSuite mapper labels must remain unrevealed. Any
 follow-up generator, timeout, feature, model, or acceptance-policy change needs
 a new protocol version.
 
+That next version is now predeclared as
+[`protocols/motif-v5.json`](protocols/motif-v5.json). V5 keeps the v4 graph
+grammar and balanced shape blocks but draws a disjoint seed. It changes the
+statistical contract in two important ways: all successful mapper rows,
+including successes from an otherwise partial shape block, train the point
+model; only complete declared shape blocks enter ranking metrics. The point
+predictor is a fixed hybrid: shapes with at most nine tiles and
+`ResMII >= RecMII` use the learned nonnegative residual, while all other inputs
+return the analytical `max(RecMII, ResMII)` result. RecMII and ResMII route this
+predeclared gate but are not learned features.
+
+Mapper timeout/nonzero outcomes are fitted and reported separately as a binary
+risk estimate. They are never converted to a numeric II. GPRM-style joint
+DFG/CGRA modeling, motivated by `references/TCAD-2026-1434_Proof_hi.pdf`, is a
+backup if the simple hybrid fails; online RL remains deferred until after a
+supervised or bandit-warm-start baseline.
+
+The v5 label-free corpus is materialized locally at
+`corpora/motif-v5-formal-seed-20260904`: 1,500 bases and 3,900 declared
+candidates, with zero label or Rec/Res artifact fields. Its local hashes are in
+[`protocols/motif-v5-predeclaration.json`](protocols/motif-v5-predeclaration.json).
+Formal mapper collection has not started. Reproduce the declaration with:
+
+~~~sh
+python3 adapters/neura_experiment.py \
+  --neura-root /path/to/pinned/neura \
+  --motif-generator-version motif-v5 \
+  --motif-samples-per-family 250 \
+  --motif-predeclare-only \
+  --seed 20260904 \
+  --timeout 60 \
+  --output-dir /path/to/motif-v5-formal
+~~~
+
 After reviewing and preserving that manifest, collection is a separate resume:
 
 ~~~sh

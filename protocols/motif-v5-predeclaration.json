@@ -1,0 +1,50 @@
+{
+  "schema_version": "cgra-ii-motif-predeclaration-attestation-v1",
+  "status": "materialized_label_free_before_mapper_collection",
+  "date": "2026-09-03",
+  "predictor_base_revision": "766a28a74212fbf5726459342b8b46bb84d690e9",
+  "protocol": {
+    "path": "protocols/motif-v5.json",
+    "sha256": "6e04dc21ad855f8706f37cb30e278121219dea84b65b81f23439818ceeb614b8"
+  },
+  "implementation": {
+    "generator_path": "adapters/neura_motifs_v5.py",
+    "generator_sha256": "488dfe331c54c90a6dab8e5e25d563211223e9c36107f44db5cc882269c6d760",
+    "base_generator_path": "adapters/neura_motifs_v4.py",
+    "base_generator_sha256": "bfd46a799ba0549ace7c98c8fa11c011a502929a2db9b932f995ba24315fcd60",
+    "generator_utilities_path": "adapters/neura_motifs.py",
+    "generator_utilities_sha256": "369fec099bce0fce0cc33ce9411c099df204ce68b8d5a639df5c109d81df96fb",
+    "adapter_path": "adapters/neura_experiment.py",
+    "adapter_sha256": "33aeebfd9750816756162e7f8200042e9992aabc6a61a14fa75c1d43fb41165d",
+    "model_path": "src/cgra_ii_predictor/model.py",
+    "model_sha256": "7373f3b8c2f7b319a3c05eef85a10be41fab755b7e2e04f7c16cb6102980bd6b",
+    "prediction_loader_path": "src/cgra_ii_predictor/predict.py",
+    "prediction_loader_sha256": "9eb065d6a21fd5e6b99b6db77cca1569e7f954ba00b0f78290ad6c70fbd1a313"
+  },
+  "manifest": {
+    "path": "corpora/motif-v5-formal-seed-20260904/corpus-manifest.predeclared.json",
+    "sha256": "d2e64847cac23b2b942fc0921f8380471420ba44ba548c207f58231f52996776",
+    "schema_version": "cgra-ii-motif-corpus-v5",
+    "status": "predeclared",
+    "base_count": 1500,
+    "candidate_count": 3900,
+    "unique_candidate_id_count": 3900,
+    "non_declared_candidate_count": 0,
+    "records_with_label_or_analysis_artifact_fields": 0,
+    "source_hash_mismatch_count": 0
+  },
+  "toolchain": {
+    "neura_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "mlir_neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+    "timeout_seconds_per_stage": 60
+  },
+  "label_boundary": {
+    "compiler_or_mapper_executed_by_predeclaration_command": false,
+    "compiled_ii_fields_present": 0,
+    "rec_res_analysis_fields_present": 0,
+    "machsuite_mapper_labels_used": false,
+    "mapper_collection_started": false
+  },
+  "trusted_external_timestamp": false
+}

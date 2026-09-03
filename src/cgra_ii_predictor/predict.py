@@ -18,8 +18,10 @@ from .dataset import (
 )
 from .model import (
     constrained_predicted_residual,
+    prediction_policy_decision,
     predict_compiled_ii,
     raw_ridge_residual_from_features,
+    validate_prediction_policy,
 )
 
 PROVEN_COMPONENT_KEYS = LOWER_BOUND_COMPONENT_NAMES
@@ -163,6 +165,8 @@ def validate_model(model: Mapping[str, Any]) -> Dict[str, Any]:
             )
             if condition_value < 1.0:
                 raise ValueError("model training design condition number is invalid")
+    if "prediction_policy" in model:
+        validate_prediction_policy(model["prediction_policy"])
     # Round-trip through JSON to detach the artifact from custom mapping types
     # and reject non-JSON values. allow_nan=False preserves the finite contract.
     return json.loads(json.dumps(dict(model), allow_nan=False))
@@ -455,6 +459,10 @@ def parse_prediction_sample(
         value = _agree(occurrences, f"{source} feature {name}")
         features[name] = value
 
+    normalized_metadata = dict(metadata)
+    for name in ("tiles", "tile_count", "rows", "columns"):
+        if name in row and name not in normalized_metadata:
+            normalized_metadata[name] = row[name]
     return PredictionSample(
         sample_id=str(sample_id),
         lower_bound=lower_bound,
@@ -462,7 +470,7 @@ def parse_prediction_sample(
         res_mii=components["res_mii"],
         lower_bound_source=str(lower_bound_source),
         features=features,
-        metadata=dict(metadata),
+        metadata=normalized_metadata,
     )
 
 
@@ -579,12 +587,21 @@ def predict_sample(
             loaded.model, sample.features
         )
         nonnegative_residual = max(0.0, raw_residual)
-        predicted_residual = constrained_predicted_residual(
+        learned_expert_residual = constrained_predicted_residual(
             loaded.model, raw_residual
         )
         prediction = predict_compiled_ii(
             loaded.model, sample.lower_bound, sample.features,
             rec_mii=sample.rec_mii, res_mii=sample.res_mii,
+            gate_facts=sample.metadata,
+        )
+        policy_decision = prediction_policy_decision(
+            loaded.model, rec_mii=sample.rec_mii, res_mii=sample.res_mii,
+            gate_facts=sample.metadata,
+        )
+        predicted_residual = (
+            learned_expert_residual
+            if policy_decision["learned_residual_used"] else 0.0
         )
     except (KeyError, ValueError, OverflowError) as error:
         raise ValueError(f"sample {sample.sample_id}: {error}") from error
@@ -597,12 +614,15 @@ def predict_sample(
         "raw_predicted_residual": raw_residual,
         "nonnegative_predicted_residual": nonnegative_residual,
         "predicted_residual": predicted_residual,
+        "learned_expert_residual": learned_expert_residual,
         "nonnegative_floor_applied": raw_residual < 0.0,
         "dead_zone": float(loaded.model.get("residual_dead_zone", 0.0)),
         "dead_zone_applied": (
-            nonnegative_residual > 0.0 and predicted_residual == 0.0
+            policy_decision["learned_residual_used"] and
+            nonnegative_residual > 0.0 and learned_expert_residual == 0.0
         ),
         "predicted_compiled_ii": prediction,
+        "prediction_policy_decision": policy_decision,
         "model_features": dict(sample.features),
         "model_sha256": loaded.model_sha256,
         "warnings": _contract_warnings(loaded, sample),

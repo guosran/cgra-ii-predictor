@@ -114,6 +114,33 @@ and candidates outside the mapper search interval. `LB > 20` prevents a mapper
 attempt and remains a censored audit record; it is never converted to a
 numeric II label. These gates do not inspect MachSuite labels.
 
+### Motif-v5 gated-hybrid acceptance
+
+V5 is a new label boundary, not a reinterpretation of v4. The machine-readable
+contract is `protocols/motif-v5.json`. It keeps every successful mapper result
+for point-model fitting, including successful candidates whose sibling shape
+timed out. Ranking metrics use only independently reconstructed complete
+declared shape blocks, so missing candidates cannot make a ranking query easier.
+
+The predeclared gate routes a candidate to residual Ridge only when its tile
+count is at most nine and `ResMII >= RecMII`; otherwise the prediction is exactly
+`max(RecMII, ResMII)`. The gate may read those analytical components, but neither
+component is present in the learned feature vector. Hyperparameters are selected
+inside the same nested group boundary with shape-balanced error first.
+
+V5 fails closed unless generator-family macro MAE and shape-balanced MAE
+strictly improve over the analytical floor, positive residual recall is nonzero
+in every family, complete-block tie-aware ranking does not regress, point and
+ranking populations pass their separate per-family minimums, and the learned
+design matrix is full rank. The output must also contain a separate mapper-risk
+model over actual mapper attempts. Its binary target is timeout/nonzero exit;
+analysis failures and `LB > 20` are excluded and counted, and no censored outcome
+is assigned a numeric II.
+
+The local v5 manifest is label-free. MachSuite remains a held-out real-program
+test and cannot select the v5 gate, feature list, hyperparameters, or acceptance
+thresholds.
+
 ## Frozen blind evaluation
 
 A frozen claim requires a separate workflow, not a command-line status flag:

@@ -43,6 +43,7 @@ def candidate(x=2.0):
             "mapper_id": "neura-heuristic",
             "mapper_revision": "revision-a",
             "mapper_config": "mapping-strategy=heuristic",
+            "tiles": 16,
         },
     }
 
@@ -107,6 +108,31 @@ class PredictionTest(unittest.TestCase):
         self.assertEqual(result["prediction_interval_upper"], 9.5)
         self.assertEqual(result["model_features"], {"x": 2.0})
         self.assertNotIn("compiled_ii", result)
+
+    def test_loaded_hybrid_model_reports_analytical_fallback_branch(self):
+        hybrid = model()
+        hybrid["prediction_policy"] = {
+            "type": "analytical_safe_ml_risk_v1",
+            "learned_residual_when": {
+                "maximum_tile_count": 9,
+                "res_mii_at_least_rec_mii": True,
+            },
+            "otherwise": "analytical_lower_bound",
+        }
+        with tempfile.TemporaryDirectory() as raw_directory:
+            loaded = load_model_artifact(
+                self._write_report(Path(raw_directory), hybrid)
+            )
+            parsed = parse_prediction_sample(
+                candidate(), loaded.model["feature_names"], "candidate"
+            )
+            result = predict_sample(loaded, parsed)
+        self.assertEqual(result["predicted_compiled_ii"], 5.0)
+        self.assertEqual(result["predicted_residual"], 0.0)
+        self.assertEqual(
+            result["prediction_policy_decision"]["branch"],
+            "analytical_lower_bound",
+        )
 
     def test_negative_floor_and_dead_zone_both_return_the_lower_bound(self):
         with tempfile.TemporaryDirectory() as raw_directory:

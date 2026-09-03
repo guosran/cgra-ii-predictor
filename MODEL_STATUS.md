@@ -298,6 +298,27 @@ changing the timeout or mapper policy, changing the generator/features/model,
 or altering the acceptance gates would be a new experiment and requires a new
 protocol version. MachSuite mapper labels remain unrevealed.
 
+That new experiment is `motif-v5`, frozen in `protocols/motif-v5.json`. Its
+primary model is a deterministic gated hybrid: use residual Ridge only for
+small (at most nine-tile), resource-dominated candidates; otherwise use the
+analytical RecMII/ResMII floor. The v5 learned feature list removes the constant
+`sources` column. All successful generated rows train point prediction, while
+ranking is evaluated only on complete declared shape blocks. Mapper timeout or
+nonzero exit is a separate binary risk target and never an imputed II.
+
+The label-free v5 declaration contains 1,500 bases and 3,900 candidates under
+`corpora/motif-v5-formal-seed-20260904`. No v5 mapper collection has started,
+and no MachSuite mapper label has been revealed. An offline replay on the
+already disclosed v4 diagnostic labels verified the implementation path only:
+it recovered 617 successful rows excluded by v4 complete-case fitting, reduced
+generator-family macro MAE from 2.6496 to 1.8000, reduced shape-balanced MAE
+from 2.6025 to 1.6695, and changed complete-block concordance from 0.7831 to
+0.7889. These are design diagnostics, not v5 results.
+
+If the predeclared v5 gates fail, the next backup is a mapping-aware graph model
+inspired by `references/TCAD-2026-1434_Proof_hi.pdf`; reinforcement learning is
+deferred until a supervised or bandit-warm-start baseline exists.
+
 The following three steps apply only to the historical motif-v3 frozen
 artifact. They do not authorize revealing labels for the failed-closed v4
 diagnostic model.

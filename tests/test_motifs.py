@@ -1,15 +1,140 @@
 import hashlib
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from adapters import neura_experiment, neura_motifs, neura_motifs_v4
+from adapters import (
+    neura_experiment, neura_motifs, neura_motifs_v4, neura_motifs_v5,
+)
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v5_predeclaration_attestation_matches_frozen_sources(self):
+        project_root = Path(neura_motifs_v5.__file__).resolve().parents[1]
+        attestation = json.loads(
+            (project_root / "protocols/motif-v5-predeclaration.json").read_text()
+        )
+        source_records = (
+            (attestation["protocol"], "path", "sha256"),
+            (attestation["implementation"], "generator_path", "generator_sha256"),
+            (
+                attestation["implementation"], "base_generator_path",
+                "base_generator_sha256",
+            ),
+            (
+                attestation["implementation"], "generator_utilities_path",
+                "generator_utilities_sha256",
+            ),
+            (attestation["implementation"], "adapter_path", "adapter_sha256"),
+            (attestation["implementation"], "model_path", "model_sha256"),
+            (
+                attestation["implementation"], "prediction_loader_path",
+                "prediction_loader_sha256",
+            ),
+        )
+        for section, path_key, hash_key in source_records:
+            self.assertEqual(
+                hashlib.sha256((project_root / section[path_key]).read_bytes()).hexdigest(),
+                section[hash_key],
+            )
+        manifest = project_root / attestation["manifest"]["path"]
+        if manifest.is_file():
+            self.assertEqual(
+                hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                attestation["manifest"]["sha256"],
+            )
+
+    def test_v5_machine_protocol_matches_runtime_hybrid_contract(self):
+        project_root = Path(neura_motifs_v5.__file__).resolve().parents[1]
+        protocol = json.loads((project_root / "protocols/motif-v5.json").read_text())
+        self.assertEqual(protocol["generator_version"], "motif-v5")
+        self.assertEqual(protocol["root_seed"], neura_motifs_v5.DEFAULT_SEED)
+        self.assertEqual(
+            tuple(protocol["point_model"]["feature_names"]),
+            neura_motifs_v5.POINT_MODEL_FEATURE_NAMES,
+        )
+        self.assertEqual(
+            protocol["point_model"]["prediction_policy"],
+            neura_motifs_v5.HYBRID_PREDICTION_POLICY,
+        )
+        self.assertNotIn("sources", neura_motifs_v5.POINT_MODEL_FEATURE_NAMES)
+        runtime_coverage = neura_motifs_v5.ACCEPTANCE_POLICY["coverage"]
+        self.assertEqual(
+            protocol["population"][
+                "minimum_successful_point_training_bases_per_family"
+            ],
+            runtime_coverage["minimum_successful_bases_per_family"],
+        )
+        self.assertEqual(
+            protocol["population"]["minimum_complete_ranking_bases_per_family"],
+            runtime_coverage["minimum_complete_ranking_bases_per_family"],
+        )
+        self.assertEqual(
+            protocol["population"]["point_training_population"],
+            "all_successful_mapper_results",
+        )
+        self.assertEqual(
+            protocol["population"]["ranking_population"],
+            "complete_declared_shape_blocks_only",
+        )
+        self.assertFalse(protocol["timeout_risk_model"]["numeric_ii_imputation"])
+        self.assertEqual(protocol["blind_test_boundary"][
+            "machsuite_mapper_labels_revealed"
+        ], 0)
+
+    def test_v5_generator_is_disjoint_and_manifest_is_label_free(self):
+        v4_base = neura_motifs_v4.make_base_specs(
+            1, seed=neura_motifs_v5.DEFAULT_SEED, motifs=("compute",)
+        )[0]
+        v5_base = neura_motifs_v5.make_base_specs(
+            1, seed=neura_motifs_v5.DEFAULT_SEED, motifs=("compute",)
+        )[0]
+        self.assertNotEqual(v4_base.base_seed, v5_base.base_seed)
+        self.assertTrue(v5_base.lineage.startswith("generated/motif-v5/"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v5.make_candidates((v5_base,), root)
+            manifest = neura_motifs_v5.make_manifest(
+                candidates, root, neura_motifs_v5.DEFAULT_SEED,
+                ("compute",), neura_motifs_v5.DEFAULT_SHAPES,
+            )
+        self.assertEqual(manifest["schema_version"], "cgra-ii-motif-corpus-v5")
+        self.assertEqual(manifest["generator"]["version"], "motif-v5")
+        self.assertTrue(all(
+            row["generator_version"] == "motif-v5"
+            and "/motif-v5/" in row["id"]
+            and "compiled_ii" not in row
+            for row in manifest["candidates"]
+        ))
+
+    def test_v5_timeout_risk_keeps_censoring_separate_from_numeric_ii(self):
+        common = {
+            "generator_family": "generated/motif/compute",
+            "mechanism_profile": "layered_sparse",
+            "operation_band": "low",
+            "rows": 2,
+            "columns": 2,
+        }
+        records = [
+            {**common, "status": "success", "stage": "complete"},
+            {**common, "status": "censored", "stage": "mapper",
+             "failure": "timeout"},
+            {**common, "status": "censored", "stage": "mapper-search-interval",
+             "failure": "lower-bound-above-mapper-ceiling"},
+        ]
+        result = neura_experiment.mapper_timeout_risk_model(records)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["eligible_mapper_attempt_count"], 2)
+        self.assertEqual(result["positive_count"], 1)
+        self.assertFalse(result["numeric_ii_imputation"])
+        self.assertEqual(
+            result["excluded_candidates"]["lower_bound_above_mapper_ceiling"], 1
+        )
+
     def test_v4_result_attestation_is_failed_closed_and_hashes_local_artifacts(self):
         project_root = Path(neura_motifs_v4.__file__).resolve().parents[1]
         result = json.loads(
@@ -57,12 +182,31 @@ class MotifCorpusTest(unittest.TestCase):
         for section, path_key, hash_key in (
             (attestation["protocol"], "path", "sha256"),
             (attestation["implementation"], "generator_path", "generator_sha256"),
-            (attestation["implementation"], "adapter_path", "adapter_sha256"),
         ):
             path = project_root / section[path_key]
             self.assertEqual(
                 hashlib.sha256(path.read_bytes()).hexdigest(), section[hash_key]
             )
+        # The shared runner is allowed to gain later protocols.  V4 attests
+        # the exact historical blob used for collection, not every future
+        # revision of the runner's working-tree path.
+        result = json.loads(
+            (project_root / "protocols/motif-v4-result.json").read_text()
+        )
+        revision = result["predictor_collection_revision"]
+        historical_adapter = subprocess.run(
+            [
+                "git", "show",
+                f"{revision}:{attestation['implementation']['adapter_path']}",
+            ],
+            cwd=project_root,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        self.assertEqual(
+            hashlib.sha256(historical_adapter).hexdigest(),
+            attestation["implementation"]["adapter_sha256"],
+        )
         manifest = project_root / attestation["manifest"]["path"]
         if manifest.is_file():
             self.assertEqual(

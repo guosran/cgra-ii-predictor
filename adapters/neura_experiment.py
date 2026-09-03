@@ -40,10 +40,11 @@ from typing import (
 import numpy as np
 
 try:
-    from adapters import neura_motifs, neura_motifs_v4
+    from adapters import neura_motifs, neura_motifs_v4, neura_motifs_v5
 except ImportError:  # Running the file directly from its adapters directory.
     import neura_motifs  # type: ignore
     import neura_motifs_v4  # type: ignore
+    import neura_motifs_v5  # type: ignore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +54,12 @@ DEFAULT_SEED = 20260829
 MOTIF_PROTOCOLS = {
     neura_motifs.GENERATOR_VERSION: neura_motifs,
     neura_motifs_v4.GENERATOR_VERSION: neura_motifs_v4,
+    neura_motifs_v5.GENERATOR_VERSION: neura_motifs_v5,
 }
+STRICT_MOTIF_GENERATOR_VERSIONS = frozenset({
+    neura_motifs_v4.GENERATOR_VERSION,
+    neura_motifs_v5.GENERATOR_VERSION,
+})
 
 
 def motif_protocol(generator_version: str) -> Any:
@@ -72,6 +78,7 @@ from cgra_ii_predictor.model import (  # noqa: E402
     constrained_predicted_residual as core_constrained_predicted_residual,
     fit_ridge as core_fit_ridge,
     nested_group_holdout as core_nested_group_holdout,
+    prediction_policy_decision as core_prediction_policy_decision,
     predict_compiled_ii as core_predict_compiled_ii,
     predict_ridge as core_predict_ridge,
     raw_ridge_residual_from_features as core_raw_residual_from_features,
@@ -160,6 +167,7 @@ MODEL_FEATURE_NAMES = (
     "routing_cut_pressure",
     "register_pressure",
 )
+MODEL_FEATURE_NAMES_V5 = neura_motifs_v5.POINT_MODEL_FEATURE_NAMES
 
 LOWER_BOUND_COMPONENT_NAMES = ("rec_mii", "res_mii")
 
@@ -1113,7 +1121,7 @@ def collect_motif_candidate(
         )
     lower_bound = max(int(values["rec_mii"]), int(values["res_mii"]))
     if (
-        candidate.generator_version == neura_motifs_v4.GENERATOR_VERSION and
+        candidate.generator_version in STRICT_MOTIF_GENERATOR_VERSIONS and
         lower_bound > MAPPER_II_CEILING
     ):
         return MotifCollectionResult(
@@ -1293,7 +1301,7 @@ def _motif_collection_config(
         "analysis_argument": "--analyze-rec-res-mii",
         "mapping_strategy": "heuristic",
     }
-    if generator_version == neura_motifs_v4.GENERATOR_VERSION:
+    if generator_version in STRICT_MOTIF_GENERATOR_VERSIONS:
         result.update({
             "mapper_ii_ceiling": MAPPER_II_CEILING,
             "outside_mapper_search_interval": "censored_without_mapper_attempt",
@@ -1576,7 +1584,7 @@ def _load_or_create_motif_manifest(
             raise ValueError("resume seed does not match manifest")
         if manifest_registers != int(registers):
             raise ValueError("resume register configuration does not match manifest")
-        if protocol.GENERATOR_VERSION == neura_motifs_v4.GENERATOR_VERSION:
+        if protocol.GENERATOR_VERSION in STRICT_MOTIF_GENERATOR_VERSIONS:
             expected_operation_bands = {
                 name: list(bounds) for name, bounds in zip(
                     ("low", "medium", "high"), protocol.OPERATION_BANDS
@@ -1634,7 +1642,7 @@ def _load_or_create_motif_manifest(
             "analysis_argument",
             "mapping_strategy",
         }
-        if protocol.GENERATOR_VERSION == neura_motifs_v4.GENERATOR_VERSION:
+        if protocol.GENERATOR_VERSION in STRICT_MOTIF_GENERATOR_VERSIONS:
             required_collection.update({
                 "mapper_ii_ceiling", "outside_mapper_search_interval",
             })
@@ -1654,7 +1662,7 @@ def _load_or_create_motif_manifest(
             raise ValueError("motif manifest analysis contract mismatch")
         if collection["mapping_strategy"] != "heuristic":
             raise ValueError("motif manifest mapper contract mismatch")
-        if protocol.GENERATOR_VERSION == neura_motifs_v4.GENERATOR_VERSION:
+        if protocol.GENERATOR_VERSION in STRICT_MOTIF_GENERATOR_VERSIONS:
             if collection["mapper_ii_ceiling"] != MAPPER_II_CEILING:
                 raise ValueError("motif manifest mapper II ceiling mismatch")
             if collection["outside_mapper_search_interval"] != (
@@ -1815,7 +1823,7 @@ def _load_or_create_motif_manifest(
         generator_version=protocol.GENERATOR_VERSION,
     )
     neura_motifs.atomic_write_json(manifest_path, manifest)
-    if protocol.GENERATOR_VERSION == neura_motifs_v4.GENERATOR_VERSION:
+    if protocol.GENERATOR_VERSION in STRICT_MOTIF_GENERATOR_VERSIONS:
         # Keep the exact label-free declaration immutable while the active
         # manifest is checkpointed during later collection.
         neura_motifs.atomic_write_json(predeclaration_snapshot_path, manifest)
@@ -2632,7 +2640,9 @@ def random_connected_tile_masks(rng: random.Random, count: int,
     return masks
 
 
-def to_core_sample(row: Sample) -> CoreSample:
+def to_core_sample(
+    row: Sample, feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+) -> CoreSample:
     """Translate a Neura flat row into the compiler-agnostic core schema."""
     lower_bound = float(row["baseline_lb"])
     return CoreSample(
@@ -2641,7 +2651,7 @@ def to_core_sample(row: Sample) -> CoreSample:
         lower_bound=lower_bound,
         compiled_ii=float(row.get("compiled_ii", lower_bound)),
         features={
-            name: float(row[name]) for name in MODEL_FEATURE_NAMES if name in row
+            name: float(row[name]) for name in feature_names if name in row
         },
         metadata={
             name: row[name]
@@ -2667,16 +2677,24 @@ def to_core_sample(row: Sample) -> CoreSample:
 
 
 def fit_ridge(train: Sequence[Sample], ridge: float,
-              residual_dead_zone: float = 0.0) -> Dict[str, object]:
+              residual_dead_zone: float = 0.0,
+              feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+              prediction_policy: Optional[Mapping[str, object]] = None,
+              ) -> Dict[str, object]:
     """Compatibility wrapper around the single core Ridge implementation."""
-    return core_fit_ridge(
-        [to_core_sample(row) for row in train], MODEL_FEATURE_NAMES,
+    model = core_fit_ridge(
+        [to_core_sample(row, feature_names) for row in train], feature_names,
         ridge, residual_dead_zone,
     )
+    if prediction_policy is not None:
+        model["prediction_policy"] = dict(prediction_policy)
+    return model
 
 
 def predict_ridge(model: Dict[str, object], row: Sample) -> float:
-    return core_predict_ridge(model, to_core_sample(row))
+    return core_predict_ridge(
+        model, to_core_sample(row, tuple(model["feature_names"]))
+    )
 
 
 def predict_unlabelled_candidate(
@@ -2689,12 +2707,21 @@ def predict_unlabelled_candidate(
         for feature_name in model["feature_names"]
     }
     raw_residual = core_raw_residual_from_features(model, model_features)
-    predicted_residual = core_constrained_predicted_residual(
+    learned_expert_residual = core_constrained_predicted_residual(
         model, raw_residual
     )
     prediction = core_predict_compiled_ii(
         model, float(lower_bound), model_features,
         rec_mii=float(row["rec_mii"]), res_mii=float(row["res_mii"]),
+        gate_facts=row,
+    )
+    policy_decision = core_prediction_policy_decision(
+        model, rec_mii=float(row["rec_mii"]), res_mii=float(row["res_mii"]),
+        gate_facts=row,
+    )
+    predicted_residual = (
+        learned_expert_residual
+        if policy_decision["learned_residual_used"] else 0.0
     )
     support = model.get("training_feature_support")
     outside_central: List[str] = []
@@ -2712,8 +2739,10 @@ def predict_unlabelled_candidate(
         "model_features": model_features,
         "raw_predicted_residual": raw_residual,
         "nonnegative_predicted_residual": max(0.0, raw_residual),
+        "learned_expert_residual": learned_expert_residual,
         "predicted_residual": predicted_residual,
         "predicted_compiled_ii": prediction,
+        "prediction_policy_decision": policy_decision,
         "feature_support": {
             "outside_central_98_percent": outside_central,
             "outside_observed_range": outside_range,
@@ -2916,13 +2945,19 @@ def is_synthetic_row(row: Dict[str, object]) -> bool:
 
 
 def random_row_holdout(samples: Sequence[Sample], seed: int, ridge: float,
-                       tree_depth: int, tree_min_samples: int) -> Dict[str, object]:
+                       tree_depth: int, tree_min_samples: int,
+                       feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+                       prediction_policy: Optional[Mapping[str, object]] = None,
+                       ) -> Dict[str, object]:
     """Diagnostic only: rows from one kernel may appear on both sides."""
     ordered = list(samples)
     random.Random(seed).shuffle(ordered)
     split = max(1, int(len(ordered) * 0.8))
     train, test = ordered[:split], ordered[split:]
-    ridge_model = fit_ridge(train, ridge)
+    ridge_model = fit_ridge(
+        train, ridge, feature_names=feature_names,
+        prediction_policy=prediction_policy,
+    )
     tree_model = fit_residual_tree(train, tree_depth, tree_min_samples)
     ridge_rows = prediction_rows(test, lambda row: predict_ridge(ridge_model, row))
     tree_rows = prediction_rows(
@@ -2943,7 +2978,10 @@ def random_row_holdout(samples: Sequence[Sample], seed: int, ridge: float,
 
 
 def leave_one_family_out(samples: Sequence[Sample], ridge: float,
-                         tree_depth: int, tree_min_samples: int) -> Dict[str, object]:
+                         tree_depth: int, tree_min_samples: int,
+                         feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+                         prediction_policy: Optional[Mapping[str, object]] = None,
+                         ) -> Dict[str, object]:
     """Evaluate generalization to an unseen kernel family without leakage."""
     families = sorted({str(row["family"]) for row in samples})
     ridge_rows: List[Dict[str, object]] = []
@@ -2955,7 +2993,10 @@ def leave_one_family_out(samples: Sequence[Sample], ridge: float,
         if len(train) < max(2, 2 * tree_min_samples):
             skipped.append(family)
             continue
-        ridge_model = fit_ridge(train, ridge)
+        ridge_model = fit_ridge(
+            train, ridge, feature_names=feature_names,
+            prediction_policy=prediction_policy,
+        )
         tree_model = fit_residual_tree(train, tree_depth, tree_min_samples)
         ridge_rows.extend(
             prediction_rows(test, lambda row: predict_ridge(ridge_model, row)))
@@ -3033,6 +3074,8 @@ def select_ridge_hyperparameters(
     train: Sequence[Sample], ridge_candidates: Sequence[float],
     dead_zone_candidates: Sequence[float],
     balance_metadata_key: Optional[str] = None,
+    feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+    prediction_policy: Optional[Mapping[str, object]] = None,
 ) -> Tuple[float, float]:
     """Choose Ridge calibration through the compiler-agnostic core."""
     families = sorted({str(row["family"]) for row in train})
@@ -3040,9 +3083,10 @@ def select_ridge_hyperparameters(
         return (ridge_candidates[len(ridge_candidates) // 2],
                 dead_zone_candidates[len(dead_zone_candidates) // 2])
     return core_select_ridge_hyperparameters(
-        [to_core_sample(row) for row in train], MODEL_FEATURE_NAMES,
+        [to_core_sample(row, feature_names) for row in train], feature_names,
         ridge_candidates, dead_zone_candidates,
         balance_metadata_key=balance_metadata_key,
+        prediction_policy=prediction_policy,
     )
 
 
@@ -3050,12 +3094,17 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
                                 ridge_candidates: Sequence[float],
                                 dead_zone_candidates: Sequence[float],
                                 selection_balance_metadata_key: Optional[str] = None,
+                                feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+                                prediction_policy: Optional[Mapping[str, object]] = None,
+                                ranking_sample_ids: Optional[Sequence[str]] = None,
                                 ) -> Dict[str, object]:
     """Outer family holdout with calibration chosen only from outer training."""
     core_result = core_nested_group_holdout(
-        [to_core_sample(row) for row in samples], MODEL_FEATURE_NAMES,
+        [to_core_sample(row, feature_names) for row in samples], feature_names,
         ridge_candidates, dead_zone_candidates,
         selection_balance_metadata_key=selection_balance_metadata_key,
+        prediction_policy=prediction_policy,
+        ranking_sample_ids=ranking_sample_ids,
     )
     rows: List[Dict[str, object]] = []
     for row in core_result["rows"]:
@@ -3066,6 +3115,9 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
             "prediction": row["prediction"],
             "compiled_ii": row["compiled_ii"],
             "raw_predicted_residual": row["raw_predicted_residual"],
+            "prediction_policy_decision": row[
+                "prediction_policy_decision"
+            ],
         }
         for name in (
             "candidate_id", "architecture_id", "architecture_variant",
@@ -3113,6 +3165,8 @@ def nested_ridge_family_holdout(samples: Sequence[Sample],
         ),
         "stratified_metrics": core_result["stratified_metrics"],
         "raw_residual_metrics": core_result["raw_residual_metrics"],
+        "ranking_population": core_result["ranking_population"],
+        "ranking_input_row_count": core_result["ranking_input_row_count"],
     }
     add_prediction_quality_metrics(result, rows, "baseline")
     add_prediction_quality_metrics(result, rows, "ridge", "prediction")
@@ -3333,6 +3387,129 @@ def motif_feasibility_coverage(
     }
 
 
+def mapper_timeout_risk_model(
+    declared_candidates: Sequence[Mapping[str, Any]],
+    stratum_fields: Sequence[str] = (
+        "generator_family", "mechanism_profile", "operation_band",
+        "target_shape",
+    ),
+) -> Dict[str, object]:
+    """Estimate mapper failure risk without fabricating numeric II labels."""
+    examples: List[Tuple[Tuple[str, ...], int]] = []
+    exclusions: Dict[str, int] = {}
+    for record in declared_candidates:
+        status = str(record.get("status", "declared"))
+        stage = str(record.get("stage", ""))
+        failure = str(record.get("failure", ""))
+        if status == "success":
+            target = 0
+        elif status == "censored" and stage == "mapper" and failure in {
+            "timeout", "nonzero-exit",
+        }:
+            target = 1
+        else:
+            reason = (
+                "not_terminal" if status in {"declared", "running"} else
+                "lower_bound_above_mapper_ceiling"
+                if stage == "mapper-search-interval" else
+                "analysis_or_contract_failure"
+            )
+            exclusions[reason] = exclusions.get(reason, 0) + 1
+            continue
+        normalized = dict(record)
+        normalized.setdefault(
+            "target_shape", f"{record.get('rows')}x{record.get('columns')}"
+        )
+        key = tuple(str(normalized.get(field, "")) for field in stratum_fields)
+        if any(not value for value in key):
+            exclusions["missing_stratum_field"] = (
+                exclusions.get("missing_stratum_field", 0) + 1
+            )
+            continue
+        examples.append((key, target))
+
+    if not examples:
+        return {
+            "status": "unavailable_no_mapper_attempts",
+            "target": "mapper_timeout_or_nonzero_exit",
+            "numeric_ii_imputation": False,
+            "eligible_mapper_attempt_count": 0,
+            "excluded_candidates": exclusions,
+        }
+
+    counts: Dict[Tuple[str, ...], List[int]] = {}
+    total_positive = 0
+    for key, target in examples:
+        bucket = counts.setdefault(key, [0, 0])
+        bucket[0] += 1
+        bucket[1] += target
+        total_positive += target
+
+    predictions: List[float] = []
+    baseline_predictions: List[float] = []
+    targets: List[int] = []
+    total = len(examples)
+    for key, target in examples:
+        bucket_total, bucket_positive = counts[key]
+        local_total = bucket_total - 1
+        local_positive = bucket_positive - target
+        if local_total:
+            risk = (local_positive + 1.0) / (local_total + 2.0)
+        else:
+            risk = (total_positive - target + 1.0) / (total + 1.0)
+        baseline = (total_positive - target + 1.0) / (total + 1.0)
+        predictions.append(risk)
+        baseline_predictions.append(baseline)
+        targets.append(target)
+
+    def brier(values: Sequence[float]) -> float:
+        return sum(
+            (prediction - target) ** 2
+            for prediction, target in zip(values, targets)
+        ) / len(targets)
+
+    def auc(values: Sequence[float]) -> Optional[float]:
+        positive = [value for value, target in zip(values, targets) if target]
+        negative = [value for value, target in zip(values, targets) if not target]
+        if not positive or not negative:
+            return None
+        concordance = sum(
+            1.0 if left > right else 0.5 if left == right else 0.0
+            for left in positive for right in negative
+        )
+        return concordance / (len(positive) * len(negative))
+
+    model_records = []
+    for key in sorted(counts):
+        count, positive = counts[key]
+        model_records.append({
+            "stratum": dict(zip(stratum_fields, key)),
+            "mapper_attempt_count": count,
+            "timeout_or_nonzero_count": positive,
+            "estimated_risk": (positive + 1.0) / (count + 2.0),
+        })
+    model_brier = brier(predictions)
+    baseline_brier = brier(baseline_predictions)
+    return {
+        "status": "ok",
+        "model_type": "laplace_smoothed_pre_mapping_stratum_rate_v1",
+        "target": "mapper_timeout_or_nonzero_exit",
+        "numeric_ii_imputation": False,
+        "stratum_fields": list(stratum_fields),
+        "evaluation": "leave_one_candidate_out_with_global_fallback",
+        "eligible_mapper_attempt_count": total,
+        "positive_count": total_positive,
+        "negative_count": total - total_positive,
+        "prevalence": total_positive / total,
+        "brier_score": model_brier,
+        "global_prevalence_brier_score": baseline_brier,
+        "roc_auc": auc(predictions),
+        "improves_brier_over_global_prevalence": model_brier < baseline_brier,
+        "excluded_candidates": exclusions,
+        "strata": model_records,
+    }
+
+
 def motif_v4_stratum_coverage(
     manifest_records: Sequence[Mapping[str, object]],
     required_families: Sequence[str], minimum_fraction: float = 0.8,
@@ -3406,6 +3583,68 @@ def motif_v4_stratum_coverage(
         "cells": cells,
         "passed": bool(cells) and len(cells) == expected_cell_count and all(
             cell["passed"] for cell in cells.values()
+        ),
+    }
+
+
+def motif_v5_population_coverage(
+    manifest_records: Sequence[Mapping[str, object]],
+    required_families: Sequence[str], policy: Mapping[str, object],
+) -> Dict[str, object]:
+    """Gate point-label and ranking-query populations on separate denominators."""
+    coverage = policy.get("coverage", {})
+    if not isinstance(coverage, Mapping):
+        coverage = {}
+    minimum_successful = coverage.get("minimum_successful_bases_per_family")
+    minimum_complete = coverage.get("minimum_complete_ranking_bases_per_family")
+    valid_thresholds = all(
+        isinstance(value, int) and not isinstance(value, bool) and value > 0
+        for value in (minimum_successful, minimum_complete)
+    )
+    grouped: Dict[Tuple[str, str], List[Mapping[str, object]]] = {}
+    for record in manifest_records:
+        family = str(record.get("generator_family", ""))
+        canonical = str(record.get("canonical_dfg_sha256", ""))
+        if family and canonical:
+            grouped.setdefault((family, canonical), []).append(record)
+    families: Dict[str, Dict[str, object]] = {}
+    for family in required_families:
+        family_groups = {
+            canonical: rows for (row_family, canonical), rows in grouped.items()
+            if row_family == family
+        }
+        successful = sum(
+            any(row.get("status") == "success" for row in rows)
+            for rows in family_groups.values()
+        )
+        complete = sum(
+            bool(rows) and all(row.get("status") == "success" for row in rows)
+            for rows in family_groups.values()
+        )
+        record = {
+            "declared_base_count": len(family_groups),
+            "successful_point_training_base_count": successful,
+            "complete_ranking_base_count": complete,
+            "minimum_successful_point_training_base_count": minimum_successful,
+            "minimum_complete_ranking_base_count": minimum_complete,
+        }
+        record["passed"] = bool(
+            valid_thresholds and successful >= int(minimum_successful) and
+            complete >= int(minimum_complete)
+        )
+        families[family] = record
+    observed = {family for family, _ in grouped}
+    expected = set(required_families)
+    return {
+        "point_training_population": "all_successful_mapper_results",
+        "ranking_population": "complete_declared_shape_blocks_only",
+        "policy_valid": valid_thresholds,
+        "missing_generator_families": sorted(expected - observed),
+        "unexpected_generator_families": sorted(observed - expected),
+        "families": families,
+        "passed": bool(
+            valid_thresholds and families and observed == expected and
+            all(record["passed"] for record in families.values())
         ),
     }
 
@@ -3808,10 +4047,68 @@ def generated_v4_acceptance_gates(
     }
 
 
+def generated_v5_acceptance_gates(
+    metadata_holdout: Optional[Mapping[str, object]],
+    labelled_samples: Sequence[Sample], coverage: Mapping[str, object],
+    feasibility_coverage: Mapping[str, object],
+    required_families: Sequence[str], policy: Mapping[str, object],
+    training_selection: Mapping[str, object],
+    timeout_risk: Mapping[str, object],
+) -> Dict[str, object]:
+    """Extend point-quality gates with v5 population and censoring contracts."""
+    result = generated_v4_acceptance_gates(
+        metadata_holdout, labelled_samples, coverage, feasibility_coverage,
+        required_families, policy,
+    )
+    gates = dict(result["gates"])
+    gates["all_successful_point_labels_used"] = {
+        "rule": "zero successful mapper labels excluded from point fitting",
+        "successful_label_count": len(labelled_samples),
+        "point_training_sample_count": training_selection.get(
+            "included_sample_count"
+        ),
+        "excluded_successful_sample_count": training_selection.get(
+            "excluded_successful_sample_count"
+        ),
+        "passed": bool(
+            training_selection.get("point_training_policy") ==
+            "all_successful_mapper_results" and
+            training_selection.get("included_sample_count") ==
+            len(labelled_samples) and
+            training_selection.get("excluded_successful_sample_count") == 0
+        ),
+    }
+    gates["timeout_risk_separation"] = {
+        "rule": "binary mapper outcome reported without numeric II imputation",
+        "model_status": timeout_risk.get("status"),
+        "eligible_mapper_attempt_count": timeout_risk.get(
+            "eligible_mapper_attempt_count"
+        ),
+        "passed": bool(
+            timeout_risk.get("status") == "ok" and
+            timeout_risk.get("target") == "mapper_timeout_or_nonzero_exit" and
+            timeout_risk.get("numeric_ii_imputation") is False and
+            isinstance(timeout_risk.get("eligible_mapper_attempt_count"), int) and
+            int(timeout_risk["eligible_mapper_attempt_count"]) > 0
+        ),
+    }
+    return {
+        **result,
+        "policy_version": policy.get("policy_version"),
+        "gates": gates,
+        "overall_passed": all(
+            gate.get("passed") is True for gate in gates.values()
+        ),
+    }
+
+
 def nested_ridge_metadata_holdout(
     samples: Sequence[Sample], metadata_key: str,
     ridge_candidates: Sequence[float], dead_zone_candidates: Sequence[float],
     selection_balance_metadata_key: Optional[str] = None,
+    feature_names: Sequence[str] = MODEL_FEATURE_NAMES,
+    prediction_policy: Optional[Mapping[str, object]] = None,
+    ranking_sample_ids: Optional[Sequence[str]] = None,
 ) -> Dict[str, object]:
     """Hold out a metadata-defined domain while weighting source lineages."""
     missing = [str(row["index"]) for row in samples if not row.get(metadata_key)]
@@ -3844,6 +4141,7 @@ def nested_ridge_metadata_holdout(
         "evaluation": nested_ridge_family_holdout(
             regrouped, ridge_candidates, dead_zone_candidates,
             selection_balance_metadata_key,
+            feature_names, prediction_policy, ranking_sample_ids,
         ),
     }
 
@@ -4949,8 +5247,8 @@ def main() -> int:
             snapshot_path = (
                 args.output_dir.resolve() / MOTIF_PREDECLARATION_SNAPSHOT
             )
-            if active_motif_protocol.GENERATOR_VERSION == (
-                neura_motifs_v4.GENERATOR_VERSION
+            if active_motif_protocol.GENERATOR_VERSION in (
+                STRICT_MOTIF_GENERATOR_VERSIONS
             ):
                 print(f"motif_predeclaration_snapshot={snapshot_path}")
             print("motif_collection=not_started label_access=none")
@@ -5004,7 +5302,7 @@ def main() -> int:
             external_model = load_model_artifact(args.model_report)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             raise SystemExit(f"invalid --model-report: {error}")
-        available_features = set(MODEL_FEATURE_NAMES)
+        available_features = set(MODEL_FEATURE_NAMES).union(MODEL_FEATURE_NAMES_V5)
         missing_model_features = set(
             external_model.model["feature_names"]
         ).difference(available_features)
@@ -5013,10 +5311,12 @@ def main() -> int:
                 "--model-report requires features unavailable from the Neura "
                 f"prediction pass: {sorted(missing_model_features)}"
             )
-        if tuple(external_model.model["feature_names"]) != MODEL_FEATURE_NAMES:
+        if tuple(external_model.model["feature_names"]) not in {
+            MODEL_FEATURE_NAMES, MODEL_FEATURE_NAMES_V5,
+        }:
             raise SystemExit(
                 "--model-report must use the predeclared structure-only "
-                "Model-1 feature contract"
+                "Model-1 or v5 hybrid feature contract"
             )
         expected_bound_contract = {
             "name": "rec_res_max_v1",
@@ -5343,10 +5643,9 @@ def main() -> int:
         suite = family_suites.get(source_family, family_suites.get(effective_lineage))
         if suite is not None:
             row["suite"] = suite
-    # A generated base is eligible for formal fitting only when every frozen
-    # shape/architecture cell produced one successful label.  Keep the full
-    # labelled list in ``samples`` for coverage/denominator accounting, but
-    # route only this independently derived subset to every fit and holdout.
+    # V4 keeps its historical complete-case fitting contract.  V5 separates
+    # the two statistical units: every successful mapper result trains the
+    # point expert, while only complete declared blocks enter shape ranking.
     required_training_shapes = tuple(
         f"{rows}x{columns}"
         for rows, columns in active_motif_protocol.DEFAULT_SHAPES
@@ -5360,10 +5659,37 @@ def main() -> int:
         motif_manifest.get("candidates", ())
         if isinstance(motif_manifest, Mapping) else ()
     )
-    training_samples, training_selection = complete_generated_training_subset(
+    complete_ranking_samples, complete_ranking_selection = complete_generated_training_subset(
         samples, required_training_cells,
         selection_candidates if isinstance(selection_candidates, list) else (),
         active_motif_protocol,
+    )
+    v5_active = (
+        active_motif_protocol.GENERATOR_VERSION ==
+        neura_motifs_v5.GENERATOR_VERSION
+    )
+    if v5_active:
+        training_samples = list(samples)
+        training_selection = {
+            "point_training_policy": "all_successful_mapper_results",
+            "included_sample_count": len(training_samples),
+            "excluded_successful_sample_count": 0,
+            "ranking_policy": "complete_declared_shape_blocks_only",
+            "ranking_selection": complete_ranking_selection,
+            "passed": True,
+        }
+    else:
+        training_samples = complete_ranking_samples
+        training_selection = complete_ranking_selection
+    ranking_sample_ids = (
+        [str(row["index"]) for row in complete_ranking_samples]
+        if v5_active else None
+    )
+    active_model_feature_names = (
+        MODEL_FEATURE_NAMES_V5 if v5_active else MODEL_FEATURE_NAMES
+    )
+    active_prediction_policy = (
+        neura_motifs_v5.HYBRID_PREDICTION_POLICY if v5_active else None
     )
     row_holdout: Optional[Dict[str, object]] = None
     family_holdout: Optional[Dict[str, object]] = None
@@ -5377,14 +5703,14 @@ def main() -> int:
     trained_full_model: Optional[Dict[str, object]] = None
     selection_balance_metadata_key = (
         "target_shape"
-        if active_motif_protocol.GENERATOR_VERSION ==
-        neura_motifs_v4.GENERATOR_VERSION else None
+        if active_motif_protocol.GENERATOR_VERSION in
+        STRICT_MOTIF_GENERATOR_VERSIONS else None
     )
     effective_metadata_holdout_keys = list(dict.fromkeys(
         list(args.metadata_holdout_key) + (
             ["generator_family"]
-            if active_motif_protocol.GENERATOR_VERSION ==
-            neura_motifs_v4.GENERATOR_VERSION else []
+            if active_motif_protocol.GENERATOR_VERSION in
+            STRICT_MOTIF_GENERATOR_VERSIONS else []
         )
     ))
     if external_model is not None:
@@ -5401,11 +5727,13 @@ def main() -> int:
         row_holdout = random_row_holdout(
             training_samples, args.seed, args.ridge,
             args.tree_depth, args.tree_min_samples,
+            active_model_feature_names, active_prediction_policy,
         )
         try:
             family_holdout = leave_one_family_out(
                 training_samples, args.ridge, args.tree_depth,
-                args.tree_min_samples
+                args.tree_min_samples, active_model_feature_names,
+                active_prediction_policy,
             )
         except ValueError:
             # A synthetic-only corpus has one family by design.  Its row split
@@ -5415,6 +5743,8 @@ def main() -> int:
             nested_ridge_holdout = nested_ridge_family_holdout(
                 training_samples, ridge_candidates, dead_zone_candidates,
                 selection_balance_metadata_key,
+                active_model_feature_names, active_prediction_policy,
+                ranking_sample_ids,
             )
         except ValueError:
             nested_ridge_holdout = None
@@ -5422,6 +5752,8 @@ def main() -> int:
             metadata_holdouts[key] = nested_ridge_metadata_holdout(
                 training_samples, key, ridge_candidates, dead_zone_candidates,
                 selection_balance_metadata_key,
+                active_model_feature_names, active_prediction_policy,
+                ranking_sample_ids,
             )
         if nested_ridge_holdout is not None:
             # Model 1 is predeclared as residual Ridge. Tree/row-split results
@@ -5431,9 +5763,11 @@ def main() -> int:
             selected_ridge, selected_dead_zone = select_ridge_hyperparameters(
                 training_samples, ridge_candidates, dead_zone_candidates,
                 selection_balance_metadata_key,
+                active_model_feature_names, active_prediction_policy,
             )
             trained_full_model = fit_ridge(
-                training_samples, selected_ridge, selected_dead_zone
+                training_samples, selected_ridge, selected_dead_zone,
+                active_model_feature_names, active_prediction_policy,
             )
             if selected_rows:
                 calibrate_unseen_family_interval(
@@ -5620,6 +5954,9 @@ def main() -> int:
                         lower_bound_within_mapper_search_interval
                     ),
                     "predicted_compiled_ii": predicted_ii,
+                    "prediction_policy_decision": point[
+                        "prediction_policy_decision"
+                    ],
                     "prediction_kind": "continuous_point_estimate",
                     "raw_predicted_residual": raw_residual,
                     "nonnegative_predicted_residual": max(0.0, raw_residual),
@@ -5629,7 +5966,10 @@ def main() -> int:
                         "residual_dead_zone", 0.0
                     )),
                     "dead_zone_applied": (
-                        raw_residual > 0.0 and predicted_residual == 0.0
+                        point["prediction_policy_decision"][
+                            "learned_residual_used"
+                        ] and raw_residual > 0.0 and
+                        float(point["learned_expert_residual"]) == 0.0
                     ),
                     "baseline_lb": features["baseline_lb"],
                     "lower_bound": features["baseline_lb"],
@@ -5785,15 +6125,15 @@ def main() -> int:
             "metadata_holdout_keys": effective_metadata_holdout_keys,
             "automatic_metadata_holdout_keys": (
                 ["generator_family"]
-                if active_motif_protocol.GENERATOR_VERSION ==
-                neura_motifs_v4.GENERATOR_VERSION else []
+                if active_motif_protocol.GENERATOR_VERSION in
+                STRICT_MOTIF_GENERATOR_VERSIONS else []
             ),
         },
     }
     portable_dataset = {
         "schema_version": "portable-v1",
         "provenance": provenance,
-        "feature_names": list(MODEL_FEATURE_NAMES),
+        "feature_names": list(active_model_feature_names),
         "samples": [{
             "sample_id": str(row["index"]),
             "group": str(row["family"]),
@@ -5869,7 +6209,17 @@ def main() -> int:
         if active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v4.GENERATOR_VERSION else None
     )
-    protocol_coverage: Mapping[str, object] = generated_coverage
+    v5_population_coverage = (
+        motif_v5_population_coverage(
+            declared_motif_candidates, required_generator_families,
+            active_motif_protocol.ACCEPTANCE_POLICY,
+        )
+        if v5_active else None
+    )
+    protocol_coverage: Mapping[str, object] = (
+        v5_population_coverage
+        if v5_population_coverage is not None else generated_coverage
+    )
     if v4_stratum_coverage is not None:
         protocol_coverage = {
             "passed": bool(
@@ -5897,11 +6247,26 @@ def main() -> int:
         if active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v4.GENERATOR_VERSION else None
     )
+    timeout_risk_model = (
+        mapper_timeout_risk_model(declared_motif_candidates)
+        if v5_active else None
+    )
+    v5_acceptance = (
+        generated_v5_acceptance_gates(
+            metadata_holdouts["generator_family"], generated_rows,
+            protocol_coverage, feasibility_coverage,
+            required_generator_families,
+            active_motif_protocol.ACCEPTANCE_POLICY,
+            training_selection,
+            timeout_risk_model or {},
+        )
+        if v5_active else None
+    )
     model_design_full_rank = bool(
         isinstance(trained_full_model, Mapping) and
         trained_full_model.get("training_design_rank") ==
         trained_full_model.get("training_design_column_count") ==
-        len(MODEL_FEATURE_NAMES) + 1
+        len(active_model_feature_names) + 1
     )
     frozen_model_scale_ready = bool(
         active_motif_protocol.GENERATOR_VERSION == neura_motifs.GENERATOR_VERSION and
@@ -5914,7 +6279,8 @@ def main() -> int:
         generated_improvement["passed"] is True
     )
     protocol_model_scale_ready = bool(
-        v4_acceptance is not None and v4_acceptance["overall_passed"] is True and
+        (v5_acceptance or v4_acceptance) is not None and
+        (v5_acceptance or v4_acceptance)["overall_passed"] is True and
         generated_only_training and trained_full_model is not None and
         model_design_full_rank
     )
@@ -5963,12 +6329,11 @@ def main() -> int:
         "feature_names": list(FEATURE_NAMES),
         "model_feature_names": (
             list(trained_full_model["feature_names"])
-            if trained_full_model is not None else list(MODEL_FEATURE_NAMES)
+            if trained_full_model is not None else list(active_model_feature_names)
         ),
-        # ``samples`` is the exact fit/evaluation population.  Preserve all
-        # successful labels separately so a partial generated lineage remains
-        # visible in the report and coverage accounting without entering the
-        # model or holdout splits.
+        # ``samples`` is the exact point-fit population. V4 selected complete
+        # cases; V5 keeps every successful label and records its stricter,
+        # separate ranking population in ``training_selection``.
         "samples": training_samples,
         "labelled_samples": samples,
         "training_selection": training_selection,
@@ -6009,8 +6374,21 @@ def main() -> int:
         "motif_corpus": generated_corpus,
         "motif_feasibility_coverage": feasibility_coverage,
         "motif_v4_stratum_coverage": v4_stratum_coverage,
+        "motif_v5_population_coverage": v5_population_coverage,
+        "mapper_timeout_risk_model": timeout_risk_model,
         "candidate_gate": {
             "requires": ([
+                "all successful mapper labels train the point expert, including partial shape blocks",
+                "only complete declared shape blocks enter ranking metrics",
+                "fixed analytical-safe / ML-risk gate selected before v5 labels",
+                "strictly improving leave-one-generator-family-out hybrid evaluation",
+                "shape-balanced MAE strictly below the analytical lower bound",
+                "tie-aware complete-block ranking no worse than the analytical lower bound",
+                "mapper timeout risk is a separate binary outcome with no numeric II imputation",
+                "minimum successful point-training and complete ranking bases in every family",
+                "full-rank intercept-plus-feature training design",
+                "RecMII and ResMII used by the deterministic gate, never learned features",
+            ] if v5_active else [
                 "generated-only training rows with source/canonical identities",
                 "at least 200 complete distinct base DFGs per generator family",
                 "complete-case coverage in every predeclared family-by-shape, family-by-profile, and family-by-operation-band marginal cell",
@@ -6041,15 +6419,29 @@ def main() -> int:
             "requested_total_bases": (
                 motif_count * len(required_generator_families)
             ),
-            "minimum_complete_bases_per_family": 200,
-            "minimum_total_complete_bases": 200 * len(required_generator_families),
-            "minimum_complete_fraction": (
-                200 / motif_count if motif_count > 0 else None
+            "minimum_complete_bases_per_family": (
+                active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
+                    "minimum_complete_ranking_bases_per_family", 200
+                ) if v5_active else 200
             ),
-            "coverage": generated_coverage,
+            "minimum_total_complete_bases": (
+                active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
+                    "minimum_complete_ranking_bases_per_family", 200
+                ) * len(required_generator_families)
+                if v5_active else 200 * len(required_generator_families)
+            ),
+            "minimum_complete_fraction": (
+                (
+                    active_motif_protocol.ACCEPTANCE_POLICY["coverage"].get(
+                        "minimum_complete_ranking_bases_per_family", 200
+                    ) if v5_active else 200
+                ) / motif_count if motif_count > 0 else None
+            ),
+            "coverage": protocol_coverage,
             "generated_nested_improvement": generated_improvement,
             "generator_family_transfer": generator_family_transfer,
             "motif_v4_acceptance": v4_acceptance,
+            "motif_v5_acceptance": v5_acceptance,
             "model_design_full_rank": model_design_full_rank,
             "model_design_rank": (
                 trained_full_model.get("training_design_rank")
@@ -6076,7 +6468,8 @@ def main() -> int:
             "overall_ready_for_machsuite_freeze": frozen_model_scale_ready,
             "overall_ready_for_protocol_model_freeze": (
                 protocol_model_scale_ready
-                if v4_acceptance is not None else frozen_model_scale_ready
+                if (v4_acceptance is not None or v5_acceptance is not None)
+                else frozen_model_scale_ready
             ),
         },
     }
