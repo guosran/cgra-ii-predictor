@@ -153,10 +153,11 @@ The repository now contains the pinned inventory and executable three-stage
 workflow. The label-free compatibility preflight has 11/19 ready and 8/19
 lowering-censored candidates. The historical motif-v3 generated-only report
 meets its scale, coverage, full-rank, nested-improvement, and generator-family
-non-degradation freeze gates. Motif-v4's stricter gates remain unmeasured until
-its separately predeclared corpus is collected and fitted. No MachSuite
-prediction seal or mapper labels have been produced, so there is still no
-frozen accuracy claim.
+non-degradation freeze gates. Motif-v4 was separately predeclared, collected,
+and fitted, but failed its stricter gates; the immutable summary and artifact
+hashes are in `protocols/motif-v4-result.json`. Its fitted Ridge object is a
+diagnostic artifact, not a freeze candidate. No MachSuite prediction seal or
+mapper labels have been produced, so there is still no frozen accuracy claim.
 
 The local seal is tamper-evident, not a trusted timestamp: all files could in
 principle be regenerated after labels were seen. Publish the seal hash to Git,

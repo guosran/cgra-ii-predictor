@@ -192,7 +192,7 @@ Ridge, so an exhaustive threshold tree is not needed at formal scale. See
 [CORPUS_PROTOCOL.md](CORPUS_PROTOCOL.md) for benchmark
 roles, shape/op-count rules, and the generated-only training protocol.
 
-The next protocol is `motif-v4`, machine-readably frozen in
+The most recently executed protocol is `motif-v4`, machine-readably frozen in
 [`protocols/motif-v4.json`](protocols/motif-v4.json). It must be predeclared in
 a separate command before any mapper label is collected. Predeclaration does
 not execute the compiler, but it requires an already built `mlir-neura-opt`
@@ -223,6 +223,15 @@ toolchain, and manifest hashes are recorded in
 The attested `corpus-manifest.predeclared.json` remains immutable while resume
 updates the active `corpus-manifest.json`. The attestation explicitly is not
 an external trusted timestamp.
+
+The predeclared 2026-09-03 run has now completed. Its immutable result summary
+and artifact hashes are recorded in
+[`protocols/motif-v4-result.json`](protocols/motif-v4-result.json). The run
+failed the predeclared acceptance gates and is therefore closed as a diagnostic
+result: its fitted Ridge model must not be frozen, censored candidates must not
+be retried under v4, and MachSuite mapper labels must remain unrevealed. Any
+follow-up generator, timeout, feature, model, or acceptance-policy change needs
+a new protocol version.
 
 After reviewing and preserving that manifest, collection is a separate resume:
 

@@ -10,6 +10,45 @@ from adapters import neura_experiment, neura_motifs, neura_motifs_v4
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v4_result_attestation_is_failed_closed_and_hashes_local_artifacts(self):
+        project_root = Path(neura_motifs_v4.__file__).resolve().parents[1]
+        result = json.loads(
+            (project_root / "protocols/motif-v4-result.json").read_text()
+        )
+        self.assertEqual(result["status"], "completed_failed_closed")
+        self.assertFalse(result["acceptance"]["overall_passed"])
+        self.assertFalse(result["decision"]["eligible_for_protocol_model_freeze"])
+        self.assertFalse(result["decision"]["eligible_for_machsuite_freeze"])
+        self.assertFalse(result["decision"]["machsuite_mapper_labels_used"])
+        self.assertEqual(
+            result["collection"]["success_count"]
+            + result["collection"]["censored_count"],
+            result["collection"]["candidate_count"],
+        )
+        self.assertEqual(
+            sum(
+                family["complete_base_count"]
+                for family in result["complete_case_training"][
+                    "by_generator_family"
+                ].values()
+            ),
+            result["complete_case_training"]["complete_base_count"],
+        )
+        for artifact in (
+            result["protocol"],
+            {
+                "path": result["predeclaration"]["manifest_path"],
+                "sha256": result["predeclaration"]["manifest_sha256"],
+            },
+            *result["result_artifacts"].values(),
+        ):
+            path = project_root / artifact["path"]
+            if path.is_file():
+                self.assertEqual(
+                    hashlib.sha256(path.read_bytes()).hexdigest(),
+                    artifact["sha256"],
+                )
+
     def test_v4_predeclaration_attestation_matches_frozen_sources(self):
         project_root = Path(neura_motifs_v4.__file__).resolve().parents[1]
         attestation = json.loads(

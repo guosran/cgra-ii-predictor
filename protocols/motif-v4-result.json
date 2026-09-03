@@ -1,0 +1,140 @@
+{
+  "schema_version": "cgra-ii-motif-result-attestation-v1",
+  "status": "completed_failed_closed",
+  "date": "2026-09-03",
+  "predictor_collection_revision": "26715fd5182ad838470c799d5bb1243f7366f4ce",
+  "protocol": {
+    "path": "protocols/motif-v4.json",
+    "sha256": "a31ef26b0da920c2e8753bf415bdac527c8d211842446dd7be664749c0aa5a67",
+    "acceptance_policy_version": "motif-v4-acceptance-v1"
+  },
+  "predeclaration": {
+    "attestation_path": "protocols/motif-v4-predeclaration.json",
+    "manifest_path": "corpora/motif-v4-formal-seed-20260903/corpus-manifest.predeclared.json",
+    "manifest_sha256": "834278ae9ae40dc5aa2e0f09c834d19eeda17f63e10aab9f09d485231defb868",
+    "base_count": 1500,
+    "candidate_count": 3900
+  },
+  "result_artifacts": {
+    "active_manifest": {
+      "path": "corpora/motif-v4-formal-seed-20260903/corpus-manifest.json",
+      "sha256": "7b1c9bbfa78d3802047c6f56f9a0781a14b7673efbfd38edd709488705f20795",
+      "status": "partial",
+      "all_candidates_terminal": true
+    },
+    "report": {
+      "path": "corpora/motif-v4-formal-seed-20260903/report.json",
+      "sha256": "4e0011c75b31824f955ce2991979230191082eebf1bdcf713afed62de7e06893",
+      "artifact_status": "exploratory_not_frozen"
+    },
+    "dataset": {
+      "path": "corpora/motif-v4-formal-seed-20260903/dataset.json",
+      "sha256": "3442de804d858f44b2d13a1f9900bc0014ac15104691a3fdeafd2919f417854d"
+    }
+  },
+  "collection": {
+    "candidate_count": 3900,
+    "success_count": 2839,
+    "censored_count": 1061,
+    "declared_count": 0,
+    "running_count": 0,
+    "censoring": {
+      "mapper_timeout": 1054,
+      "mapper_nonzero_exit": 1,
+      "lower_bound_above_mapper_ceiling": 6
+    },
+    "by_generator_family": {
+      "generated/motif/compute": {"candidate_count": 650, "success_count": 493, "censored_count": 157},
+      "generated/motif/memory": {"candidate_count": 650, "success_count": 519, "censored_count": 131},
+      "generated/motif/mixed": {"candidate_count": 650, "success_count": 343, "censored_count": 307},
+      "generated/motif/pointer": {"candidate_count": 650, "success_count": 415, "censored_count": 235},
+      "generated/motif/predicated": {"candidate_count": 650, "success_count": 427, "censored_count": 223},
+      "generated/motif/recurrence": {"candidate_count": 650, "success_count": 642, "censored_count": 8}
+    }
+  },
+  "feasibility": {
+    "analysis_valid_count": 3900,
+    "analysis_unknown_count": 0,
+    "feasible_search_interval_count": 3894,
+    "outside_search_interval_count": 6,
+    "mapper_attempt_count": 3894,
+    "successful_label_count": 2839,
+    "label_coverage_on_feasible": 0.729070364663585,
+    "passed": true
+  },
+  "complete_case_training": {
+    "complete_base_count": 856,
+    "required_complete_base_count": 1200,
+    "included_sample_count": 2222,
+    "excluded_successful_sample_count": 617,
+    "partial_base_count": 644,
+    "by_generator_family": {
+      "generated/motif/compute": {"complete_base_count": 148, "required_complete_base_count": 200, "passed": false},
+      "generated/motif/memory": {"complete_base_count": 161, "required_complete_base_count": 200, "passed": false},
+      "generated/motif/mixed": {"complete_base_count": 79, "required_complete_base_count": 200, "passed": false},
+      "generated/motif/pointer": {"complete_base_count": 111, "required_complete_base_count": 200, "passed": false},
+      "generated/motif/predicated": {"complete_base_count": 111, "required_complete_base_count": 200, "passed": false},
+      "generated/motif/recurrence": {"complete_base_count": 246, "required_complete_base_count": 200, "passed": true}
+    },
+    "marginal_cell_count": 102,
+    "expected_marginal_cell_count": 102,
+    "minimum_complete_fraction": 0.8,
+    "coverage_passed": false
+  },
+  "diagnostic_model_fit": {
+    "selected_model": "residual_ridge",
+    "ridge": 0.1,
+    "residual_dead_zone": 1.5,
+    "training_design_rank": 13,
+    "training_design_column_count": 14,
+    "training_design_condition_number": 685642774795325.5,
+    "freeze_eligible": false
+  },
+  "acceptance": {
+    "overall_passed": false,
+    "gates": {
+      "strict_generator_family_logo_improvement": {
+        "baseline_macro_mae": 1.8215237327070455,
+        "ridge_macro_mae": 1.9384517819982838,
+        "passed": false
+      },
+      "reject_all_floor_predictions": {"positive_target_count": 1366, "positive_prediction_count": 1526, "passed": true},
+      "positive_residual_quality": {
+        "baseline_positive_subset_mae": 2.5819912152269398,
+        "ridge_positive_subset_mae": 1.8108141643075817,
+        "baseline_macro_family_positive_subset_mae": 2.390426518769636,
+        "ridge_macro_family_positive_subset_mae": 1.5947280958948118,
+        "ridge_positive_residual_recall": 0.5702781844802343,
+        "every_family_positive_recall": false,
+        "positive_residual_recall_by_family": {
+          "generated/motif/compute": 0.0,
+          "generated/motif/memory": 1.0,
+          "generated/motif/mixed": 1.0,
+          "generated/motif/pointer": 1.0,
+          "generated/motif/predicated": 0.0,
+          "generated/motif/recurrence": 0.896551724137931
+        },
+        "passed": false
+      },
+      "positive_residual_distribution": {"passed": true},
+      "stratified_metric_completeness": {"passed": true},
+      "shape_balanced_point_error": {"baseline_mae": 1.4488311967384588, "ridge_mae": 2.0992476463423384, "passed": false},
+      "tie_aware_shape_ranking_non_degradation": {
+        "baseline_macro_pairwise_concordance": 0.7830969267139474,
+        "ridge_macro_pairwise_concordance": 0.7647754137115835,
+        "eligible_ranking_query_count": 564,
+        "passed": false
+      },
+      "coverage": {"passed": false},
+      "feasibility_and_censoring_coverage": {"passed": true}
+    }
+  },
+  "decision": {
+    "eligible_for_protocol_model_freeze": false,
+    "eligible_for_machsuite_freeze": false,
+    "machsuite_mapper_labels_used": false,
+    "retry_or_relabel_motif_v4": false,
+    "next_iteration_requires_new_protocol_version": true
+  },
+  "trusted_external_timestamp": false
+}
