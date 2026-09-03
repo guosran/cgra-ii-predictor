@@ -277,6 +277,9 @@ python3 adapters/neura_experiment.py \
   --output-dir /path/to/motif-v6-formal
 ~~~
 
+The materialized declaration and its implementation/toolchain hashes are in
+[`protocols/motif-v6-predeclaration.json`](protocols/motif-v6-predeclaration.json).
+
 After reviewing and preserving that manifest, collection is a separate resume:
 
 ~~~sh

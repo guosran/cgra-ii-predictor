@@ -14,6 +14,42 @@ from adapters import (
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v6_predeclaration_attestation_matches_frozen_sources(self):
+        project_root = Path(neura_motifs_v6.__file__).resolve().parents[1]
+        attestation = json.loads(
+            (project_root / "protocols/motif-v6-predeclaration.json").read_text()
+        )
+        implementation = attestation["implementation"]
+        records = (
+            ("generator_path", "generator_sha256"),
+            ("parent_generator_path", "parent_generator_sha256"),
+            ("base_generator_path", "base_generator_sha256"),
+            ("generator_utilities_path", "generator_utilities_sha256"),
+            ("adapter_path", "adapter_sha256"),
+            ("model_path", "model_sha256"),
+            ("prediction_loader_path", "prediction_loader_sha256"),
+        )
+        revision = attestation["predictor_declaration_revision"]
+        for path_key, hash_key in records:
+            historical = subprocess.run(
+                ["git", "show", f"{revision}:{implementation[path_key]}"],
+                cwd=project_root, check=True, stdout=subprocess.PIPE,
+            ).stdout
+            self.assertEqual(
+                hashlib.sha256(historical).hexdigest(), implementation[hash_key]
+            )
+        protocol_path = project_root / attestation["protocol"]["path"]
+        self.assertEqual(
+            hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
+            attestation["protocol"]["sha256"],
+        )
+        manifest_path = project_root / attestation["manifest"]["path"]
+        if manifest_path.is_file():
+            self.assertEqual(
+                hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                attestation["manifest"]["sha256"],
+            )
+
     def test_v6_declares_every_oriented_rectangle_and_top1_primary_metric(self):
         expected = tuple(
             (rows, columns) for rows in range(1, 5) for columns in range(1, 5)
