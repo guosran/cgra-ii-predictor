@@ -1,4 +1,6 @@
 import importlib.util
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
@@ -95,6 +97,34 @@ class ConvexEnsembleTest(unittest.TestCase):
             np.mean(np.abs(gated - targets)),
             np.mean(np.abs(static - targets)),
         )
+
+
+@unittest.skipUnless(TORCH_AVAILABLE, "latency adapter requires PyTorch")
+class LatencySummaryTest(unittest.TestCase):
+    def test_percentile_interpolates_and_validates_inputs(self):
+        from adapters.benchmark_pointwise_latency import percentile
+
+        self.assertEqual(percentile([1.0, 3.0], 0.0), 1.0)
+        self.assertEqual(percentile([1.0, 3.0], 0.5), 2.0)
+        self.assertEqual(percentile([1.0, 3.0], 1.0), 3.0)
+        with self.assertRaisesRegex(ValueError, "empty"):
+            percentile([], 0.5)
+        with self.assertRaisesRegex(ValueError, r"\[0, 1\]"):
+            percentile([1.0], 1.1)
+
+
+@unittest.skipUnless(TORCH_AVAILABLE, "ensemble adapter requires PyTorch")
+class EnsembleArtifactTest(unittest.TestCase):
+    def test_checkpoint_sha256_is_content_addressed(self):
+        from adapters.ensemble_pointwise_checkpoints import sha256_file
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "checkpoint.pt"
+            path.write_bytes(b"checkpoint")
+            self.assertEqual(
+                sha256_file(path),
+                "47320987f9a49d5b00119b960f247a956773f57543982b8bfcb6da5bb3afd9ef",
+            )
 
 
 if __name__ == "__main__":

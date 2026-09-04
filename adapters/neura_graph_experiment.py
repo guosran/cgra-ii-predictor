@@ -272,6 +272,38 @@ def add_training_only_queries(
     return result, [query.ranking_query_id for query in added]
 
 
+def subsample_training_queries(
+    queries: Sequence[QueryRecord], fraction: float, seed: int,
+) -> List[QueryRecord]:
+    """Select a deterministic, family-stratified nested training subset.
+
+    This is an experiment control for learning curves, not a new data split:
+    validation and test queries remain untouched.  Sorting by a stable hash and
+    taking a prefix makes smaller fractions exact subsets of larger ones.
+    """
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError("training fraction must be in (0, 1]")
+    if fraction == 1.0:
+        return list(queries)
+    by_family: Dict[str, List[QueryRecord]] = defaultdict(list)
+    for query in queries:
+        by_family[query.generator_family].append(query)
+    selected: List[QueryRecord] = []
+    for family in sorted(by_family):
+        ordered = sorted(by_family[family], key=lambda query: (
+            hashlib.sha256(
+                (
+                    f"training-subset:{seed}:{family}:"
+                    f"{query.ranking_query_id}"
+                ).encode("utf-8")
+            ).hexdigest(),
+            query.ranking_query_id,
+        ))
+        count = max(1, int(len(ordered) * fraction))
+        selected.extend(ordered[:count])
+    return selected
+
+
 def attach_placement_supervision(
     queries: Sequence[QueryRecord], path: Path,
 ) -> Tuple[List[QueryRecord], Dict[str, Any]]:
@@ -961,6 +993,12 @@ def parse_args() -> argparse.Namespace:
         help=("Model initialization and batch-order seed. Defaults to --seed "
               "without changing the fixed data split."),
     )
+    parser.add_argument(
+        "--training-fraction", type=float, default=1.0,
+        help=("Deterministic family-stratified fraction of the training "
+              "partition used for a nested learning-curve experiment. "
+              "Validation and test remain unchanged."),
+    )
     parser.add_argument("--threads", type=int, default=6)
     parser.add_argument(
         "--device", choices=("auto", "cpu", "cuda"), default="auto",
@@ -1084,6 +1122,19 @@ def main() -> int:
             f"new_queries={len(added_ids)}",
             flush=True,
         )
+    full_training_query_count = len(splits["train"])
+    splits["train"] = subsample_training_queries(
+        splits["train"], args.training_fraction, args.seed,
+    )
+    selected_training_query_ids = sorted(
+        query.ranking_query_id for query in splits["train"]
+    )
+    print(
+        f"training_fraction={args.training_fraction} "
+        f"selected_queries={len(splits['train'])} "
+        f"full_queries={full_training_query_count}",
+        flush=True,
+    )
     placement_supervision = None
     if args.placement_supervision is not None:
         if config.placement_loss_weight <= 0.0:
@@ -1196,6 +1247,7 @@ def main() -> int:
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
         "training_seed": training_seed,
+        "training_fraction": args.training_fraction,
         "additional_training_manifest_sha256": [
             sha256_file(path.resolve())
             for path in args.additional_training_manifest
@@ -1309,6 +1361,15 @@ def main() -> int:
                 "test": 1.0 - DEFAULT_TRAIN_FRACTION - DEFAULT_VALIDATION_FRACTION,
             },
             "summary": split_summary(splits),
+            "training_subset": {
+                "fraction": args.training_fraction,
+                "seed": args.seed,
+                "full_query_count": full_training_query_count,
+                "selected_query_count": len(splits["train"]),
+                "selected_query_ids_sha256": hashlib.sha256(
+                    "\n".join(selected_training_query_ids).encode("utf-8")
+                ).hexdigest(),
+            },
             "additional_training_only_query_count": len(
                 added_training_query_ids
             ),

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -37,6 +38,14 @@ from neura_graph_experiment import (  # noqa: E402
 
 
 Prediction = Dict[str, Any]
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _parse_checkpoint(value: str) -> Tuple[str, Path]:
@@ -416,6 +425,7 @@ def main() -> None:
         )
         configs[name] = {
             "path": str(path.resolve()),
+            "sha256": sha256_file(path.resolve()),
             "config": config.to_dict(),
         }
         all_predictions[name] = split_predictions
@@ -436,6 +446,7 @@ def main() -> None:
         "selection_split": "validation_only",
         "primary_metric": "successful_candidate_continuous_ii_mae",
         "manifest": str(args.manifest.resolve()),
+        "manifest_sha256": sha256_file(args.manifest.resolve()),
         "seed": args.seed,
         "checkpoints": configs,
         "weights": {

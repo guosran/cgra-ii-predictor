@@ -408,3 +408,71 @@ macro-query MAE 0.41242。解析 lower bound 的拟合权重为 0。若更看重
 
 Jupyter 也必须经 Slurm 启动。计算节点端口使用 10000--19999，登录节点反向转发端口
 使用 20000--29999，并让 Jupyter 只绑定 `127.0.0.1`。
+
+### 2026-09-05：训练规模、模型宽度与 pointwise ensemble
+
+所有结果继续使用冻结 manifest SHA256
+`74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9`、
+固定 split seed `20260906`，主指标为成功候选连续 II MAE。六次完全相同的
+9-layer/hidden=64 训练仅改变初始化与 batch-order seed，测试 MAE 为
+`0.43347, 0.41692, 0.43371, 0.42443, 0.43998, 0.42962`，均值 `0.42969`、
+样本标准差 `0.00809`。单个 seed 的最好结果不能当作稳定架构收益。
+
+新增的 `--training-fraction` 在已经固定的 train partition 内做 family-stratified、
+稳定哈希前缀采样；不同 fraction 严格嵌套，validation/test 不变。学习曲线为：
+
+| Job | 训练 DFG | fraction | test MAE |
+|---|---:|---:|---:|
+| `1477067` | 555 | 25% | 0.65411 |
+| `1477068` | 1115 | 50% | 0.54622 |
+| `1477069` | 1671 | 75% | 0.49634 |
+| `1476848` | 2232 | 100% | 0.43347 |
+
+全量模型的 train MAE 为 0.19571、validation MAE 为 0.43698。学习曲线在全量点
+仍明显下降且存在较大泛化间隙，因此当前数据量确实限制精度；继续收集时应使用与 v7
+一致的 16-shape/同 mapper 协议和新的 DFG seed，不能把 shape/架构协议不同的 v2--v5
+旧标签直接拼入。
+
+hidden 从 64 增至 128 后，参数量从 890327 增至 3525527。四个 seed 的测试 MAE 为：
+
+| Job | training seed | validation MAE | test MAE |
+|---|---:|---:|---:|
+| `1477072` | 20260906 | 0.42328 | 0.40582 |
+| `1477078` | 20260907 | **0.40502** | 0.39264 |
+| `1477079` | 20260908 | 0.41546 | **0.38123** |
+| `1477080` | 20260909 | 0.42629 | 0.40556 |
+
+所以增加容量有稳定收益，但四个宽模型的 train MAE 仍只有 0.116--0.135，数据覆盖仍是
+主要约束。hidden=128 延长到 160 epoch 的 `1477246` 虽把 train MAE 降至 0.06076，
+validation MAE 却从同 seed 100 epoch 的 0.40502 变为 0.40806，不能替换短训模型。
+hidden=256/100 epoch 的 `1477084` 没有收敛（train/test MAE 0.59244/0.61118）；
+延长到 200 epoch 的 `1477247` 仍只有 0.46337/0.58678，继续扩宽已不是当前优化器和
+数据规模下有证据支持的方向。
+
+ensemble 仍逐候选独立：base convex weights、置信度指数和方差归一化尺度只从
+validation 拟合。关键结果：
+
+| Job | checkpoint 数 | validation MAE | test MAE |
+|---|---:|---:|---:|
+| `1477056` | 12 个 hidden=64/结构消融 | 0.37861 | 0.36896 |
+| `1477215` | 4 个 hidden=128 seed | 0.37589 | 0.35486 |
+| `1477216` | 旧紧凑 5 个 + 4 个 hidden=128 | 0.36731 | **0.34906** |
+| `1477217` | 全部 16 个候选 | 0.36707 | 0.34998 |
+| `1477240` | validation 权重前三个模型 | **0.36515** | 0.35498 |
+| `1477267` | 最终三模型、含 manifest/checkpoint SHA-256 | **0.36515** | 0.35498 |
+
+不能用测试集在 `1477216`、`1477217` 和 `1477240` 之间反选。按 validation 主指标，
+当前部署候选是 `1477267`：`absolute_p + wide7 + wide8`，权重分别为
+`0.18582, 0.44491, 0.36927`，置信度指数为 `3.1`。解析 lower bound 权重仍为 0。
+它用三个模型保留了大部分 ensemble 收益；若只报告探索性最低 test 数值，应明确
+`1477216` 的 0.34906 不是 validation 选择结果。
+
+Job `1477071` 在 L20、batch=1 上测得：单个 hidden=64/9-layer 模型平均约 6.1 ms，
+旧五模型顺序 ensemble 平均 26.51 ms、P95 31.02 ms。口径包括图张量化、GNN、
+soft placement 和 routing context，不包括模型加载、manifest 解析与编译前端。
+最终三模型的 Job `1477266` 平均 **16.06 ms/候选**、median 16.16 ms、P95 18.73 ms；
+其中 `absolute_p` 平均 3.11 ms，两个 hidden=128 模型分别为 6.81 和 6.55 ms。
+报告已保存为
+`evaluations/model2-pointwise-ensemble-2026-09-05.json` 和
+`evaluations/model2-pointwise-latency-2026-09-05.json`。二者记录了冻结 manifest 与
+三个 checkpoint 的 SHA-256；模型本体继续保留在报告列出的 FactCluster 路径。

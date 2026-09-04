@@ -17,6 +17,7 @@ class GraphModelTest(unittest.TestCase):
         global torch
         global CandidateRecord, QueryRecord, resolve_device, split_queries
         global add_training_only_queries, attach_placement_supervision
+        global subsample_training_queries
         global batch_placement_targets, _validation_score
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
@@ -32,7 +33,8 @@ class GraphModelTest(unittest.TestCase):
         from adapters.neura_graph_experiment import (
             CandidateRecord, QueryRecord, add_training_only_queries,
             attach_placement_supervision, batch_placement_targets,
-            resolve_device, split_queries, _validation_score,
+            resolve_device, split_queries, subsample_training_queries,
+            _validation_score,
         )
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
@@ -892,6 +894,45 @@ class GraphModelTest(unittest.TestCase):
                 attached, 1, torch.device("cpu"),
             )
             self.assertTrue(torch.equal(targets, torch.tensor([[[0]]])))
+
+    def test_training_subsamples_are_deterministic_stratified_and_nested(self):
+        graph = parse_neura_dfg(
+            '%a = "neura.constant"() : () -> !neura.data<i32, i1>'
+        )
+        queries = []
+        for family in ("f0", "f1"):
+            for index in range(12):
+                identity = f"{family}/{index}"
+                candidate = CandidateRecord(
+                    candidate_id=f"{identity}/1x1",
+                    ranking_query_id=identity, rows=1, columns=1,
+                    rec_mii=1, res_mii=1, lower_bound=1,
+                    status="success", compiled_ii=1,
+                )
+                queries.append(QueryRecord(
+                    ranking_query_id=identity,
+                    generator_family=family, graph=graph,
+                    candidates=(candidate,),
+                ))
+        quarter = subsample_training_queries(queries, 0.25, 17)
+        half = subsample_training_queries(queries, 0.5, 17)
+        quarter_ids = {query.ranking_query_id for query in quarter}
+        half_ids = {query.ranking_query_id for query in half}
+        self.assertEqual(len(quarter), 6)
+        self.assertEqual(len(half), 12)
+        self.assertLessEqual(quarter_ids, half_ids)
+        self.assertEqual(
+            half_ids,
+            {query.ranking_query_id
+             for query in subsample_training_queries(queries, 0.5, 17)},
+        )
+        self.assertEqual(
+            {query.generator_family for query in quarter}, {"f0", "f1"}
+        )
+        self.assertEqual(subsample_training_queries(queries, 1.0, 17), queries)
+        for fraction in (0.0, 1.1):
+            with self.assertRaisesRegex(ValueError, "training fraction"):
+                subsample_training_queries(queries, fraction, 17)
 
     def test_route_expanded_placement_targets_align_to_materialized_nodes(self):
         graph = parse_neura_route_expanded_dfg("""
