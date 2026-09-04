@@ -32,9 +32,16 @@ if [[ "${actual_manifest_sha256}" != "${EXPECTED_MANIFEST_SHA256}" ]]; then
   exit 2
 fi
 
+project_revision=unknown
+if [[ -r .factcluster-synced-commit ]]; then
+  read -r project_revision < .factcluster-synced-commit
+elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  project_revision=$(git rev-parse HEAD)
+fi
+
 echo "job_id=${SLURM_JOB_ID}"
 echo "host=${SLURMD_NODENAME:-unknown}"
-echo "project_commit=$(git rev-parse HEAD)"
+echo "project_commit=${project_revision}"
 echo "manifest_sha256=${actual_manifest_sha256}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
