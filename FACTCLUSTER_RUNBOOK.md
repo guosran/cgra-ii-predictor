@@ -149,6 +149,22 @@ top-1 为 29.21%，optimal-II rate 为 51.84%，selected-success rate 为 92.89%
 timeout-penalized regret 为 1.2605。后续架构比较必须使用这四项以及逐 family 指标，
 不能只比较训练 loss。
 
+候选条件化 cross-attention 对照是 Job `1474457`，代码提交
+`9d98ac04ab8a289aa2ce34f9f16c7005e43df598`，最佳 epoch 39，执行满 40
+个 epoch。测试结果如下：
+
+| 指标 | pooled `1472687` | cross-attention `1474457` | 变化 |
+| --- | ---: | ---: | ---: |
+| strict top-1 | 29.21% | 34.47% | +5.26 pp |
+| optimal-II rate | 51.84% | 55.26% | +3.42 pp |
+| selected-success rate | 92.89% | 97.11% | +4.21 pp |
+| timeout-penalized regret | 1.2605 | 1.0211 | -0.2394 |
+
+逐 family 的 strict top-1 变化为：compute 25.33% -> 40.00%，memory 24.00%
+-> 28.00%，mixed 17.14% -> 28.57%，predicated 20.27% -> 28.38%；pointer
+25.53% -> 21.28%、recurrence 55.41% -> 52.70% 出现回退。该结果仍使用已经披露
+标签的探索性切分，不是新的盲测结论。
+
 记下输出的 job ID。低频查看队列：
 
 ```sh
