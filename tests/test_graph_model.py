@@ -15,7 +15,7 @@ TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 class GraphModelTest(unittest.TestCase):
     def setUp(self):
         global torch
-        global CandidateRecord, QueryRecord, split_queries
+        global CandidateRecord, QueryRecord, resolve_device, split_queries
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global parse_neura_dfg
@@ -24,13 +24,21 @@ class GraphModelTest(unittest.TestCase):
         from adapters import neura_graph_frozen as frozen_adapter
         from adapters import neura_motifs_v7
         from adapters.neura_graph_experiment import (
-            CandidateRecord, QueryRecord, split_queries,
+            CandidateRecord, QueryRecord, resolve_device, split_queries,
         )
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
             censored_top1_metrics, make_cgra_graph, model2_loss,
             parse_neura_dfg,
         )
+
+    def test_device_selection_never_silently_ignores_explicit_cuda(self):
+        self.assertEqual(resolve_device("cpu").type, "cpu")
+        with self.assertRaisesRegex(ValueError, "auto, cpu, or cuda"):
+            resolve_device("tpu")
+        if not torch.cuda.is_available():
+            with self.assertRaisesRegex(ValueError, "CUDA was requested"):
+                resolve_device("cuda")
 
     def test_frozen_evaluator_loads_weights_without_constructing_optimizer(self):
         config = frozen_adapter.frozen_config()

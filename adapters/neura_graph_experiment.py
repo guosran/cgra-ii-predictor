@@ -434,10 +434,26 @@ def _validation_score(evaluation: Mapping[str, Any]) -> Tuple[float, ...]:
     )
 
 
+def resolve_device(requested: str) -> torch.device:
+    """Resolve an explicit training device without silently ignoring CUDA."""
+    normalized = requested.strip().lower()
+    if normalized == "auto":
+        normalized = "cuda" if torch.cuda.is_available() else "cpu"
+    if normalized == "cuda" and not torch.cuda.is_available():
+        raise ValueError(
+            "CUDA was requested but torch.cuda.is_available() is false; "
+            "check the NVIDIA driver and /dev/nvidia* device nodes"
+        )
+    if normalized not in {"cpu", "cuda"}:
+        raise ValueError("device must be auto, cpu, or cuda")
+    return torch.device(normalized)
+
+
 def train_model(
     splits: Mapping[str, Sequence[QueryRecord]], config: Model2Config,
     *, epochs: int, batch_size: int, learning_rate: float,
     weight_decay: float, patience: int, seed: int, threads: int,
+    device: Optional[torch.device] = None,
 ) -> Tuple[JointGraphShapeModel, Dict[str, Any]]:
     config.validate()
     if epochs < 1 or batch_size < 1 or patience < 1 or threads < 1:
@@ -445,7 +461,9 @@ def train_model(
     torch.manual_seed(seed)
     torch.set_num_threads(threads)
     torch.use_deterministic_algorithms(True)
-    device = torch.device("cpu")
+    device = device or torch.device("cpu")
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(seed)
     model = JointGraphShapeModel(config).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay,
@@ -534,7 +552,7 @@ def train_model(
 def train_fixed_epochs(
     queries: Sequence[QueryRecord], config: Model2Config, *, epochs: int,
     batch_size: int, learning_rate: float, weight_decay: float,
-    seed: int, threads: int,
+    seed: int, threads: int, device: Optional[torch.device] = None,
 ) -> Tuple[JointGraphShapeModel, Dict[str, Any]]:
     """Refit a frozen configuration on every development query.
 
@@ -550,7 +568,9 @@ def train_fixed_epochs(
     torch.manual_seed(seed)
     torch.set_num_threads(threads)
     torch.use_deterministic_algorithms(True)
-    device = torch.device("cpu")
+    device = device or torch.device("cpu")
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(seed)
     model = JointGraphShapeModel(config).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay,
@@ -631,6 +651,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--seed", type=int, default=DEFAULT_SPLIT_SEED)
     parser.add_argument("--threads", type=int, default=6)
+    parser.add_argument(
+        "--device", choices=("auto", "cpu", "cuda"), default="auto",
+        help=("Training device. Explicit --device cuda fails instead of "
+              "silently falling back when the NVIDIA driver is unavailable."),
+    )
     parser.add_argument("--hidden-dimension", type=int, default=64)
     parser.add_argument("--message-passing-layers", type=int, default=3)
     parser.add_argument("--dropout", type=float, default=0.10)
@@ -640,6 +665,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    try:
+        device = resolve_device(args.device)
+    except ValueError as error:
+        raise SystemExit(str(error))
     config = Model2Config(
         hidden_dimension=args.hidden_dimension,
         message_passing_layers=args.message_passing_layers,
@@ -647,13 +676,17 @@ def main() -> int:
         strict_tiebreak_loss_weight=args.strict_tiebreak_loss_weight,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
+    generator_versions = sorted({
+        str(candidate.get("generator_version", "unknown"))
+        for candidate in manifest["candidates"]
+    })
     splits = split_queries(queries, args.seed)
     model, training = train_model(
         splits, config, epochs=args.epochs, batch_size=args.batch_size,
         learning_rate=args.learning_rate, weight_decay=args.weight_decay,
         patience=args.patience, seed=args.seed, threads=args.threads,
+        device=device,
     )
-    device = torch.device("cpu")
     shape_graphs = [
         make_cgra_graph(rows, columns)
         for rows in range(1, 5) for columns in range(1, 5)
@@ -711,13 +744,19 @@ def main() -> int:
     }
     report = {
         "schema_version": SCHEMA_VERSION,
-        "status": "exploratory_v6_labels_already_disclosed",
+        "status": (
+            "exploratory_v6_labels_already_disclosed"
+            if generator_versions == ["motif-v6"] else
+            "exploratory_combined_labels_already_disclosed"
+        ),
         "model_class": "joint_directed_gnn_dual_head_listwise_v1",
+        "training_device": str(device),
         "manifest": {
             "path": str(args.manifest.resolve()),
             "sha256": sha256_file(args.manifest.resolve()),
             "schema_version": manifest.get("schema_version"),
             "candidate_count": len(manifest["candidates"]),
+            "generator_versions": generator_versions,
         },
         "model": {
             "path": str(model_path.resolve()),
