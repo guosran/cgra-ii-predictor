@@ -223,6 +223,46 @@ def split_queries(
     return result
 
 
+def add_training_only_queries(
+    splits: Mapping[str, Sequence[QueryRecord]],
+    base_queries: Sequence[QueryRecord],
+    additional_queries: Sequence[QueryRecord],
+) -> Tuple[Dict[str, List[QueryRecord]], List[str]]:
+    """Append only previously unseen queries to the training partition.
+
+    This preserves an already inspected validation/test population while a
+    collection that was in progress at snapshot time finishes.  Overlapping
+    queries must be identical under the model input/target contract; silently
+    replacing their labels would invalidate the comparison.
+    """
+    split_names = ("train", "validation", "test")
+    if set(splits) != set(split_names):
+        raise ValueError("training split must contain train, validation, and test")
+    by_id: Dict[str, QueryRecord] = {}
+    for query in base_queries:
+        if query.ranking_query_id in by_id:
+            raise ValueError("base queries contain a duplicate identity")
+        by_id[query.ranking_query_id] = query
+    result = {name: list(splits[name]) for name in split_names}
+    added: List[QueryRecord] = []
+    for query in additional_queries:
+        existing = by_id.get(query.ranking_query_id)
+        if existing is not None:
+            if existing != query:
+                raise ValueError(
+                    "additional manifest changes an existing query: "
+                    + query.ranking_query_id
+                )
+            continue
+        by_id[query.ranking_query_id] = query
+        added.append(query)
+    added.sort(key=lambda query: (
+        query.generator_family, query.ranking_query_id,
+    ))
+    result["train"].extend(added)
+    return result, [query.ranking_query_id for query in added]
+
+
 def _oracle_index(query: QueryRecord) -> int:
     successful = [
         (index, candidate) for index, candidate in enumerate(query.candidates)
@@ -647,6 +687,13 @@ def split_summary(splits: Mapping[str, Sequence[QueryRecord]]) -> Dict[str, Any]
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument(
+        "--additional-training-manifest", action="append", type=Path,
+        default=[],
+        help=("Append queries absent from --manifest to training only while "
+              "preserving its validation/test split. Overlapping queries "
+              "must be identical."),
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -710,11 +757,34 @@ def main() -> int:
         discrete_ii_decision=args.discrete_ii_decision,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
+    manifests = [(args.manifest, manifest)]
+    splits = split_queries(queries, args.seed)
+    added_training_query_ids: List[str] = []
+    known_queries = list(queries)
+    for additional_path in args.additional_training_manifest:
+        additional_manifest, additional_queries = load_terminal_manifest(
+            additional_path
+        )
+        splits, added_ids = add_training_only_queries(
+            splits, known_queries, additional_queries,
+        )
+        added_set = set(added_ids)
+        known_queries.extend(
+            query for query in additional_queries
+            if query.ranking_query_id in added_set
+        )
+        added_training_query_ids.extend(added_ids)
+        manifests.append((additional_path, additional_manifest))
+        print(
+            f"additional_training_manifest={additional_path.resolve()} "
+            f"new_queries={len(added_ids)}",
+            flush=True,
+        )
     generator_versions = sorted({
         str(candidate.get("generator_version", "unknown"))
-        for candidate in manifest["candidates"]
+        for _, source_manifest in manifests
+        for candidate in source_manifest["candidates"]
     })
-    splits = split_queries(queries, args.seed)
     model, training = train_model(
         splits, config, epochs=args.epochs, batch_size=args.batch_size,
         learning_rate=args.learning_rate, weight_decay=args.weight_decay,
@@ -769,6 +839,10 @@ def main() -> int:
         ),
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
+        "additional_training_manifest_sha256": [
+            sha256_file(path.resolve())
+            for path in args.additional_training_manifest
+        ],
     }, model_path)
     test_baseline = evaluations["test"]["analytical_top1"]
     test_model = evaluations["test"]["model2_top1"]
@@ -825,6 +899,14 @@ def main() -> int:
             "schema_version": manifest.get("schema_version"),
             "candidate_count": len(manifest["candidates"]),
             "generator_versions": generator_versions,
+            "additional_training_only": [
+                {
+                    "path": str(path.resolve()),
+                    "sha256": sha256_file(path.resolve()),
+                    "candidate_count": len(source_manifest["candidates"]),
+                }
+                for path, source_manifest in manifests[1:]
+            ],
         },
         "model": {
             "path": str(model_path.resolve()),
@@ -844,6 +926,12 @@ def main() -> int:
                 "test": 1.0 - DEFAULT_TRAIN_FRACTION - DEFAULT_VALIDATION_FRACTION,
             },
             "summary": split_summary(splits),
+            "additional_training_only_query_count": len(
+                added_training_query_ids
+            ),
+            "additional_training_only_query_ids_sha256": hashlib.sha256(
+                "\n".join(added_training_query_ids).encode("utf-8")
+            ).hexdigest(),
         },
         "loss_contract": {
             "success": (

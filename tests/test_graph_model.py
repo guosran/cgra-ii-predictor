@@ -16,6 +16,7 @@ class GraphModelTest(unittest.TestCase):
     def setUp(self):
         global torch
         global CandidateRecord, QueryRecord, resolve_device, split_queries
+        global add_training_only_queries
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global pad_shortest_path_distances, parse_neura_dfg
@@ -24,7 +25,8 @@ class GraphModelTest(unittest.TestCase):
         from adapters import neura_graph_frozen as frozen_adapter
         from adapters import neura_motifs_v7
         from adapters.neura_graph_experiment import (
-            CandidateRecord, QueryRecord, resolve_device, split_queries,
+            CandidateRecord, QueryRecord, add_training_only_queries,
+            resolve_device, split_queries,
         )
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
@@ -434,6 +436,46 @@ class GraphModelTest(unittest.TestCase):
              for name in ("train", "validation", "test")],
             [28, 6, 6],
         )
+
+    def test_additional_queries_are_training_only_without_moving_holdouts(self):
+        graph = parse_neura_dfg(
+            '%a = "neura.constant"() : () -> !neura.data<i32, i1>'
+        )
+
+        def query(identity, compiled_ii=1):
+            candidate = CandidateRecord(
+                candidate_id=f"{identity}/1x1",
+                ranking_query_id=identity, rows=1, columns=1,
+                rec_mii=1, res_mii=1, lower_bound=1,
+                status="success", compiled_ii=compiled_ii,
+            )
+            return QueryRecord(
+                ranking_query_id=identity,
+                generator_family="family", graph=graph,
+                candidates=(candidate,),
+            )
+
+        base = [query(f"q{index}") for index in range(3)]
+        split = {
+            "train": [base[0]],
+            "validation": [base[1]],
+            "test": [base[2]],
+        }
+        extended, added = add_training_only_queries(
+            split, base, [base[1], query("q3")],
+        )
+        self.assertEqual(added, ["q3"])
+        self.assertEqual(
+            [q.ranking_query_id for q in extended["validation"]], ["q1"]
+        )
+        self.assertEqual(
+            [q.ranking_query_id for q in extended["test"]], ["q2"]
+        )
+        self.assertEqual(
+            [q.ranking_query_id for q in extended["train"]], ["q0", "q3"]
+        )
+        with self.assertRaisesRegex(ValueError, "changes an existing query"):
+            add_training_only_queries(split, base, [query("q1", 2)])
 
 
 if __name__ == "__main__":

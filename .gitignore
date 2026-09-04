@@ -12,4 +12,5 @@ corpora/
 # artifacts. A future frozen model should use a distinct non-exploratory name.
 references/*.pdf
 models/*-exploratory.json
+models/model2-*-factcluster-*/
 evaluations/*-summary.json
