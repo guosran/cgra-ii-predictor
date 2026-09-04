@@ -109,6 +109,7 @@ class Model2Config:
     discrete_ii_loss_weight: float = 1.0
     discrete_success_threshold: float = 0.5
     discrete_ii_decision: str = "map"
+    placement_loss_weight: float = 0.0
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -155,6 +156,18 @@ class Model2Config:
                 raise ValueError(
                     "discrete_ii_decision must be map, round, floor, or ceil"
                 )
+        if (
+            not math.isfinite(float(self.placement_loss_weight)) or
+            self.placement_loss_weight < 0.0
+        ):
+            raise ValueError("placement_loss_weight must be finite and nonnegative")
+        if self.placement_loss_weight > 0.0 and self.interaction_mode not in {
+            "cross_attention", "routing_set_attention",
+            "discrete_routing_set", "strict_set_classifier",
+        }:
+            raise ValueError(
+                "placement supervision requires a cross-attention mode"
+            )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
@@ -182,6 +195,8 @@ class Model2Config:
             values.pop("discrete_ii_loss_weight")
             values.pop("discrete_success_threshold")
             values.pop("discrete_ii_decision")
+        if self.placement_loss_weight == 0.0:
+            values.pop("placement_loss_weight")
         return values
 
 
@@ -277,6 +292,50 @@ def parse_neura_dfg(text: str) -> GraphData:
         edges=edges,
     )
     return graph.validate(len(DFG_NODE_FEATURE_NAMES))
+
+
+def parse_neura_mapped_placements(
+    text: str, source_graph: GraphData, rows: int, columns: int,
+) -> Tuple[int, ...]:
+    """Extract one mapper-assigned PE index for every materialized DFG node."""
+    if not 1 <= rows <= 4 or not 1 <= columns <= 4:
+        raise ValueError("mapped placement shape is outside the pinned mesh")
+    mapped_types: List[int] = []
+    placements: List[int] = []
+    for line in text.splitlines():
+        match = re.match(r"\s*(%[A-Za-z0-9_]+)\s*=\s*(.*)", line)
+        if not match:
+            continue
+        expression = match.group(2)
+        kind_match = re.search(r'"?neura\.([a-z_]+)', expression)
+        if not kind_match or kind_match.group(1) in TRANSPARENT_OPERATIONS:
+            continue
+        kind = kind_match.group(1)
+        mapped_types.append(
+            OPERATION_TO_ID.get(kind, OPERATION_TO_ID["<unknown>"])
+        )
+        tile_locations = []
+        for location in re.findall(r"\{[^{}]*\}", expression):
+            if 'resource = "tile"' not in location:
+                continue
+            x_match = re.search(r"x = (\d+) : i32", location)
+            y_match = re.search(r"y = (\d+) : i32", location)
+            if x_match is not None and y_match is not None:
+                tile_locations.append((
+                    int(x_match.group(1)), int(y_match.group(1)),
+                ))
+        unique_locations = set(tile_locations)
+        if len(unique_locations) != 1:
+            raise ValueError(
+                "mapped materialized operation lacks one stable tile location"
+            )
+        x, y = next(iter(unique_locations))
+        if not 0 <= x < columns or not 0 <= y < rows:
+            raise ValueError("mapped tile location is outside the candidate shape")
+        placements.append(y * columns + x)
+    if tuple(mapped_types) != source_graph.node_types:
+        raise ValueError("mapped operation sequence differs from the source DFG")
+    return tuple(placements)
 
 
 def make_cgra_graph(rows: int, columns: int) -> GraphData:
@@ -607,7 +666,7 @@ if nn is not None:
         def _candidate_conditioned_interaction(
             self, dfg_nodes: Tensor, dfg_mask: Tensor,
             cgra_nodes: Tensor, cgra_mask: Tensor,
-        ) -> Tuple[Tensor, Tensor, Tensor]:
+        ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
             """Attend every operation to the PEs of each candidate shape.
 
             Besides a learned cross-graph summary, return differentiable load
@@ -674,7 +733,7 @@ if nn is not None:
             cross_context = torch.stack((
                 pressure, normalized_peak, normalized_entropy,
             ), dim=-1)
-            return cross_summary, cross_context, attention
+            return cross_summary, cross_context, attention, logits
 
         def _routing_context(
             self, attention: Tensor, dfg_adjacency: Tensor,
@@ -742,7 +801,10 @@ if nn is not None:
                 )
                 dfg = self.dfg_encoder.pool_nodes(dfg_nodes, dfg_mask)
                 cgra = self.cgra_encoder.pool_nodes(cgra_nodes, cgra_mask)
-                cross_summary, cross_context, cross_attention = (
+                (
+                    cross_summary, cross_context, cross_attention,
+                    cross_attention_logits,
+                ) = (
                     self._candidate_conditioned_interaction(
                         dfg_nodes, dfg_mask, cgra_nodes, cgra_mask,
                     )
@@ -763,6 +825,7 @@ if nn is not None:
                 cross_summary = None
                 cross_context = None
                 routing_context = None
+                cross_attention_logits = None
             batch, candidates = context.shape[:2]
             dfg = dfg[:, None, :].expand(batch, candidates, -1)
             cgra = cgra[None, :, :].expand(batch, candidates, -1)
@@ -885,6 +948,8 @@ if nn is not None:
             }
             if cross_context is not None:
                 result["cross_attention_context"] = cross_context
+            if cross_attention_logits is not None:
+                result["placement_logits"] = cross_attention_logits
             if routing_context is not None and ranking_logits is not None:
                 result["routing_context"] = routing_context
                 result["ranking_logits"] = ranking_logits
@@ -904,7 +969,7 @@ else:  # pragma: no cover - exercised only in NumPy-only installations.
 def model2_loss(
     output: Mapping[str, Tensor], success_target: Tensor,
     residual_target: Tensor, optimal_ii_target: Tensor, oracle_index: Tensor,
-    config: Model2Config,
+    config: Model2Config, placement_target: Optional[Tensor] = None,
 ) -> Dict[str, Tensor]:
     """Combine the configured candidate objectives.
 
@@ -937,6 +1002,26 @@ def model2_loss(
     else:
         residual_loss = logits.sum() * 0.0
     discrete_ii_loss = logits.sum() * 0.0
+    placement_loss = logits.sum() * 0.0
+    if config.placement_loss_weight > 0.0:
+        if placement_target is None:
+            raise ValueError(
+                "positive placement_loss_weight requires placement targets"
+            )
+        placement_logits = output.get("placement_logits")
+        if placement_logits is None:
+            raise ValueError("model output lacks placement logits")
+        placement_target = placement_target.to(
+            placement_logits.device, dtype=torch.long,
+        )
+        if placement_target.shape != placement_logits.shape[:-1]:
+            raise ValueError("placement target tensor has an inconsistent shape")
+        supervised_placements = placement_target >= 0
+        if supervised_placements.any():
+            placement_loss = functional.cross_entropy(
+                placement_logits[supervised_placements],
+                placement_target[supervised_placements],
+            )
     if "ii_class_logits" in output and successful.any():
         target_ii = (
             output["lower_bound"] + residual_target
@@ -992,11 +1077,14 @@ def model2_loss(
             config.listwise_loss_weight * listwise_loss +
             config.discrete_ii_loss_weight * discrete_ii_loss
         )
+    if config.placement_loss_weight > 0.0:
+        total = total + config.placement_loss_weight * placement_loss
     return {
         "total": total,
         "success": success_loss,
         "residual": residual_loss,
         "discrete_ii": discrete_ii_loss,
+        "placement": placement_loss,
         "listwise": listwise_loss,
         "listwise_optimal_ii": optimal_ii_loss,
         "listwise_strict_tiebreak": strict_tiebreak_loss,
@@ -1104,4 +1192,5 @@ __all__ = [
     "Model2Config", "OPERATION_TYPES", "candidate_context",
     "censored_top1_metrics", "make_cgra_graph", "model2_loss",
     "pad_graphs", "pad_shortest_path_distances", "parse_neura_dfg",
+    "parse_neura_mapped_placements",
 ]

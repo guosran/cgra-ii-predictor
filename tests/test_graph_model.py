@@ -16,22 +16,26 @@ class GraphModelTest(unittest.TestCase):
     def setUp(self):
         global torch
         global CandidateRecord, QueryRecord, resolve_device, split_queries
-        global add_training_only_queries
+        global add_training_only_queries, attach_placement_supervision
+        global batch_placement_targets
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global pad_shortest_path_distances, parse_neura_dfg
+        global parse_neura_mapped_placements
         global frozen_adapter, neura_motifs_v7
         import torch
         from adapters import neura_graph_frozen as frozen_adapter
         from adapters import neura_motifs_v7
         from adapters.neura_graph_experiment import (
             CandidateRecord, QueryRecord, add_training_only_queries,
+            attach_placement_supervision, batch_placement_targets,
             resolve_device, split_queries,
         )
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
             censored_top1_metrics, make_cgra_graph, model2_loss,
             pad_shortest_path_distances, parse_neura_dfg,
+            parse_neura_mapped_placements,
         )
 
     def test_device_selection_never_silently_ignores_explicit_cuda(self):
@@ -118,6 +122,25 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(graph.edges, ((0, 2), (1, 2)))
         self.assertEqual(graph.node_features[0][6], 1.0)
         self.assertEqual(graph.node_features[2][7], 1.0)
+
+    def test_mapped_placements_align_materialized_operations_to_pes(self):
+        source = """
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %m = "neura.data_mov"(%a) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %c = "neura.add"(%m, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """
+        mapped = """
+        %0 = "neura.constant"() {mapping_locs = [{resource = "tile", x = 0 : i32, y = 0 : i32}]} : () -> !neura.data<i32, i1>
+        %1 = "neura.constant"() {mapping_locs = [{resource = "tile", x = 1 : i32, y = 0 : i32}]} : () -> !neura.data<i32, i1>
+        %2 = "neura.data_mov"(%0) {mapping_locs = [{resource = "link"}]} : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %3 = "neura.add"(%2, %1) {mapping_locs = [{resource = "tile", x = 1 : i32, y = 0 : i32}]} : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """
+        graph = parse_neura_dfg(source)
+        self.assertEqual(
+            parse_neura_mapped_placements(mapped, graph, 1, 2),
+            (0, 1, 1),
+        )
 
     def test_oriented_shape_context_and_graph_are_not_transpose_aliases(self):
         two_by_three = candidate_context(2, 3, 1, 4, 4)
@@ -355,6 +378,40 @@ class GraphModelTest(unittest.TestCase):
         ).to_dict()
         self.assertEqual(calibrated["discrete_success_threshold"], 0.9)
         self.assertEqual(calibrated["discrete_ii_decision"], "floor")
+        with self.assertRaisesRegex(ValueError, "cross-attention mode"):
+            Model2Config(placement_loss_weight=1.0).validate()
+
+    def test_placement_loss_supervises_operation_to_pe_attention(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="discrete_routing_set",
+            candidate_set_layers=1, candidate_set_heads=4,
+            placement_loss_weight=0.5,
+        )
+        model = JointGraphShapeModel(config)
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        context = torch.tensor([[
+            candidate_context(1, 1, 1, 4, 4),
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        output = model([graph], shapes, context)
+        placement = torch.tensor([[[0, 0, 0], [0, 1, 1]]])
+        losses = model2_loss(
+            output, torch.tensor([[1.0, 1.0]]),
+            torch.tensor([[1.0, 1.0]]), torch.tensor([[False, True]]),
+            torch.tensor([1]), config, placement,
+        )
+        self.assertGreater(float(losses["placement"]), 0.0)
+        losses["total"].backward()
+        gradient = model.cross_dfg_query.weight.grad
+        self.assertIsNotNone(gradient)
+        self.assertTrue(torch.any(gradient != 0))
+        self.assertEqual(config.to_dict()["placement_loss_weight"], 0.5)
 
     def test_strict_set_classifier_optimizes_only_oracle_shape(self):
         graph = parse_neura_dfg("""
@@ -397,8 +454,11 @@ class GraphModelTest(unittest.TestCase):
             gradient = parameters[name].grad
             self.assertIsNotNone(gradient, name)
             self.assertTrue(torch.any(gradient != 0), name)
-        self.assertIsNone(parameters["success_head.weight"].grad)
-        self.assertIsNone(parameters["residual_head.weight"].grad)
+        for name in ("success_head.weight", "residual_head.weight"):
+            gradient = parameters[name].grad
+            self.assertTrue(
+                gradient is None or not torch.any(gradient != 0), name
+            )
         serialized = config.to_dict()
         self.assertEqual(
             serialized["interaction_mode"], "strict_set_classifier"
@@ -476,6 +536,22 @@ class GraphModelTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "changes an existing query"):
             add_training_only_queries(split, base, [query("q1", 2)])
+
+        with tempfile.TemporaryDirectory() as directory:
+            supervision_path = Path(directory) / "placement.json"
+            supervision_path.write_text(json.dumps({
+                "schema_version": "cgra-ii-placement-supervision-v1",
+                "placements": {"q0/1x1": [0]},
+            }))
+            attached, metadata = attach_placement_supervision(
+                [base[0]], supervision_path,
+            )
+            self.assertEqual(metadata["attached_training_candidate_count"], 1)
+            self.assertEqual(attached[0].candidates[0].placement, (0,))
+            targets = batch_placement_targets(
+                attached, 1, torch.device("cpu"),
+            )
+            self.assertTrue(torch.equal(targets, torch.tensor([[[0]]])))
 
 
 if __name__ == "__main__":

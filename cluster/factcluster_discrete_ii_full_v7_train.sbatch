@@ -18,8 +18,11 @@ ADDITIONAL_MANIFEST=${DATA_ROOT}/motif-v7-formal-seed-20260906/corpus-manifest.j
 OUTPUT_DIR=${RUN_ROOT}/discrete-full-v7-${SLURM_JOB_ID}
 EXPECTED_MANIFEST_SHA256=74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9
 EXPECTED_ADDITIONAL_SHA256=9ef9ee0ba648430c6a594a20f3e32fb55038af505560dfc2f9b91d613ea6b062
+EXPECTED_PLACEMENT_SHA256=9ad9434c4207a77bb5b549b23485a973e7c0168ba4626edc17aa5c547a75aa43
 EPOCHS=${EPOCHS:-40}
 PATIENCE=${PATIENCE:-${EPOCHS}}
+PLACEMENT_SUPERVISION=${PLACEMENT_SUPERVISION:-}
+PLACEMENT_LOSS_WEIGHT=${PLACEMENT_LOSS_WEIGHT:-0.0}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -39,6 +42,19 @@ if [[ "${actual_additional_sha256}" != "${EXPECTED_ADDITIONAL_SHA256}" ]]; then
   exit 2
 fi
 
+placement_arguments=()
+if [[ -n "${PLACEMENT_SUPERVISION}" ]]; then
+  actual_placement_sha256=$(sha256sum "${PLACEMENT_SUPERVISION}" | awk '{print $1}')
+  if [[ "${actual_placement_sha256}" != "${EXPECTED_PLACEMENT_SHA256}" ]]; then
+    echo "placement supervision hash mismatch" >&2
+    exit 2
+  fi
+  placement_arguments=(
+    --placement-supervision "${PLACEMENT_SUPERVISION}"
+    --placement-loss-weight "${PLACEMENT_LOSS_WEIGHT}"
+  )
+fi
+
 project_revision=unknown
 if [[ -r .factcluster-synced-commit ]]; then
   read -r project_revision < .factcluster-synced-commit
@@ -54,6 +70,8 @@ echo "additional_manifest_sha256=${actual_additional_sha256}"
 echo "architecture=calibrated_discrete_ii_ranker_full_v7_training_only"
 echo "epochs=${EPOCHS}"
 echo "patience=${PATIENCE}"
+echo "placement_supervision=${PLACEMENT_SUPERVISION:-none}"
+echo "placement_loss_weight=${PLACEMENT_LOSS_WEIGHT}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
@@ -73,4 +91,5 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --discrete-ii-loss-weight 1.0 \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \
+  "${placement_arguments[@]}" \
   --device cuda

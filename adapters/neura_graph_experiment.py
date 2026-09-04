@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import math
@@ -58,6 +58,7 @@ class CandidateRecord:
     lower_bound: float
     status: str
     compiled_ii: Optional[float]
+    placement: Optional[Tuple[int, ...]] = None
 
     def identity(self) -> Tuple[int, int, int, str]:
         return (
@@ -263,6 +264,59 @@ def add_training_only_queries(
     return result, [query.ranking_query_id for query in added]
 
 
+def attach_placement_supervision(
+    queries: Sequence[QueryRecord], path: Path,
+) -> Tuple[List[QueryRecord], Dict[str, Any]]:
+    """Attach mapper placement labels to successful training candidates."""
+    raw = json.loads(path.read_text())
+    if not isinstance(raw, Mapping) or raw.get("schema_version") != (
+        "cgra-ii-placement-supervision-v1"
+    ):
+        raise ValueError("placement supervision has an unsupported schema")
+    records = raw.get("placements")
+    if not isinstance(records, Mapping):
+        raise ValueError("placement supervision lacks placement records")
+    attached = 0
+    result: List[QueryRecord] = []
+    for query in queries:
+        candidates = []
+        operation_count = len(query.graph.node_types)
+        for candidate in query.candidates:
+            target = records.get(candidate.candidate_id)
+            if candidate.status == "censored":
+                if target is not None:
+                    raise ValueError(
+                        "censored candidate has placement supervision: "
+                        + candidate.candidate_id
+                    )
+                candidates.append(candidate)
+                continue
+            if not isinstance(target, list) or len(target) != operation_count:
+                raise ValueError(
+                    "successful candidate lacks complete placement supervision: "
+                    + candidate.candidate_id
+                )
+            if any(
+                isinstance(value, bool) or not isinstance(value, int) or
+                value < 0 or value >= candidate.rows * candidate.columns
+                for value in target
+            ):
+                raise ValueError(
+                    "candidate has invalid placement supervision: "
+                    + candidate.candidate_id
+                )
+            candidates.append(replace(candidate, placement=tuple(target)))
+            attached += 1
+        result.append(replace(query, candidates=tuple(candidates)))
+    return result, {
+        "path": str(path.resolve()),
+        "sha256": sha256_file(path.resolve()),
+        "schema_version": raw["schema_version"],
+        "available_candidate_count": len(records),
+        "attached_training_candidate_count": attached,
+    }
+
+
 def _oracle_index(query: QueryRecord) -> int:
     successful = [
         (index, candidate) for index, candidate in enumerate(query.candidates)
@@ -324,6 +378,33 @@ def batch_targets(
     )
 
 
+def batch_placement_targets(
+    queries: Sequence[QueryRecord], maximum_operations: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Pad optional operation-to-PE supervision with an ignore value."""
+    if maximum_operations < max(len(query.graph.node_types) for query in queries):
+        raise ValueError("placement target width is smaller than a DFG")
+    candidate_counts = {len(query.candidates) for query in queries}
+    if len(candidate_counts) != 1:
+        raise ValueError("placement batch has inconsistent candidate counts")
+    targets = torch.full(
+        (len(queries), next(iter(candidate_counts)), maximum_operations),
+        -1, dtype=torch.long, device=device,
+    )
+    for query_index, query in enumerate(queries):
+        operation_count = len(query.graph.node_types)
+        for candidate_index, candidate in enumerate(query.candidates):
+            if candidate.placement is None:
+                continue
+            if len(candidate.placement) != operation_count:
+                raise ValueError("placement label count differs from DFG nodes")
+            targets[query_index, candidate_index, :operation_count] = (
+                torch.tensor(candidate.placement, dtype=torch.long, device=device)
+            )
+    return targets
+
+
 def query_batches(
     queries: Sequence[QueryRecord], batch_size: int, *, seed: Optional[int] = None,
 ) -> Iterable[List[QueryRecord]]:
@@ -358,8 +439,14 @@ def evaluate_model(
                 batch, config, device,
             )
             output = model([query.graph for query in batch], shape_graphs, context)
+            placement = (
+                batch_placement_targets(
+                    batch, output["placement_logits"].shape[-2], device,
+                )
+                if config.placement_loss_weight > 0.0 else None
+            )
             losses = model2_loss(
-                output, success, residual, optimal, oracle, config,
+                output, success, residual, optimal, oracle, config, placement,
             )
             for name, value in losses.items():
                 loss_sums[name] += float(value) * len(batch)
@@ -531,8 +618,14 @@ def train_model(
             )
             optimizer.zero_grad(set_to_none=True)
             output = model([query.graph for query in batch], shape_graphs, context)
+            placement = (
+                batch_placement_targets(
+                    batch, output["placement_logits"].shape[-2], device,
+                )
+                if config.placement_loss_weight > 0.0 else None
+            )
             losses = model2_loss(
-                output, success, residual, optimal, oracle, config,
+                output, success, residual, optimal, oracle, config, placement,
             )
             losses["total"].backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
@@ -634,8 +727,14 @@ def train_fixed_epochs(
             )
             optimizer.zero_grad(set_to_none=True)
             output = model([query.graph for query in batch], shape_graphs, context)
+            placement = (
+                batch_placement_targets(
+                    batch, output["placement_logits"].shape[-2], device,
+                )
+                if config.placement_loss_weight > 0.0 else None
+            )
             losses = model2_loss(
-                output, success, residual, optimal, oracle, config,
+                output, success, residual, optimal, oracle, config, placement,
             )
             losses["total"].backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
@@ -694,6 +793,11 @@ def parse_args() -> argparse.Namespace:
               "preserving its validation/test split. Overlapping queries "
               "must be identical."),
     )
+    parser.add_argument(
+        "--placement-supervision", type=Path,
+        help=("Mapper operation-to-PE labels. They are attached to the "
+              "training partition only."),
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -728,6 +832,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-set-layers", type=int, default=2)
     parser.add_argument("--candidate-set-heads", type=int, default=4)
     parser.add_argument("--discrete-ii-loss-weight", type=float, default=1.0)
+    parser.add_argument("--placement-loss-weight", type=float, default=0.0)
     parser.add_argument(
         "--discrete-success-threshold", type=float, default=0.5,
     )
@@ -755,6 +860,7 @@ def main() -> int:
         discrete_ii_loss_weight=args.discrete_ii_loss_weight,
         discrete_success_threshold=args.discrete_success_threshold,
         discrete_ii_decision=args.discrete_ii_decision,
+        placement_loss_weight=args.placement_loss_weight,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
     manifests = [(args.manifest, manifest)]
@@ -779,6 +885,26 @@ def main() -> int:
             f"additional_training_manifest={additional_path.resolve()} "
             f"new_queries={len(added_ids)}",
             flush=True,
+        )
+    placement_supervision = None
+    if args.placement_supervision is not None:
+        if config.placement_loss_weight <= 0.0:
+            raise SystemExit(
+                "--placement-supervision requires positive "
+                "--placement-loss-weight"
+            )
+        splits["train"], placement_supervision = attach_placement_supervision(
+            splits["train"], args.placement_supervision,
+        )
+        print(
+            "placement_supervision_candidates="
+            f"{placement_supervision['attached_training_candidate_count']}",
+            flush=True,
+        )
+    elif config.placement_loss_weight > 0.0:
+        raise SystemExit(
+            "positive --placement-loss-weight requires "
+            "--placement-supervision"
         )
     generator_versions = sorted({
         str(candidate.get("generator_version", "unknown"))
@@ -811,6 +937,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v6"
+            if config.placement_loss_weight > 0.0 else
             "cgra-ii-joint-graph-model-v5"
             if config.interaction_mode == "strict_set_classifier" else
             "cgra-ii-joint-graph-model-v4"
@@ -843,6 +971,10 @@ def main() -> int:
             sha256_file(path.resolve())
             for path in args.additional_training_manifest
         ],
+        "placement_supervision_sha256": (
+            placement_supervision["sha256"]
+            if placement_supervision is not None else None
+        ),
     }, model_path)
     test_baseline = evaluations["test"]["analytical_top1"]
     test_model = evaluations["test"]["model2_top1"]
@@ -882,6 +1014,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "placement_supervised_discrete_ii_candidate_set_ranker_v6"
+            if config.placement_loss_weight > 0.0 else
             "strict_only_routing_candidate_set_classifier_v5"
             if config.interaction_mode == "strict_set_classifier" else
             "discrete_ii_routing_candidate_set_ranker_v4"
@@ -907,6 +1041,7 @@ def main() -> int:
                 }
                 for path, source_manifest in manifests[1:]
             ],
+            "placement_supervision": placement_supervision,
         },
         "model": {
             "path": str(model_path.resolve()),
@@ -945,6 +1080,10 @@ def main() -> int:
             "discrete_ii": (
                 "cross_entropy_integer_ii_successful_candidates_only"
                 if config.interaction_mode == "discrete_routing_set" else None
+            ),
+            "placement": (
+                "operation_to_mapper_selected_pe_cross_entropy_training_only"
+                if config.placement_loss_weight > 0.0 else None
             ),
             "listwise": (
                 "strict_oracle_shape_cross_entropy_only"
