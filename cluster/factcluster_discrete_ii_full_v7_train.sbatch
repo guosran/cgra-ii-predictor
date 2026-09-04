@@ -18,6 +18,8 @@ ADDITIONAL_MANIFEST=${DATA_ROOT}/motif-v7-formal-seed-20260906/corpus-manifest.j
 OUTPUT_DIR=${RUN_ROOT}/discrete-full-v7-${SLURM_JOB_ID}
 EXPECTED_MANIFEST_SHA256=74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9
 EXPECTED_ADDITIONAL_SHA256=9ef9ee0ba648430c6a594a20f3e32fb55038af505560dfc2f9b91d613ea6b062
+EPOCHS=${EPOCHS:-40}
+PATIENCE=${PATIENCE:-${EPOCHS}}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -50,6 +52,8 @@ echo "project_commit=${project_revision}"
 echo "manifest_sha256=${actual_manifest_sha256}"
 echo "additional_manifest_sha256=${actual_additional_sha256}"
 echo "architecture=calibrated_discrete_ii_ranker_full_v7_training_only"
+echo "epochs=${EPOCHS}"
+echo "patience=${PATIENCE}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
@@ -57,8 +61,8 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --manifest "${MANIFEST}" \
   --additional-training-manifest "${ADDITIONAL_MANIFEST}" \
   --output-dir "${OUTPUT_DIR}" \
-  --epochs 40 \
-  --patience 40 \
+  --epochs "${EPOCHS}" \
+  --patience "${PATIENCE}" \
   --batch-size 32 \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
