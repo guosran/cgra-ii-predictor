@@ -309,15 +309,21 @@ lower bound；最难的是 predicated（0.7270），最好的是 recurrence（0.
 满足真实接口约束的同时降低了 26.3%。该结果仍是已披露开发切分，不是新的 blind
 test。
 
-由于最佳点仍在 epoch 80 边界，下一轮运行 160 epoch 的 placement 0.1 与无
-placement 对照。脚本通过将 `PLACEMENT_SUPERVISION` 显式设为空关闭辅助监督：
+epoch 64--80 的 validation MAE 只在 0.4625--0.4470 间波动，继续到 160 的预期
+边际收益很小，因此 160-epoch 方案在提交前取消。下一步改为 `residual_pointwise`：
+输出类别从 absolute II `1..20` 改成 analytical lower bound 之上的非负残差
+`DeltaII=0..20`，不同 lower bound 的样本可以共享同一残差规律，并从结构上保证
+连续预测不低于 lower bound。它仍无任何跨候选信息流，输出仍是连续 expected II。
+
+首次比较运行 80 epoch 的 residual 模型，分别使用 placement 0.1 和完全关闭
+placement。脚本通过将 `PLACEMENT_SUPERVISION` 显式设为空关闭辅助监督：
 
 ```sh
 ssh factcluster
 cd /fact_home/yibozhang/cgra-ii-predictor
-sbatch --export=ALL,EPOCHS=160,PATIENCE=160 \
+sbatch --export=ALL,INTERACTION_MODE=residual_pointwise,EPOCHS=80,PATIENCE=80 \
   cluster/factcluster_discrete_ii_pointwise_train.sbatch
-sbatch --export=ALL,EPOCHS=160,PATIENCE=160,PLACEMENT_SUPERVISION=,PLACEMENT_LOSS_WEIGHT=0 \
+sbatch --export=ALL,INTERACTION_MODE=residual_pointwise,EPOCHS=80,PATIENCE=80,PLACEMENT_SUPERVISION=,PLACEMENT_LOSS_WEIGHT=0 \
   cluster/factcluster_discrete_ii_pointwise_train.sbatch
 ```
 

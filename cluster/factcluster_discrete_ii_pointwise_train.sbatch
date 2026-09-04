@@ -23,6 +23,7 @@ EXPECTED_PLACEMENT_SHA256=9ad9434c4207a77bb5b549b23485a973e7c0168ba4626edc17aa5c
 EPOCHS=${EPOCHS:-80}
 PATIENCE=${PATIENCE:-${EPOCHS}}
 PLACEMENT_LOSS_WEIGHT=${PLACEMENT_LOSS_WEIGHT:-0.1}
+INTERACTION_MODE=${INTERACTION_MODE:-discrete_pointwise}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -71,7 +72,7 @@ echo "project_commit=${project_revision}"
 echo "manifest_sha256=${actual_manifest_sha256}"
 echo "additional_manifest_sha256=${actual_additional_sha256}"
 echo "placement_supervision_sha256=${actual_placement_sha256}"
-echo "architecture=independent_discrete_ii_pointwise_v1"
+echo "architecture=${INTERACTION_MODE}"
 echo "primary_metric=successful_candidate_continuous_ii_mae"
 echo "epochs=${EPOCHS}"
 echo "patience=${PATIENCE}"
@@ -88,7 +89,7 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --batch-size 32 \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
-  --interaction-mode discrete_pointwise \
+  --interaction-mode "${INTERACTION_MODE}" \
   --discrete-ii-loss-weight 1.0 \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \

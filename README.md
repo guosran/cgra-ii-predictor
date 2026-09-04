@@ -351,6 +351,10 @@ contract: it has no cross-candidate attention or listwise loss and emits a
 continuous expected II, integer mode, class distribution, uncertainty, and
 mapper-success probability. Its checkpoint-selection metric is successful-
 candidate continuous II MAE; shape rankings are downstream diagnostics only.
+`residual_pointwise` keeps the same independent interface but models the
+nonnegative integer residual above `max(RecMII, ResMII)` instead of absolute II
+classes, so residual behavior is shared across candidates with different lower
+bounds and the continuous estimate respects the analytical floor by design.
 
 V4 fails closed unless generator-family LOGO MAE strictly improves on the
 Rec/Res floor, held-out predictions recover positive residuals in every

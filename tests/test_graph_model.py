@@ -457,6 +457,55 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(serialized["interaction_mode"], "discrete_pointwise")
         self.assertNotIn("candidate_set_layers", serialized)
 
+    def test_residual_pointwise_distribution_is_lower_bound_relative(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="residual_pointwise",
+        )
+        model = JointGraphShapeModel(config).eval()
+        with torch.no_grad():
+            model.discrete_ii_head.weight.zero_()
+            model.discrete_ii_head.bias.zero_()
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        first_context = candidate_context(1, 1, 1, 4, 4)
+        contexts = torch.tensor([[
+            first_context,
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        together = model([graph], shapes, contexts)
+        alone = model([graph], shapes[:1], torch.tensor([[first_context]]))
+        self.assertTrue(torch.allclose(
+            together["predicted_ii_mean"][:, :1],
+            alone["predicted_ii_mean"], atol=1e-6,
+        ))
+        self.assertEqual(tuple(together["ii_class_probabilities"].shape), (1, 2, 21))
+        self.assertAlmostEqual(float(together["lower_bound"][0, 0]), 4.0)
+        self.assertAlmostEqual(float(together["predicted_ii_mode"][0, 0]), 4.0)
+        self.assertGreaterEqual(
+            float(together["predicted_ii_mean"][0, 0]), 4.0
+        )
+        self.assertTrue(torch.all(
+            together["ii_class_logits"][0, 0, 17:] < -1e20
+        ))
+
+        losses = model2_loss(
+            together, torch.tensor([[1.0, 1.0]]),
+            torch.tensor([[3.0, 1.0]]), torch.tensor([[True, True]]),
+            torch.tensor([0]), config,
+        )
+        self.assertGreater(float(losses["discrete_ii"]), 0.0)
+        self.assertEqual(float(losses["listwise"]), 0.0)
+        losses["total"].backward()
+        self.assertTrue(torch.any(model.discrete_ii_head.weight.grad != 0))
+        serialized = config.to_dict()
+        self.assertEqual(serialized["interaction_mode"], "residual_pointwise")
+        self.assertNotIn("candidate_set_layers", serialized)
+
     def test_discrete_mode_requires_integer_ii_ceiling(self):
         with self.assertRaisesRegex(ValueError, "integer mapper_ii_ceiling"):
             Model2Config(

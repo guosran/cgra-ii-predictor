@@ -120,13 +120,14 @@ class Model2Config:
             raise ValueError("dropout must be in [0, 1)")
         if self.interaction_mode not in {
             "pooled", "cross_attention", "routing_set_attention",
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
             "strict_set_classifier",
         }:
             raise ValueError(
                 "interaction_mode must be pooled, cross_attention, "
                 "routing_set_attention, discrete_routing_set, "
-                "discrete_pointwise, or strict_set_classifier"
+                "discrete_pointwise, residual_pointwise, or "
+                "strict_set_classifier"
             )
         if self.interaction_mode in {
             "routing_set_attention", "discrete_routing_set",
@@ -141,7 +142,7 @@ class Model2Config:
                     "hidden_dimension must be divisible by candidate_set_heads"
                 )
         if self.interaction_mode in {
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
         } and (
             not float(self.mapper_ii_ceiling).is_integer()
         ):
@@ -149,7 +150,7 @@ class Model2Config:
                 "discrete modes require an integer mapper_ii_ceiling"
             )
         if self.interaction_mode in {
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
         }:
             if not 0.0 <= self.discrete_success_threshold <= 1.0:
                 raise ValueError(
@@ -168,7 +169,7 @@ class Model2Config:
             raise ValueError("placement_loss_weight must be finite and nonnegative")
         if self.placement_loss_weight > 0.0 and self.interaction_mode not in {
             "cross_attention", "routing_set_attention",
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
             "strict_set_classifier",
         }:
             raise ValueError(
@@ -198,7 +199,7 @@ class Model2Config:
             values.pop("candidate_set_layers")
             values.pop("candidate_set_heads")
         if self.interaction_mode not in {
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
         }:
             values.pop("discrete_ii_loss_weight")
             values.pop("discrete_success_threshold")
@@ -617,6 +618,7 @@ if nn is not None:
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
+                "residual_pointwise",
                 "strict_set_classifier",
             }:
                 self.cross_dfg_query = nn.Linear(hidden, hidden)
@@ -638,7 +640,8 @@ if nn is not None:
                 interaction_width += hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
                 if self.config.interaction_mode in {
                     "routing_set_attention", "discrete_routing_set",
-                    "discrete_pointwise", "strict_set_classifier",
+                    "discrete_pointwise", "residual_pointwise",
+                    "strict_set_classifier",
                 }:
                     interaction_width += len(ROUTING_CONTEXT_NAMES)
             self.interaction = nn.Sequential(
@@ -669,9 +672,12 @@ if nn is not None:
                 self.rank_head = nn.Linear(hidden, 1)
             elif self.config.interaction_mode in {
                 "discrete_routing_set", "discrete_pointwise",
+                "residual_pointwise",
             }:
                 self.discrete_ii_head = nn.Linear(
-                    hidden, int(self.config.mapper_ii_ceiling),
+                    hidden, int(self.config.mapper_ii_ceiling) + int(
+                        self.config.interaction_mode == "residual_pointwise"
+                    ),
                 )
 
         def _candidate_conditioned_interaction(
@@ -803,6 +809,7 @@ if nn is not None:
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
+                "residual_pointwise",
                 "strict_set_classifier",
             }:
                 dfg_nodes, dfg_mask, dfg_adjacency = (
@@ -827,7 +834,8 @@ if nn is not None:
                     )
                     if self.config.interaction_mode in {
                         "routing_set_attention", "discrete_routing_set",
-                        "discrete_pointwise", "strict_set_classifier",
+                        "discrete_pointwise", "residual_pointwise",
+                        "strict_set_classifier",
                     }
                     else None
                 )
@@ -884,6 +892,7 @@ if nn is not None:
                 selection_cost = -ranking_logits
             elif self.config.interaction_mode in {
                 "discrete_routing_set", "discrete_pointwise",
+                "residual_pointwise",
             }:
                 discrete_features = (
                     ranked
@@ -891,30 +900,57 @@ if nn is not None:
                     else hidden
                 )
                 ii_class_logits = self.discrete_ii_head(discrete_features)
-                class_values = torch.arange(
-                    1, int(self.config.mapper_ii_ceiling) + 1,
-                    dtype=ii_class_logits.dtype, device=ii_class_logits.device,
+                residual_classes = (
+                    self.config.interaction_mode == "residual_pointwise"
                 )
-                valid_classes = (
-                    class_values[None, None, :] >=
-                    torch.ceil(lower_bound - 1e-6)[..., None]
-                )
+                if residual_classes:
+                    class_values = torch.arange(
+                        0, int(self.config.mapper_ii_ceiling) + 1,
+                        dtype=ii_class_logits.dtype,
+                        device=ii_class_logits.device,
+                    )
+                    maximum_residual = torch.floor(
+                        self.config.mapper_ii_ceiling - lower_bound + 1e-6
+                    ).clamp_min(0.0)
+                    valid_classes = (
+                        class_values[None, None, :] <=
+                        maximum_residual[..., None]
+                    )
+                else:
+                    class_values = torch.arange(
+                        1, int(self.config.mapper_ii_ceiling) + 1,
+                        dtype=ii_class_logits.dtype,
+                        device=ii_class_logits.device,
+                    )
+                    valid_classes = (
+                        class_values[None, None, :] >=
+                        torch.ceil(lower_bound - 1e-6)[..., None]
+                    )
                 ii_class_logits = ii_class_logits.masked_fill(
                     ~valid_classes, torch.finfo(ii_class_logits.dtype).min,
                 )
                 ii_probabilities = torch.softmax(ii_class_logits, dim=-1)
-                predicted_ii = (
+                predicted_class_value = (
                     ii_probabilities * class_values[None, None, :]
                 ).sum(dim=-1)
+                predicted_ii = (
+                    lower_bound + predicted_class_value
+                    if residual_classes else predicted_class_value
+                )
                 predicted_ii_variance = (
                     ii_probabilities * (
-                        class_values[None, None, :] - predicted_ii[..., None]
+                        class_values[None, None, :] -
+                        predicted_class_value[..., None]
                     ).square()
                 ).sum(dim=-1)
                 predicted_ii_std = predicted_ii_variance.clamp_min(0.0).sqrt()
+                map_class_value = ii_class_logits.argmax(dim=-1).to(
+                    predicted_ii.dtype
+                )
                 map_ii_class = (
-                    ii_class_logits.argmax(dim=-1) + 1
-                ).to(predicted_ii.dtype)
+                    lower_bound + map_class_value
+                    if residual_classes else map_class_value + 1.0
+                )
                 if self.config.discrete_ii_decision == "map":
                     predicted_ii_class = map_ii_class
                 elif self.config.discrete_ii_decision == "round":
@@ -923,9 +959,16 @@ if nn is not None:
                     predicted_ii_class = torch.floor(predicted_ii)
                 else:
                     predicted_ii_class = torch.ceil(predicted_ii)
-                predicted_ii_class = predicted_ii_class.clamp(
-                    min=1.0, max=self.config.mapper_ii_ceiling,
+                minimum_decision = torch.ceil(lower_bound - 1e-6).clamp_min(1.0)
+                maximum_decision = torch.maximum(
+                    torch.full_like(
+                        minimum_decision, self.config.mapper_ii_ceiling,
+                    ),
+                    minimum_decision,
                 )
+                predicted_ii_class = torch.maximum(
+                    predicted_ii_class, minimum_decision,
+                ).minimum(maximum_decision)
                 expected_cost = (
                     success_probability * predicted_ii +
                     (1.0 - success_probability) * timeout_cost
@@ -986,7 +1029,9 @@ if nn is not None:
                 result["predicted_ii_mode"] = map_ii_class
                 result["predicted_ii_class"] = predicted_ii_class
                 result["predicted_ii_std"] = predicted_ii_std
-                if self.config.interaction_mode == "discrete_pointwise":
+                if self.config.interaction_mode in {
+                    "discrete_pointwise", "residual_pointwise",
+                }:
                     result["predicted_residual"] = (
                         predicted_ii - lower_bound
                     ).clamp_min(0.0)
@@ -1057,23 +1102,29 @@ def model2_loss(
                 placement_target[supervised_placements],
             )
     if "ii_class_logits" in output and successful.any():
-        target_ii = (
-            output["lower_bound"] + residual_target
-        )[successful]
-        rounded_target_ii = target_ii.round()
+        residual_classes = config.interaction_mode == "residual_pointwise"
+        target_class = (
+            residual_target[successful]
+            if residual_classes else
+            (output["lower_bound"] + residual_target)[successful] - 1.0
+        )
+        rounded_target_class = target_class.round()
         class_count = output["ii_class_logits"].shape[-1]
-        if torch.any(torch.abs(target_ii - rounded_target_ii) > 1e-5):
+        if torch.any(torch.abs(target_class - rounded_target_class) > 1e-5):
             raise ValueError("discrete-II targets must be integers")
         if torch.any(
-            (rounded_target_ii < 1) | (rounded_target_ii > class_count)
+            (rounded_target_class < 0) |
+            (rounded_target_class >= class_count)
         ):
             raise ValueError("discrete-II target is outside the class range")
         discrete_ii_loss = functional.cross_entropy(
             output["ii_class_logits"][successful],
-            rounded_target_ii.to(dtype=torch.long) - 1,
+            rounded_target_class.to(dtype=torch.long),
         )
     eligible = optimal_ii_target.any(dim=1)
-    if config.interaction_mode == "discrete_pointwise":
+    if config.interaction_mode in {
+        "discrete_pointwise", "residual_pointwise",
+    }:
         optimal_ii_loss = logits.sum() * 0.0
         strict_tiebreak_loss = logits.sum() * 0.0
         listwise_loss = logits.sum() * 0.0
@@ -1108,7 +1159,9 @@ def model2_loss(
         optimal_ii_loss = logits.sum() * 0.0
         listwise_loss = strict_tiebreak_loss
         total = strict_tiebreak_loss
-    elif config.interaction_mode == "discrete_pointwise":
+    elif config.interaction_mode in {
+        "discrete_pointwise", "residual_pointwise",
+    }:
         total = (
             config.success_loss_weight * success_loss +
             config.residual_loss_weight * residual_loss +

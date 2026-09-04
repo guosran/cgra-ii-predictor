@@ -564,6 +564,7 @@ def evaluate_model(
                 config.discrete_ii_decision
                 if config.interaction_mode in {
                     "discrete_routing_set", "discrete_pointwise",
+                    "residual_pointwise",
                 } else
                 "round_to_nearest_integer"
             ),
@@ -907,7 +908,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interaction-mode", choices=(
             "pooled", "cross_attention", "routing_set_attention",
-            "discrete_routing_set", "discrete_pointwise",
+            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
             "strict_set_classifier",
         ),
         default="pooled",
@@ -918,6 +919,8 @@ def parse_args() -> argparse.Namespace:
               "classes and applies deterministic shape tie-breaking; "
               "discrete_pointwise predicts an independent II distribution "
               "for each DFG/CGRA pair; "
+              "residual_pointwise predicts the independent integer residual "
+              "distribution above the analytical lower bound; "
               "strict_set_classifier directly optimizes deterministic "
               "oracle-shape cross-entropy only."),
     )
@@ -1029,6 +1032,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v8"
+            if config.interaction_mode == "residual_pointwise" else
             "cgra-ii-joint-graph-model-v7"
             if config.interaction_mode == "discrete_pointwise" else
             "cgra-ii-joint-graph-model-v6"
@@ -1050,6 +1055,7 @@ def main() -> int:
             if config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
+                "residual_pointwise",
                 "strict_set_classifier",
             } else []
         ),
@@ -1057,7 +1063,8 @@ def main() -> int:
             list(ROUTING_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
-                "discrete_pointwise", "strict_set_classifier",
+                "discrete_pointwise", "residual_pointwise",
+                "strict_set_classifier",
             } else []
         ),
         "state_dict": model.state_dict(),
@@ -1104,6 +1111,13 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "placement_supervised_residual_ii_pointwise_predictor_v8"
+            if (
+                config.interaction_mode == "residual_pointwise" and
+                config.placement_loss_weight > 0.0
+            ) else
+            "residual_ii_pointwise_predictor_v8"
+            if config.interaction_mode == "residual_pointwise" else
             "placement_supervised_discrete_ii_pointwise_predictor_v7"
             if (
                 config.interaction_mode == "discrete_pointwise" and
@@ -1173,13 +1187,16 @@ def main() -> int:
             "ii": (
                 None if config.interaction_mode == "strict_set_classifier"
                 else "smooth_l1_distribution_mean_successful_candidates_only"
-                if config.interaction_mode == "discrete_pointwise"
+                if config.interaction_mode in {
+                    "discrete_pointwise", "residual_pointwise",
+                }
                 else "smooth_l1_successful_candidates_only"
             ),
             "discrete_ii": (
                 "cross_entropy_integer_ii_successful_candidates_only"
                 if config.interaction_mode in {
                     "discrete_routing_set", "discrete_pointwise",
+                    "residual_pointwise",
                 } else None
             ),
             "placement": (
@@ -1187,14 +1204,18 @@ def main() -> int:
                 if config.placement_loss_weight > 0.0 else None
             ),
             "listwise": (
-                None if config.interaction_mode == "discrete_pointwise" else
+                None if config.interaction_mode in {
+                    "discrete_pointwise", "residual_pointwise",
+                } else
                 "strict_oracle_shape_cross_entropy_only"
                 if config.interaction_mode == "strict_set_classifier" else
                 "optimal_ii_set_log_mass_plus_weighted_strict_tiebreak_cross_entropy"
             ),
             "selection_cost": (
                 "exported_timeout_aware_expected_ii_frontend_owned"
-                if config.interaction_mode == "discrete_pointwise" else
+                if config.interaction_mode in {
+                    "discrete_pointwise", "residual_pointwise",
+                } else
                 "predicted_success_then_integer_ii_then_area_rows_columns"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_candidate_set_ranking_logit"
@@ -1204,7 +1225,9 @@ def main() -> int:
                 "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)"
             ),
             "ranking_prior": (
-                None if config.interaction_mode == "discrete_pointwise" else
+                None if config.interaction_mode in {
+                    "discrete_pointwise", "residual_pointwise",
+                } else
                 "negative_timeout_aware_expected_discrete_ii"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_timeout_aware_expected_cost_plus_learned_set_adjustment"
@@ -1213,6 +1236,14 @@ def main() -> int:
                 if config.interaction_mode == "strict_set_classifier" else None
             ),
             "numeric_ii_imputation_for_censored_candidates": False,
+            "ii_class_basis": (
+                "nonnegative_residual_above_analytical_lower_bound"
+                if config.interaction_mode == "residual_pointwise" else
+                "absolute_ii"
+                if config.interaction_mode in {
+                    "discrete_routing_set", "discrete_pointwise",
+                } else None
+            ),
         },
         "evaluation_contract": {
             "prediction_unit": "one_dfg_and_one_cgra_candidate",
