@@ -428,6 +428,7 @@ def evaluate_model(
     graph_rows: List[List[Dict[str, Any]]] = []
     baseline_rows: List[List[Dict[str, Any]]] = []
     point_errors: List[float] = []
+    decision_point_errors: List[float] = []
     baseline_errors: List[float] = []
     probabilities: List[float] = []
     targets: List[float] = []
@@ -453,6 +454,10 @@ def evaluate_model(
             loss_query_count += len(batch)
             selection_cost = output["selection_cost"].cpu().tolist()
             predicted_ii = output["predicted_ii"].cpu().tolist()
+            decision_ii = output.get(
+                "predicted_ii_class",
+                torch.floor(output["predicted_ii"] + 0.5),
+            ).cpu().tolist()
             probability = output["success_probability"].cpu().tolist()
             for query_index, query in enumerate(batch):
                 query_graph_rows = []
@@ -482,6 +487,10 @@ def evaluate_model(
                     if candidate.compiled_ii is not None:
                         point_errors.append(abs(
                             predicted_ii[query_index][candidate_index] -
+                            candidate.compiled_ii
+                        ))
+                        decision_point_errors.append(abs(
+                            decision_ii[query_index][candidate_index] -
                             candidate.compiled_ii
                         ))
                         baseline_errors.append(abs(
@@ -515,6 +524,28 @@ def evaluate_model(
         "successful_candidate_point_mae": (
             sum(point_errors) / len(point_errors) if point_errors else None
         ),
+        "successful_candidate_ii_decision": {
+            "policy": (
+                config.discrete_ii_decision
+                if config.interaction_mode == "discrete_routing_set" else
+                "round_to_nearest_integer"
+            ),
+            "candidate_count": len(decision_point_errors),
+            "exact_accuracy": (
+                sum(error < 1e-6 for error in decision_point_errors) /
+                len(decision_point_errors)
+                if decision_point_errors else None
+            ),
+            "within_one_accuracy": (
+                sum(error <= 1.0 + 1e-6 for error in decision_point_errors) /
+                len(decision_point_errors)
+                if decision_point_errors else None
+            ),
+            "mae": (
+                sum(decision_point_errors) / len(decision_point_errors)
+                if decision_point_errors else None
+            ),
+        },
         "analytical_successful_candidate_mae": (
             sum(baseline_errors) / len(baseline_errors)
             if baseline_errors else None
