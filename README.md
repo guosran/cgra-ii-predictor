@@ -342,6 +342,16 @@ improve, and every family must retain at least 200 ranking-eligible bases with
 two or more successful shapes. The local declaration is tamper-evident but is
 not an external trusted timestamp.
 
+That statement describes the historical frozen v7 ranking protocol, not the
+current deployment contract. In the program-level DSE frontend, the predictor
+is called on one `(task DFG, assigned CGRA candidate)` pair at a time. The
+frontend analytical model combines independently predicted task IIs to score
+complete spatiotemporal candidates. `discrete_pointwise` implements this
+contract: it has no cross-candidate attention or listwise loss and emits a
+continuous expected II, integer mode, class distribution, uncertainty, and
+mapper-success probability. Its checkpoint-selection metric is successful-
+candidate continuous II MAE; shape rankings are downstream diagnostics only.
+
 V4 fails closed unless generator-family LOGO MAE strictly improves on the
 Rec/Res floor, held-out predictions recover positive residuals in every
 family, positive-subset and shape-balanced MAE improve, tie-aware shape

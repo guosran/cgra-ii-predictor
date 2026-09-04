@@ -261,11 +261,15 @@ validation-only quantile/UCB 搜索仍选择原来的 `success>=0.9 + floor(expe
 三模型 Borda ensemble 虽把 validation strict Top-1 提到 46.07%，测试只有 43.95%，
 不应采用。
 
-从后续实验开始，shape 主指标统一改为 transpose-equivalent，exact-oriented 只作为
-诊断项保留。Top-k 表示按模型 selection cost 排名前 k 的候选中是否包含 oracle 的
-转置等价 shape；optimal-II Top-k 表示前 k 个候选中是否至少有一个成功候选的
-compiled II 等于该查询所有成功 shape 的最小值。censored 候选不填入数值 II。
-固定测试集 380 个合格查询的结果为：
+上面的 candidate-set 实验保留为历史诊断，但不再定义最终模型接口。实际前端会对
+大程序做 task 时空排列 DSE；ML 每次只接收一个 task DFG 和该 DSE 候选为它分配的
+一个 CGRA 配置，独立预测 II，再由前端解析模型汇总各 task II 并给完整 DSE 候选
+打分。即使为了吞吐量批量调用，单个候选的输出也必须不随 batch 中其他候选改变。
+
+因此后续模型的主指标是成功候选的连续 II MAE，同时报告 macro-query MAE、整数
+exact-II、±1-II、均方根误差、系统偏差和低估率。success/timeout 概率单独报告；
+censored 候选不填入数值 II。shape Top-k 只保留为前端排序诊断，若报告则统一使用
+transpose-equivalent。历史固定测试集 380 个查询上的诊断为：
 
 | 排序器 | 转置等价 Top-1/2/3 | optimal-II Top-1/2/3 |
 | --- | ---: | ---: |
@@ -274,12 +278,24 @@ compiled II 等于该查询所有成功 shape 的最小值。censored 候选不�
 | placement 0.1 `1475561` | **55.53% / 73.95% / 79.21%** | **58.16% / 76.58% / 82.89%** |
 | placement 0.5 `1475562` | 51.32% / 64.21% / 68.68% | 57.37% / 71.05% / 73.42% |
 
-`1475561` 的前 1/2/3 个候选中至少有一个 mapper 成功的比例分别为
-93.42% / 98.68% / 99.47%。因此当前主要瓶颈不是候选召回，而是把已进入 Top-2/3
-的最优候选排到第一。下一轮优先保持 placement weight 0.1，移除 exact-oriented
-one-hot tie-break，改用 transpose-equivalent target，并按 validation
-transpose-equivalent Top-1 选择 checkpoint；若允许少量 mapper 调用，则直接映射
-模型 Top-2 后按真实 II 选择，是当前收益/开销最明确的 hybrid 路径。
+`1475561` 的候选级结果是 expected-II MAE 0.6373；对 expected II 取 floor 后，
+exact-II 为 54.04%、±1-II 为 88.09%、MAE 为 0.6230。解析 lower bound 的对应
+结果是 31.64%、46.31% 和 2.5607。但 `1475561` 的 II head 位于跨 16 候选的
+self-attention 之后，违反 pointwise 部署契约，只能作为参考线。
+
+新的 `discrete_pointwise` 模式移除了候选集合层和所有 listwise/shape loss，保留
+DFG/CGRA GNN、operation-to-PE cross-attention、routing context、success head 和
+placement 辅助监督。它输出连续分布均值 `predicted_ii_mean`、整数 mode、完整 II
+概率分布、标准差与 mapper success 概率。训练仍可并行计算同一 DFG 的 16 个标签，
+但网络中没有跨候选信息流，单独推理与批量推理必须一致。
+
+首次 pointwise 基线使用已有数据和 placement weight 0.1，无需重新采集：
+
+```sh
+ssh factcluster
+cd /fact_home/yibozhang/cgra-ii-predictor
+sbatch cluster/factcluster_discrete_ii_pointwise_train.sbatch
+```
 
 记下输出的 job ID。低频查看队列：
 
@@ -300,19 +316,20 @@ ssh factcluster \
 ssh factcluster 'scancel <JOB_ID>'
 ```
 
-输出目录是
-`/fact_data/yibozhang/cgra-ii-model2/runs/retrain-<JOB_ID>/`，其中
+pointwise 输出目录是
+`/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v7-<JOB_ID>/`，其中
 `model.pt` 是最佳验证 epoch 的模型，`report.json` 包含完整切分、指标、逐 family
 结果与验收门。复制回本机：
 
 ```sh
-rsync -az factcluster:/fact_data/yibozhang/cgra-ii-model2/runs/retrain-<JOB_ID>/ \
-  models/model2-factcluster-<JOB_ID>/
+rsync -az factcluster:/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v7-<JOB_ID>/ \
+  models/model2-pointwise-factcluster-<JOB_ID>/
 ```
 
-训练最重要的主指标是完整 shape 块上的 strict top-1 accuracy；同时检查 selected
-success rate、optimal-II rate、timeout-penalized regret 以及各 generator family
-是否退化。若以后改用 `gpu-scavenger` 做参数扫描，每组配置应写到独立目录，并在输出
+训练最重要的主指标是成功候选的连续 II MAE；同时检查 macro-query MAE、exact-II、
+±1-II、低估率、success calibration 以及各 generator family 是否退化。完整程序
+DSE 接通后，再以解析模型最终选中方案的真实 objective regret 作为端到端指标。
+若以后改用 `gpu-scavenger` 做参数扫描，每组配置应写到独立目录，并在输出
 已存在时跳过，以便抢占后安全重提。
 
 Jupyter 也必须经 Slurm 启动。计算节点端口使用 10000--19999，登录节点反向转发端口

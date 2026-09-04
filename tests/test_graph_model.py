@@ -17,7 +17,7 @@ class GraphModelTest(unittest.TestCase):
         global torch
         global CandidateRecord, QueryRecord, resolve_device, split_queries
         global add_training_only_queries, attach_placement_supervision
-        global batch_placement_targets
+        global batch_placement_targets, _validation_score
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global pad_shortest_path_distances, parse_neura_dfg
@@ -29,7 +29,7 @@ class GraphModelTest(unittest.TestCase):
         from adapters.neura_graph_experiment import (
             CandidateRecord, QueryRecord, add_training_only_queries,
             attach_placement_supervision, batch_placement_targets,
-            resolve_device, split_queries,
+            resolve_device, split_queries, _validation_score,
         )
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
@@ -45,6 +45,25 @@ class GraphModelTest(unittest.TestCase):
         if not torch.cuda.is_available():
             with self.assertRaisesRegex(ValueError, "CUDA was requested"):
                 resolve_device("cuda")
+
+    def test_validation_selection_prioritizes_continuous_ii_mae(self):
+        def evaluation(mae, macro_mae, decision_mae, exact):
+            return {
+                "successful_candidate_point_error": {
+                    "mae": mae, "macro_query_mae": macro_mae,
+                },
+                "successful_candidate_ii_decision": {
+                    "mae": decision_mae, "exact_accuracy": exact,
+                    "within_one_accuracy": 0.9,
+                },
+                "success_classifier": {"brier_score": 0.1},
+            }
+
+        lower_mae = evaluation(0.5, 0.6, 0.7, 0.4)
+        higher_exact = evaluation(0.6, 0.5, 0.5, 0.9)
+        self.assertLess(
+            _validation_score(lower_mae), _validation_score(higher_exact)
+        )
 
     def test_frozen_evaluator_loads_weights_without_constructing_optimizer(self):
         config = frozen_adapter.frozen_config()
@@ -189,10 +208,8 @@ class GraphModelTest(unittest.TestCase):
              "compiled_ii": 7, "score": 4.0},
         ]]
         result = censored_top1_metrics(rows, "score")
-        self.assertEqual(
-            result["primary_shape_metric"],
-            "transpose_equivalent_top1_accuracy",
-        )
+        self.assertEqual(result["shape_metric_role"], "downstream_diagnostic_only")
+        self.assertEqual(result["shape_equivalence"], "transpose_equivalent")
         self.assertEqual(result["strict_top2_accuracy"], 0.0)
         self.assertEqual(result["strict_top3_accuracy"], 1.0)
         self.assertEqual(result["transpose_equivalent_top1_accuracy"], 0.0)
@@ -383,6 +400,62 @@ class GraphModelTest(unittest.TestCase):
         gradient = model.discrete_ii_head.weight.grad
         self.assertIsNotNone(gradient)
         self.assertTrue(torch.any(gradient != 0))
+
+    def test_discrete_pointwise_prediction_is_candidate_independent(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="discrete_pointwise",
+        )
+        model = JointGraphShapeModel(config).eval()
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        first_context = candidate_context(1, 1, 1, 4, 4)
+        context = torch.tensor([[
+            first_context,
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        together = model([graph], shapes, context)
+        alone = model(
+            [graph], shapes[:1], torch.tensor([[first_context]]),
+        )
+        for name in (
+            "predicted_ii_mean", "predicted_ii_mode",
+            "predicted_ii_std", "success_probability",
+        ):
+            self.assertTrue(torch.allclose(
+                together[name][:, :1], alone[name], atol=1e-6,
+            ), name)
+        self.assertFalse(hasattr(model, "candidate_set_blocks"))
+        self.assertEqual(tuple(together["ii_class_probabilities"].shape), (1, 2, 20))
+
+        changed_context = context.clone()
+        changed_context[0, 1] = torch.tensor(
+            candidate_context(1, 2, 1, 10, 10)
+        )
+        changed = model([graph], shapes, changed_context)
+        self.assertTrue(torch.allclose(
+            together["predicted_ii_mean"][0, 0],
+            changed["predicted_ii_mean"][0, 0], atol=1e-6,
+        ))
+
+        losses = model2_loss(
+            together, torch.tensor([[1.0, 1.0]]),
+            torch.tensor([[1.0, 1.0]]), torch.tensor([[True, True]]),
+            torch.tensor([0]), config,
+        )
+        self.assertEqual(float(losses["listwise"]), 0.0)
+        losses["total"].backward()
+        gradient = model.discrete_ii_head.weight.grad
+        self.assertIsNotNone(gradient)
+        self.assertTrue(torch.any(gradient != 0))
+
+        serialized = config.to_dict()
+        self.assertEqual(serialized["interaction_mode"], "discrete_pointwise")
+        self.assertNotIn("candidate_set_layers", serialized)
 
     def test_discrete_mode_requires_integer_ii_ceiling(self):
         with self.assertRaisesRegex(ValueError, "integer mapper_ii_ceiling"):

@@ -428,6 +428,8 @@ def evaluate_model(
     graph_rows: List[List[Dict[str, Any]]] = []
     baseline_rows: List[List[Dict[str, Any]]] = []
     point_errors: List[float] = []
+    point_signed_errors: List[float] = []
+    query_point_maes: List[float] = []
     decision_point_errors: List[float] = []
     baseline_errors: List[float] = []
     probabilities: List[float] = []
@@ -462,6 +464,7 @@ def evaluate_model(
             for query_index, query in enumerate(batch):
                 query_graph_rows = []
                 query_baseline_rows = []
+                query_errors: List[float] = []
                 for candidate_index, candidate in enumerate(query.candidates):
                     common = {
                         "candidate_id": candidate.candidate_id,
@@ -485,10 +488,13 @@ def evaluate_model(
                     target = float(candidate.status == "success")
                     targets.append(target)
                     if candidate.compiled_ii is not None:
-                        point_errors.append(abs(
+                        signed_error = (
                             predicted_ii[query_index][candidate_index] -
                             candidate.compiled_ii
-                        ))
+                        )
+                        point_signed_errors.append(signed_error)
+                        point_errors.append(abs(signed_error))
+                        query_errors.append(abs(signed_error))
                         decision_point_errors.append(abs(
                             decision_ii[query_index][candidate_index] -
                             candidate.compiled_ii
@@ -496,6 +502,10 @@ def evaluate_model(
                         baseline_errors.append(abs(
                             candidate.lower_bound - candidate.compiled_ii
                         ))
+                if query_errors:
+                    query_point_maes.append(
+                        sum(query_errors) / len(query_errors)
+                    )
                 graph_rows.append(query_graph_rows)
                 baseline_rows.append(query_baseline_rows)
     graph_top1 = censored_top1_metrics(
@@ -524,10 +534,37 @@ def evaluate_model(
         "successful_candidate_point_mae": (
             sum(point_errors) / len(point_errors) if point_errors else None
         ),
+        "successful_candidate_point_error": {
+            "candidate_count": len(point_errors),
+            "mae": (
+                sum(point_errors) / len(point_errors)
+                if point_errors else None
+            ),
+            "rmse": (
+                math.sqrt(sum(error * error for error in point_errors) /
+                          len(point_errors))
+                if point_errors else None
+            ),
+            "macro_query_mae": (
+                sum(query_point_maes) / len(query_point_maes)
+                if query_point_maes else None
+            ),
+            "mean_signed_error": (
+                sum(point_signed_errors) / len(point_signed_errors)
+                if point_signed_errors else None
+            ),
+            "underprediction_rate": (
+                sum(error < 0.0 for error in point_signed_errors) /
+                len(point_signed_errors)
+                if point_signed_errors else None
+            ),
+        },
         "successful_candidate_ii_decision": {
             "policy": (
                 config.discrete_ii_decision
-                if config.interaction_mode == "discrete_routing_set" else
+                if config.interaction_mode in {
+                    "discrete_routing_set", "discrete_pointwise",
+                } else
                 "round_to_nearest_integer"
             ),
             "candidate_count": len(decision_point_errors),
@@ -550,6 +587,23 @@ def evaluate_model(
             sum(baseline_errors) / len(baseline_errors)
             if baseline_errors else None
         ),
+        "analytical_successful_candidate_ii": {
+            "candidate_count": len(baseline_errors),
+            "exact_accuracy": (
+                sum(error < 1e-6 for error in baseline_errors) /
+                len(baseline_errors)
+                if baseline_errors else None
+            ),
+            "within_one_accuracy": (
+                sum(error <= 1.0 + 1e-6 for error in baseline_errors) /
+                len(baseline_errors)
+                if baseline_errors else None
+            ),
+            "mae": (
+                sum(baseline_errors) / len(baseline_errors)
+                if baseline_errors else None
+            ),
+        },
         "success_classifier": {
             "accuracy_at_0_5": sum(
                 prediction == target
@@ -586,13 +640,15 @@ def evaluate_by_family(
 
 
 def _validation_score(evaluation: Mapping[str, Any]) -> Tuple[float, ...]:
-    top1 = evaluation["model2_top1"]
+    point = evaluation["successful_candidate_point_error"]
+    decision = evaluation["successful_candidate_ii_decision"]
     return (
-        -float(top1["transpose_equivalent_top1_accuracy"]),
-        -float(top1["optimal_ii_rate"]),
-        -float(top1["selected_success_rate"]),
-        float(top1["mean_timeout_penalized_regret"]),
-        float(evaluation["loss"]["total"]),
+        float(point["mae"]),
+        float(point["macro_query_mae"]),
+        float(decision["mae"]),
+        -float(decision["exact_accuracy"]),
+        -float(decision["within_one_accuracy"]),
+        float(evaluation["success_classifier"]["brier_score"]),
     )
 
 
@@ -690,12 +746,12 @@ def train_model(
             "selected_as_best": improved,
         }
         history.append(record)
-        top1 = validation["model2_top1"]
+        point = validation["successful_candidate_point_error"]
+        decision = validation["successful_candidate_ii_decision"]
         print(
             f"epoch={epoch} loss={record['training_loss']['total']:.4f} "
-            "validation_transpose_top1="
-            f"{top1['transpose_equivalent_top1_accuracy']:.4f} "
-            f"validation_success={top1['selected_success_rate']:.4f} "
+            f"validation_ii_mae={point['mae']:.4f} "
+            f"validation_exact_ii={decision['exact_accuracy']:.4f} "
             f"best_epoch={best_epoch}",
             flush=True,
         )
@@ -708,11 +764,12 @@ def train_model(
         "best_epoch": best_epoch,
         "executed_epochs": len(history),
         "selection_order": [
-            "maximum_validation_transpose_equivalent_top1_accuracy",
-            "maximum_validation_optimal_ii_rate",
-            "maximum_validation_selected_success_rate",
-            "minimum_validation_timeout_penalized_regret",
-            "minimum_validation_total_loss",
+            "minimum_validation_successful_candidate_point_mae",
+            "minimum_validation_macro_query_mae",
+            "minimum_validation_integer_decision_mae",
+            "maximum_validation_exact_ii_accuracy",
+            "maximum_validation_within_one_ii_accuracy",
+            "minimum_validation_success_brier_score",
         ],
         "history": history,
     }
@@ -850,7 +907,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interaction-mode", choices=(
             "pooled", "cross_attention", "routing_set_attention",
-            "discrete_routing_set", "strict_set_classifier",
+            "discrete_routing_set", "discrete_pointwise",
+            "strict_set_classifier",
         ),
         default="pooled",
         help=("pooled reproduces Model 2; cross_attention performs "
@@ -858,6 +916,8 @@ def parse_args() -> argparse.Namespace:
               "routing_set_attention adds route pressure and joint "
               "candidate ranking; discrete_routing_set predicts integer II "
               "classes and applies deterministic shape tie-breaking; "
+              "discrete_pointwise predicts an independent II distribution "
+              "for each DFG/CGRA pair; "
               "strict_set_classifier directly optimizes deterministic "
               "oracle-shape cross-entropy only."),
     )
@@ -969,6 +1029,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v7"
+            if config.interaction_mode == "discrete_pointwise" else
             "cgra-ii-joint-graph-model-v6"
             if config.placement_loss_weight > 0.0 else
             "cgra-ii-joint-graph-model-v5"
@@ -987,14 +1049,15 @@ def main() -> int:
             list(CROSS_ATTENTION_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
-                "discrete_routing_set", "strict_set_classifier",
+                "discrete_routing_set", "discrete_pointwise",
+                "strict_set_classifier",
             } else []
         ),
         "routing_context_names": (
             list(ROUTING_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
-                "strict_set_classifier",
+                "discrete_pointwise", "strict_set_classifier",
             } else []
         ),
         "state_dict": model.state_dict(),
@@ -1008,33 +1071,28 @@ def main() -> int:
             if placement_supervision is not None else None
         ),
     }, model_path)
-    test_baseline = evaluations["test"]["analytical_top1"]
-    test_model = evaluations["test"]["model2_top1"]
+    test_evaluation = evaluations["test"]
+    test_point = test_evaluation["successful_candidate_point_error"]
+    test_decision = test_evaluation["successful_candidate_ii_decision"]
+    test_analytical = test_evaluation["analytical_successful_candidate_ii"]
     gates = {
-        "transpose_equivalent_top1_improvement": (
-            float(test_model["transpose_equivalent_top1_accuracy"]) >
-            float(test_baseline["transpose_equivalent_top1_accuracy"])
+        "successful_candidate_point_mae_improvement": (
+            float(test_point["mae"]) < float(test_analytical["mae"])
         ),
-        "selected_success_non_degradation": (
-            float(test_model["selected_success_rate"]) >=
-            float(test_baseline["selected_success_rate"])
+        "integer_ii_decision_mae_improvement": (
+            float(test_decision["mae"]) < float(test_analytical["mae"])
         ),
-        "timeout_penalized_regret_improvement": (
-            float(test_model["mean_timeout_penalized_regret"]) <
-            float(test_baseline["mean_timeout_penalized_regret"])
+        "exact_ii_accuracy_improvement": (
+            float(test_decision["exact_accuracy"]) >
+            float(test_analytical["exact_accuracy"])
         ),
-        "optimal_ii_rate_non_degradation": (
-            float(test_model["optimal_ii_rate"]) >=
-            float(test_baseline["optimal_ii_rate"])
+        "within_one_ii_accuracy_improvement": (
+            float(test_decision["within_one_accuracy"]) >
+            float(test_analytical["within_one_accuracy"])
         ),
-        "every_family_optimal_ii_rate_non_degradation": all(
-            float(record["model2_top1"]["optimal_ii_rate"]) >=
-            float(record["analytical_top1"]["optimal_ii_rate"])
-            for record in family_evaluations["test"].values()
-        ),
-        "every_family_selected_success_non_degradation": all(
-            float(record["model2_top1"]["selected_success_rate"]) >=
-            float(record["analytical_top1"]["selected_success_rate"])
+        "every_family_point_mae_improvement": all(
+            float(record["successful_candidate_point_error"]["mae"]) <
+            float(record["analytical_successful_candidate_ii"]["mae"])
             for record in family_evaluations["test"].values()
         ),
     }
@@ -1046,6 +1104,13 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "placement_supervised_discrete_ii_pointwise_predictor_v7"
+            if (
+                config.interaction_mode == "discrete_pointwise" and
+                config.placement_loss_weight > 0.0
+            ) else
+            "discrete_ii_pointwise_predictor_v7"
+            if config.interaction_mode == "discrete_pointwise" else
             "placement_supervised_discrete_ii_candidate_set_ranker_v6"
             if config.placement_loss_weight > 0.0 else
             "strict_only_routing_candidate_set_classifier_v5"
@@ -1107,22 +1172,29 @@ def main() -> int:
             ),
             "ii": (
                 None if config.interaction_mode == "strict_set_classifier"
+                else "smooth_l1_distribution_mean_successful_candidates_only"
+                if config.interaction_mode == "discrete_pointwise"
                 else "smooth_l1_successful_candidates_only"
             ),
             "discrete_ii": (
                 "cross_entropy_integer_ii_successful_candidates_only"
-                if config.interaction_mode == "discrete_routing_set" else None
+                if config.interaction_mode in {
+                    "discrete_routing_set", "discrete_pointwise",
+                } else None
             ),
             "placement": (
                 "operation_to_mapper_selected_pe_cross_entropy_training_only"
                 if config.placement_loss_weight > 0.0 else None
             ),
             "listwise": (
+                None if config.interaction_mode == "discrete_pointwise" else
                 "strict_oracle_shape_cross_entropy_only"
                 if config.interaction_mode == "strict_set_classifier" else
                 "optimal_ii_set_log_mass_plus_weighted_strict_tiebreak_cross_entropy"
             ),
             "selection_cost": (
+                "exported_timeout_aware_expected_ii_frontend_owned"
+                if config.interaction_mode == "discrete_pointwise" else
                 "predicted_success_then_integer_ii_then_area_rows_columns"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_candidate_set_ranking_logit"
@@ -1132,6 +1204,7 @@ def main() -> int:
                 "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)"
             ),
             "ranking_prior": (
+                None if config.interaction_mode == "discrete_pointwise" else
                 "negative_timeout_aware_expected_discrete_ii"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_timeout_aware_expected_cost_plus_learned_set_adjustment"
@@ -1142,13 +1215,15 @@ def main() -> int:
             "numeric_ii_imputation_for_censored_candidates": False,
         },
         "evaluation_contract": {
-            "primary_shape_metric": "transpose_equivalent_top1_accuracy",
-            "reported_shape_topk": [1, 2, 3],
-            "strict_oriented_shape_metrics": "diagnostic_only",
-            "optimal_ii_topk_definition": (
-                "at_least_one_of_the_top_k_ranked_shapes_has_the_minimum_"
-                "compiled_ii_among_successful_candidates"
-            ),
+            "prediction_unit": "one_dfg_and_one_cgra_candidate",
+            "batch_invariance_required": True,
+            "primary_metric": "successful_candidate_point_error.mae",
+            "secondary_metrics": [
+                "successful_candidate_point_error.macro_query_mae",
+                "successful_candidate_ii_decision.exact_accuracy",
+                "successful_candidate_ii_decision.within_one_accuracy",
+            ],
+            "shape_ranking_metrics": "downstream_diagnostic_only",
         },
         "training": training,
         "evaluation": evaluations,
@@ -1161,10 +1236,9 @@ def main() -> int:
     report_path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(
         f"model2_report={report_path.resolve()} "
-        "test_transpose_top1="
-        f"{test_model['transpose_equivalent_top1_accuracy']:.4f} "
-        "baseline_transpose_top1="
-        f"{test_baseline['transpose_equivalent_top1_accuracy']:.4f} "
+        f"test_ii_mae={test_point['mae']:.4f} "
+        f"test_exact_ii={test_decision['exact_accuracy']:.4f} "
+        f"analytical_ii_mae={test_analytical['mae']:.4f} "
         f"gates_passed={all(gates.values())}",
         flush=True,
     )
