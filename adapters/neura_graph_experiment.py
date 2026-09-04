@@ -679,6 +679,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-set-layers", type=int, default=2)
     parser.add_argument("--candidate-set-heads", type=int, default=4)
     parser.add_argument("--discrete-ii-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--discrete-success-threshold", type=float, default=0.5,
+    )
+    parser.add_argument(
+        "--discrete-ii-decision",
+        choices=("map", "round", "floor", "ceil"), default="map",
+    )
     return parser.parse_args()
 
 
@@ -697,6 +704,8 @@ def main() -> int:
         candidate_set_layers=args.candidate_set_layers,
         candidate_set_heads=args.candidate_set_heads,
         discrete_ii_loss_weight=args.discrete_ii_loss_weight,
+        discrete_success_threshold=args.discrete_success_threshold,
+        discrete_ii_decision=args.discrete_ii_decision,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
     generator_versions = sorted({

@@ -107,6 +107,8 @@ class Model2Config:
     candidate_set_layers: int = 2
     candidate_set_heads: int = 4
     discrete_ii_loss_weight: float = 1.0
+    discrete_success_threshold: float = 0.5
+    discrete_ii_decision: str = "map"
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -140,6 +142,17 @@ class Model2Config:
             raise ValueError(
                 "discrete_routing_set requires an integer mapper_ii_ceiling"
             )
+        if self.interaction_mode == "discrete_routing_set":
+            if not 0.0 <= self.discrete_success_threshold <= 1.0:
+                raise ValueError(
+                    "discrete_success_threshold must be in [0, 1]"
+                )
+            if self.discrete_ii_decision not in {
+                "map", "round", "floor", "ceil",
+            }:
+                raise ValueError(
+                    "discrete_ii_decision must be map, round, floor, or ceil"
+                )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
@@ -164,6 +177,8 @@ class Model2Config:
             values.pop("candidate_set_heads")
         if self.interaction_mode != "discrete_routing_set":
             values.pop("discrete_ii_loss_weight")
+            values.pop("discrete_success_threshold")
+            values.pop("discrete_ii_decision")
         return values
 
 
@@ -797,9 +812,20 @@ if nn is not None:
                 predicted_ii = (
                     ii_probabilities * class_values[None, None, :]
                 ).sum(dim=-1)
-                predicted_ii_class = (
+                map_ii_class = (
                     ii_class_logits.argmax(dim=-1) + 1
                 ).to(predicted_ii.dtype)
+                if self.config.discrete_ii_decision == "map":
+                    predicted_ii_class = map_ii_class
+                elif self.config.discrete_ii_decision == "round":
+                    predicted_ii_class = torch.floor(predicted_ii + 0.5)
+                elif self.config.discrete_ii_decision == "floor":
+                    predicted_ii_class = torch.floor(predicted_ii)
+                else:
+                    predicted_ii_class = torch.ceil(predicted_ii)
+                predicted_ii_class = predicted_ii_class.clamp(
+                    min=1.0, max=self.config.mapper_ii_ceiling,
+                )
                 expected_cost = (
                     success_probability * predicted_ii +
                     (1.0 - success_probability) * timeout_cost
@@ -819,7 +845,10 @@ if nn is not None:
                 identity_tiebreak = (
                     rows * columns * 100.0 + rows * 10.0 + columns
                 )
-                predicted_safe = success_probability >= 0.5
+                predicted_safe = (
+                    success_probability >=
+                    self.config.discrete_success_threshold
+                )
                 fallback = success_probability == success_probability.max(
                     dim=1, keepdim=True
                 ).values

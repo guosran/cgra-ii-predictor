@@ -336,6 +336,23 @@ class GraphModelTest(unittest.TestCase):
                 interaction_mode="discrete_routing_set",
                 mapper_ii_ceiling=20.5,
             ).validate()
+        with self.assertRaisesRegex(ValueError, "discrete_success_threshold"):
+            Model2Config(
+                interaction_mode="discrete_routing_set",
+                discrete_success_threshold=1.1,
+            ).validate()
+        with self.assertRaisesRegex(ValueError, "discrete_ii_decision"):
+            Model2Config(
+                interaction_mode="discrete_routing_set",
+                discrete_ii_decision="truncate",
+            ).validate()
+        calibrated = Model2Config(
+            interaction_mode="discrete_routing_set",
+            discrete_success_threshold=0.9,
+            discrete_ii_decision="floor",
+        ).to_dict()
+        self.assertEqual(calibrated["discrete_success_threshold"], 0.9)
+        self.assertEqual(calibrated["discrete_ii_decision"], "floor")
 
     def test_split_keeps_queries_intact_and_balances_families(self):
         graph = parse_neura_dfg(
