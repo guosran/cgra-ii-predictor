@@ -21,6 +21,8 @@ class GraphModelTest(unittest.TestCase):
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global pad_shortest_path_distances, parse_neura_dfg
+        global parse_neura_route_expanded_dfg
+        global ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES
         global parse_neura_mapped_placements
         global frozen_adapter, neura_motifs_v7
         import torch
@@ -35,7 +37,9 @@ class GraphModelTest(unittest.TestCase):
             JointGraphShapeModel, Model2Config, candidate_context,
             censored_top1_metrics, make_cgra_graph, model2_loss,
             pad_shortest_path_distances, parse_neura_dfg,
+            parse_neura_route_expanded_dfg,
             parse_neura_mapped_placements,
+            ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES,
         )
 
     def test_device_selection_never_silently_ignores_explicit_cuda(self):
@@ -141,6 +145,64 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(graph.edges, ((0, 2), (1, 2)))
         self.assertEqual(graph.node_features[0][6], 1.0)
         self.assertEqual(graph.node_features[2][7], 1.0)
+
+    def test_route_expanded_parser_preserves_moves_return_and_feedback(self):
+        source = """
+        %init = "neura.constant"() : () -> !neura.data<i32, i1>
+        %reserved = neura.reserve : !neura.data<i32, i1>
+        %init_mov = "neura.data_mov"(%init) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %state = neura.phi_start %init_mov, %reserved : !neura.data<i32, i1>, !neura.data<i32, i1> -> !neura.data<i32, i1>
+        %next = "neura.add"(%state, %init) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %back = "neura.data_mov"(%next) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        neura.ctrl_mov %back -> %reserved : !neura.data<i32, i1> !neura.data<i32, i1>
+        func.return
+        """
+        graph = parse_neura_route_expanded_dfg(source)
+        self.assertEqual(len(graph.node_types), 7)
+        self.assertIn((5, 1), graph.edges)
+        self.assertIn((4, 3), graph.semantic_edges)
+        materialized = ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
+            "is_materialized"
+        )
+        recurrence = ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
+            "is_recurrence_cycle"
+        )
+        self.assertEqual(
+            sum(row[materialized] for row in graph.node_features), 4.0
+        )
+        self.assertEqual(
+            sum(row[recurrence] for row in graph.node_features), 4.0
+        )
+
+    def test_route_expanded_model_counts_only_materialized_pe_demand(self):
+        graph = parse_neura_route_expanded_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %m = "neura.data_mov"(%a) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %b = "neura.add"(%m, %a) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        func.return
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="residual_pointwise",
+            dfg_representation="route_expanded_v2",
+        )
+        model = JointGraphShapeModel(config).eval()
+        context = torch.tensor([[candidate_context(1, 2, 1, 2, 2)]])
+        output = model([graph], [make_cgra_graph(1, 2)], context)
+        expected_pressure = math.log1p(3.0 / 2.0) / math.log(129.0)
+        self.assertAlmostEqual(
+            float(output["cross_attention_context"][0, 0, 0]),
+            expected_pressure,
+        )
+        self.assertEqual(
+            config.to_dict()["dfg_representation"], "route_expanded_v2"
+        )
+        with self.assertRaisesRegex(ValueError, "partial targets"):
+            Model2Config(
+                interaction_mode="residual_pointwise",
+                dfg_representation="route_expanded_v2",
+                placement_loss_weight=0.1,
+            ).validate()
 
     def test_mapped_placements_align_materialized_operations_to_pes(self):
         source = """

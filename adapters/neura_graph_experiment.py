@@ -29,6 +29,8 @@ import torch
 from cgra_ii_predictor.graph_model import (
     CANDIDATE_CONTEXT_NAMES,
     CROSS_ATTENTION_CONTEXT_NAMES,
+    DFG_NODE_FEATURE_NAMES,
+    ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES,
     ROUTING_CONTEXT_NAMES,
     GraphData,
     JointGraphShapeModel,
@@ -37,7 +39,7 @@ from cgra_ii_predictor.graph_model import (
     censored_top1_metrics,
     make_cgra_graph,
     model2_loss,
-    parse_neura_dfg,
+    parse_neura_dfg_representation,
 )
 
 
@@ -95,7 +97,9 @@ def _safe_relative(root: Path, raw_path: object) -> Path:
     return path
 
 
-def load_terminal_manifest(path: Path) -> Tuple[Dict[str, Any], List[QueryRecord]]:
+def load_terminal_manifest(
+    path: Path, dfg_representation: str = "semantic_v1",
+) -> Tuple[Dict[str, Any], List[QueryRecord]]:
     """Load all declared candidates without converting censorship into II."""
     path = path.resolve()
     manifest = json.loads(path.read_text())
@@ -131,7 +135,9 @@ def load_terminal_manifest(path: Path) -> Tuple[Dict[str, Any], List[QueryRecord
             raise ValueError(f"source hash mismatch for query {query_id}")
         graph = source_cache.get(source_sha)
         if graph is None:
-            graph = parse_neura_dfg(source_path.read_text())
+            graph = parse_neura_dfg_representation(
+                source_path.read_text(), dfg_representation,
+            )
             source_cache[source_sha] = graph
         candidates: List[CandidateRecord] = []
         seen = set()
@@ -929,6 +935,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--discrete-ii-loss-weight", type=float, default=1.0)
     parser.add_argument("--placement-loss-weight", type=float, default=0.0)
     parser.add_argument(
+        "--dfg-representation",
+        choices=("semantic_v1", "route_expanded_v2"),
+        default="semantic_v1",
+        help=("semantic_v1 reproduces historical collapsed DFG inputs; "
+              "route_expanded_v2 retains data movement, return demand, and "
+              "loop-carried control feedback."),
+    )
+    parser.add_argument(
         "--discrete-success-threshold", type=float, default=0.5,
     )
     parser.add_argument(
@@ -956,15 +970,18 @@ def main() -> int:
         discrete_success_threshold=args.discrete_success_threshold,
         discrete_ii_decision=args.discrete_ii_decision,
         placement_loss_weight=args.placement_loss_weight,
+        dfg_representation=args.dfg_representation,
     ).validate()
-    manifest, queries = load_terminal_manifest(args.manifest)
+    manifest, queries = load_terminal_manifest(
+        args.manifest, config.dfg_representation,
+    )
     manifests = [(args.manifest, manifest)]
     splits = split_queries(queries, args.seed)
     added_training_query_ids: List[str] = []
     known_queries = list(queries)
     for additional_path in args.additional_training_manifest:
         additional_manifest, additional_queries = load_terminal_manifest(
-            additional_path
+            additional_path, config.dfg_representation,
         )
         splits, added_ids = add_training_only_queries(
             splits, known_queries, additional_queries,
@@ -1032,6 +1049,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v9"
+            if config.dfg_representation == "route_expanded_v2" else
             "cgra-ii-joint-graph-model-v8"
             if config.interaction_mode == "residual_pointwise" else
             "cgra-ii-joint-graph-model-v7"
@@ -1049,6 +1068,11 @@ def main() -> int:
             "cgra-ii-joint-graph-model-v1"
         ),
         "config": config.to_dict(),
+        "dfg_node_feature_names": list(
+            ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES
+            if config.dfg_representation == "route_expanded_v2" else
+            DFG_NODE_FEATURE_NAMES
+        ),
         "candidate_context_names": list(CANDIDATE_CONTEXT_NAMES),
         "cross_attention_context_names": (
             list(CROSS_ATTENTION_CONTEXT_NAMES)
@@ -1111,6 +1135,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "route_expanded_residual_ii_pointwise_predictor_v9"
+            if config.dfg_representation == "route_expanded_v2" else
             "placement_supervised_residual_ii_pointwise_predictor_v8"
             if (
                 config.interaction_mode == "residual_pointwise" and

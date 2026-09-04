@@ -24,6 +24,7 @@ EPOCHS=${EPOCHS:-80}
 PATIENCE=${PATIENCE:-${EPOCHS}}
 PLACEMENT_LOSS_WEIGHT=${PLACEMENT_LOSS_WEIGHT:-0.1}
 INTERACTION_MODE=${INTERACTION_MODE:-discrete_pointwise}
+DFG_REPRESENTATION=${DFG_REPRESENTATION:-semantic_v1}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -73,6 +74,7 @@ echo "manifest_sha256=${actual_manifest_sha256}"
 echo "additional_manifest_sha256=${actual_additional_sha256}"
 echo "placement_supervision_sha256=${actual_placement_sha256}"
 echo "architecture=${INTERACTION_MODE}"
+echo "dfg_representation=${DFG_REPRESENTATION}"
 echo "primary_metric=successful_candidate_continuous_ii_mae"
 echo "epochs=${EPOCHS}"
 echo "patience=${PATIENCE}"
@@ -90,6 +92,7 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
   --interaction-mode "${INTERACTION_MODE}" \
+  --dfg-representation "${DFG_REPRESENTATION}" \
   --discrete-ii-loss-weight 1.0 \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \
