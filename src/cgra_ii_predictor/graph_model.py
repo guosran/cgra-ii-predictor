@@ -119,14 +119,16 @@ class Model2Config:
             raise ValueError("dropout must be in [0, 1)")
         if self.interaction_mode not in {
             "pooled", "cross_attention", "routing_set_attention",
-            "discrete_routing_set",
+            "discrete_routing_set", "strict_set_classifier",
         }:
             raise ValueError(
-                "interaction_mode must be pooled, cross_attention, or "
-                "a routing set mode"
+                "interaction_mode must be pooled, cross_attention, "
+                "routing_set_attention, discrete_routing_set, or "
+                "strict_set_classifier"
             )
         if self.interaction_mode in {
             "routing_set_attention", "discrete_routing_set",
+            "strict_set_classifier",
         }:
             if self.candidate_set_layers < 1:
                 raise ValueError("candidate_set_layers must be positive")
@@ -172,6 +174,7 @@ class Model2Config:
             values.pop("interaction_mode")
         if self.interaction_mode not in {
             "routing_set_attention", "discrete_routing_set",
+            "strict_set_classifier",
         }:
             values.pop("candidate_set_layers")
             values.pop("candidate_set_heads")
@@ -546,7 +549,7 @@ if nn is not None:
             interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
-                "discrete_routing_set",
+                "discrete_routing_set", "strict_set_classifier",
             }:
                 self.cross_dfg_query = nn.Linear(hidden, hidden)
                 self.cross_cgra_key = nn.Linear(hidden, hidden)
@@ -567,6 +570,7 @@ if nn is not None:
                 interaction_width += hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
                 if self.config.interaction_mode in {
                     "routing_set_attention", "discrete_routing_set",
+                    "strict_set_classifier",
                 }:
                     interaction_width += len(ROUTING_CONTEXT_NAMES)
             self.interaction = nn.Sequential(
@@ -581,6 +585,7 @@ if nn is not None:
             self.residual_head = nn.Linear(hidden, 1)
             if self.config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
+                "strict_set_classifier",
             }:
                 self.candidate_set_blocks = nn.ModuleList([
                     CandidateSetBlock(
@@ -590,7 +595,9 @@ if nn is not None:
                     for _ in range(self.config.candidate_set_layers)
                 ])
                 self.candidate_set_normalization = nn.LayerNorm(hidden)
-            if self.config.interaction_mode == "routing_set_attention":
+            if self.config.interaction_mode in {
+                "routing_set_attention", "strict_set_classifier",
+            }:
                 self.rank_head = nn.Linear(hidden, 1)
             elif self.config.interaction_mode == "discrete_routing_set":
                 self.discrete_ii_head = nn.Linear(
@@ -725,7 +732,7 @@ if nn is not None:
             context = context.to(device=device, dtype=torch.float32)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
-                "discrete_routing_set",
+                "discrete_routing_set", "strict_set_classifier",
             }:
                 dfg_nodes, dfg_mask, dfg_adjacency = (
                     self.dfg_encoder.encode_nodes(dfg_graphs)
@@ -746,6 +753,7 @@ if nn is not None:
                     )
                     if self.config.interaction_mode in {
                         "routing_set_attention", "discrete_routing_set",
+                        "strict_set_classifier",
                     }
                     else None
                 )
@@ -786,6 +794,7 @@ if nn is not None:
             ranked = None
             if self.config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
+                "strict_set_classifier",
             }:
                 ranked = hidden
                 for block in self.candidate_set_blocks:
@@ -794,6 +803,9 @@ if nn is not None:
             if self.config.interaction_mode == "routing_set_attention":
                 rank_adjustment = self.rank_head(ranked).squeeze(-1)
                 ranking_logits = -expected_cost + rank_adjustment
+                selection_cost = -ranking_logits
+            elif self.config.interaction_mode == "strict_set_classifier":
+                ranking_logits = self.rank_head(ranked).squeeze(-1)
                 selection_cost = -ranking_logits
             elif self.config.interaction_mode == "discrete_routing_set":
                 ii_class_logits = self.discrete_ii_head(ranked)
@@ -894,7 +906,14 @@ def model2_loss(
     residual_target: Tensor, optimal_ii_target: Tensor, oracle_index: Tensor,
     config: Model2Config,
 ) -> Dict[str, Tensor]:
-    """Combine binary risk, successful-II, and candidate-set Top-1 losses."""
+    """Combine the configured candidate objectives.
+
+    ``strict_set_classifier`` deliberately optimizes only the deterministic
+    oracle shape cross-entropy.  The otherwise shared success and residual
+    heads stay in the forward contract so this diagnostic architecture can be
+    evaluated by the same pipeline without pretending its auxiliary outputs
+    were trained.
+    """
     _require_torch()
     config.validate()
     logits = output["success_logits"]
@@ -962,12 +981,17 @@ def model2_loss(
         optimal_ii_loss = logits.sum() * 0.0
         strict_tiebreak_loss = logits.sum() * 0.0
         listwise_loss = logits.sum() * 0.0
-    total = (
-        config.success_loss_weight * success_loss +
-        config.residual_loss_weight * residual_loss +
-        config.listwise_loss_weight * listwise_loss +
-        config.discrete_ii_loss_weight * discrete_ii_loss
-    )
+    if config.interaction_mode == "strict_set_classifier":
+        optimal_ii_loss = logits.sum() * 0.0
+        listwise_loss = strict_tiebreak_loss
+        total = strict_tiebreak_loss
+    else:
+        total = (
+            config.success_loss_weight * success_loss +
+            config.residual_loss_weight * residual_loss +
+            config.listwise_loss_weight * listwise_loss +
+            config.discrete_ii_loss_weight * discrete_ii_loss
+        )
     return {
         "total": total,
         "success": success_loss,

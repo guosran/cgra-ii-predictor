@@ -354,6 +354,55 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(calibrated["discrete_success_threshold"], 0.9)
         self.assertEqual(calibrated["discrete_ii_decision"], "floor")
 
+    def test_strict_set_classifier_optimizes_only_oracle_shape(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="strict_set_classifier",
+            candidate_set_layers=1, candidate_set_heads=4,
+        )
+        model = JointGraphShapeModel(config)
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        context = torch.tensor([[
+            candidate_context(1, 1, 1, 4, 4),
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        output = model([graph], shapes, context)
+        self.assertEqual(tuple(output["ranking_logits"].shape), (1, 2))
+        self.assertTrue(torch.equal(
+            output["selection_cost"], -output["ranking_logits"]
+        ))
+        losses = model2_loss(
+            output, torch.tensor([[0.0, 1.0]]),
+            torch.tensor([[0.0, 2.0]]), torch.tensor([[False, True]]),
+            torch.tensor([1]), config,
+        )
+        self.assertTrue(torch.equal(
+            losses["total"], losses["listwise_strict_tiebreak"]
+        ))
+        self.assertEqual(float(losses["listwise_optimal_ii"]), 0.0)
+        losses["total"].backward()
+        parameters = dict(model.named_parameters())
+        for name in (
+            "candidate_set_blocks.0.attention.in_proj_weight",
+            "candidate_set_blocks.0.feed_forward.0.weight",
+            "rank_head.weight",
+        ):
+            gradient = parameters[name].grad
+            self.assertIsNotNone(gradient, name)
+            self.assertTrue(torch.any(gradient != 0), name)
+        self.assertIsNone(parameters["success_head.weight"].grad)
+        self.assertIsNone(parameters["residual_head.weight"].grad)
+        serialized = config.to_dict()
+        self.assertEqual(
+            serialized["interaction_mode"], "strict_set_classifier"
+        )
+        self.assertNotIn("discrete_ii_loss_weight", serialized)
+
     def test_split_keeps_queries_intact_and_balances_families(self):
         graph = parse_neura_dfg(
             '%a = "neura.constant"() : () -> !neura.data<i32, i1>'

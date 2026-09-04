@@ -667,14 +667,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interaction-mode", choices=(
             "pooled", "cross_attention", "routing_set_attention",
-            "discrete_routing_set",
+            "discrete_routing_set", "strict_set_classifier",
         ),
         default="pooled",
         help=("pooled reproduces Model 2; cross_attention performs "
               "candidate-conditioned operation-to-PE interaction; "
               "routing_set_attention adds route pressure and joint "
               "candidate ranking; discrete_routing_set predicts integer II "
-              "classes and applies deterministic shape tie-breaking."),
+              "classes and applies deterministic shape tie-breaking; "
+              "strict_set_classifier directly optimizes deterministic "
+              "oracle-shape cross-entropy only."),
     )
     parser.add_argument("--candidate-set-layers", type=int, default=2)
     parser.add_argument("--candidate-set-heads", type=int, default=4)
@@ -739,6 +741,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v5"
+            if config.interaction_mode == "strict_set_classifier" else
             "cgra-ii-joint-graph-model-v4"
             if config.interaction_mode == "discrete_routing_set" else
             "cgra-ii-joint-graph-model-v3"
@@ -753,13 +757,14 @@ def main() -> int:
             list(CROSS_ATTENTION_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
-                "discrete_routing_set",
+                "discrete_routing_set", "strict_set_classifier",
             } else []
         ),
         "routing_context_names": (
             list(ROUTING_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
+                "strict_set_classifier",
             } else []
         ),
         "state_dict": model.state_dict(),
@@ -803,6 +808,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "strict_only_routing_candidate_set_classifier_v5"
+            if config.interaction_mode == "strict_set_classifier" else
             "discrete_ii_routing_candidate_set_ranker_v4"
             if config.interaction_mode == "discrete_routing_set" else
             "routing_aware_candidate_set_ranker_v3"
@@ -839,27 +846,39 @@ def main() -> int:
             "summary": split_summary(splits),
         },
         "loss_contract": {
-            "success": "binary_cross_entropy_all_declared_candidates",
-            "ii": "smooth_l1_successful_candidates_only",
+            "success": (
+                None if config.interaction_mode == "strict_set_classifier"
+                else "binary_cross_entropy_all_declared_candidates"
+            ),
+            "ii": (
+                None if config.interaction_mode == "strict_set_classifier"
+                else "smooth_l1_successful_candidates_only"
+            ),
             "discrete_ii": (
                 "cross_entropy_integer_ii_successful_candidates_only"
                 if config.interaction_mode == "discrete_routing_set" else None
             ),
             "listwise": (
+                "strict_oracle_shape_cross_entropy_only"
+                if config.interaction_mode == "strict_set_classifier" else
                 "optimal_ii_set_log_mass_plus_weighted_strict_tiebreak_cross_entropy"
             ),
             "selection_cost": (
                 "predicted_success_then_integer_ii_then_area_rows_columns"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_candidate_set_ranking_logit"
-                if config.interaction_mode == "routing_set_attention" else
+                if config.interaction_mode in {
+                    "routing_set_attention", "strict_set_classifier",
+                } else
                 "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)"
             ),
             "ranking_prior": (
                 "negative_timeout_aware_expected_discrete_ii"
                 if config.interaction_mode == "discrete_routing_set" else
                 "negative_timeout_aware_expected_cost_plus_learned_set_adjustment"
-                if config.interaction_mode == "routing_set_attention" else None
+                if config.interaction_mode == "routing_set_attention" else
+                "none_direct_strict_shape_logits"
+                if config.interaction_mode == "strict_set_classifier" else None
             ),
             "numeric_ii_imputation_for_censored_candidates": False,
         },
