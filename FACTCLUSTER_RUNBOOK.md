@@ -362,5 +362,49 @@ DSE 接通后，再以解析模型最终选中方案的真实 objective regret �
 若以后改用 `gpu-scavenger` 做参数扫描，每组配置应写到独立目录，并在输出
 已存在时跳过，以便抢占后安全重提。
 
+### 2026-09-04：pointwise II 的后续固定切分结果
+
+以下结果都使用 SHA256 为
+`74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9`
+的冻结 manifest 和 split seed `20260906`。最终训练集含 2232 个独立 DFG、
+35712 个候选、29481 个成功 II 标签；validation 为 383/6128/5295，test 为
+385/6160/5265。16 个 shape 标签共享 DFG，不能当成独立图样本计数。
+
+关键单模型测试结果：
+
+| Job | 改动 | 连续 II MAE |
+|---|---|---:|
+| 1476358 | semantic residual + placement | 0.45242 |
+| 1476507 | route-expanded，3 层 sum | 0.48017 |
+| 1476614 | route-expanded，3 层 dual-mean + placement + cosine | 0.44354 |
+| 1476763 | 将 discrete CE 从 1.0 降到 0.25 | 0.46721 |
+| 1476764 | 直接 continuous residual head，CE 0.25 | 0.48258 |
+| 1476842 | 3 层 + 显式 depth/width/cutwidth 摘要 | 0.45401 |
+| 1476844 | 3 层 + materialized-only pooling | 0.46399 |
+| 1476841 | 6 层，保留全节点 pooling | 0.43891 |
+| 1476843 | 6 层 + materialized-only pooling | **0.43857** |
+| 1476848 | 9 层 | **0.43347** |
+| 1476849 | 6 层 + weight decay 1e-3 | 0.45340 |
+| 1476850 | 6 层 + discrete CE 2.0 | 0.43608 |
+| 1476851 | 6 层 + dropout 0.2 | 0.43716 |
+
+这组消融说明 route 节点只有在消息感受野加深后才有稳定收益；只改 pooling 或只注入
+手工图摘要无效。直接 scalar residual head 的训练 MAE 很低、验证/测试却退化，原来的
+整数 residual 分布同时提供了有效正则和预测方差，因此保留 distribution mean 作为
+连续 II 输出。
+
+`adapters/ensemble_pointwise_checkpoints.py` 只在 validation 上拟合非负凸组合，再用
+各模型的 residual-distribution 标准差做单候选置信度门控：
+
+```text
+w_i(x) ∝ base_weight_i * (std_i(x) / median_validation_std_i) ^ (-alpha)
+```
+
+`alpha` 也只在 validation 上选择；模型之间没有候选集合信息流。加入 6 层模型后的
+Job 1476845 测试结果为：静态 ensemble MAE 0.40479，置信度门控 MAE **0.38162**，
+macro-query MAE 0.41242。解析 lower bound 的拟合权重为 0。若更看重延迟，同切分
+子集搜索选择 `absolute_p + layers6 + structural + layers6_pool` 四个模型，测试 MAE
+为 **0.38128**，没有观察到完整 12 模型的精度优势。
+
 Jupyter 也必须经 Slurm 启动。计算节点端口使用 10000--19999，登录节点反向转发端口
 使用 20000--29999，并让 Jupyter 只绑定 `127.0.0.1`。

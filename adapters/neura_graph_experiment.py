@@ -956,6 +956,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--seed", type=int, default=DEFAULT_SPLIT_SEED)
+    parser.add_argument(
+        "--training-seed", type=int,
+        help=("Model initialization and batch-order seed. Defaults to --seed "
+              "without changing the fixed data split."),
+    )
     parser.add_argument("--threads", type=int, default=6)
     parser.add_argument(
         "--device", choices=("auto", "cpu", "cuda"), default="auto",
@@ -1029,6 +1034,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    training_seed = (
+        args.seed if args.training_seed is None else args.training_seed
+    )
     try:
         device = resolve_device(args.device)
     except ValueError as error:
@@ -1104,11 +1112,12 @@ def main() -> int:
     model, training = train_model(
         splits, config, epochs=args.epochs, batch_size=args.batch_size,
         learning_rate=args.learning_rate, weight_decay=args.weight_decay,
-        patience=args.patience, seed=args.seed, threads=args.threads,
+        patience=args.patience, seed=training_seed, threads=args.threads,
         device=device,
         learning_rate_schedule=args.learning_rate_schedule,
         minimum_learning_rate=args.minimum_learning_rate,
     )
+    training["training_seed"] = training_seed
     shape_graphs = [
         make_cgra_graph(rows, columns)
         for rows in range(1, 5) for columns in range(1, 5)
@@ -1186,6 +1195,7 @@ def main() -> int:
         ),
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
+        "training_seed": training_seed,
         "additional_training_manifest_sha256": [
             sha256_file(path.resolve())
             for path in args.additional_training_manifest

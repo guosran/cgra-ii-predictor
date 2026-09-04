@@ -37,6 +37,7 @@ DROPOUT=${DROPOUT:-0.10}
 LEARNING_RATE_SCHEDULE=${LEARNING_RATE_SCHEDULE:-none}
 MINIMUM_LEARNING_RATE=${MINIMUM_LEARNING_RATE:-1e-5}
 DISCRETE_II_LOSS_WEIGHT=${DISCRETE_II_LOSS_WEIGHT:-1.0}
+TRAINING_SEED=${TRAINING_SEED:-20260906}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -103,6 +104,8 @@ echo "dropout=${DROPOUT}"
 echo "learning_rate_schedule=${LEARNING_RATE_SCHEDULE}"
 echo "minimum_learning_rate=${MINIMUM_LEARNING_RATE}"
 echo "discrete_ii_loss_weight=${DISCRETE_II_LOSS_WEIGHT}"
+echo "split_seed=20260906"
+echo "training_seed=${TRAINING_SEED}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
@@ -119,6 +122,7 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --weight-decay "${WEIGHT_DECAY}" \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
+  --training-seed "${TRAINING_SEED}" \
   --interaction-mode "${INTERACTION_MODE}" \
   --dfg-representation "${DFG_REPRESENTATION}" \
   --dfg-message-mode "${DFG_MESSAGE_MODE}" \
