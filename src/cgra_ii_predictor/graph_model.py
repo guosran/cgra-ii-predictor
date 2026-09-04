@@ -57,6 +57,10 @@ CANDIDATE_CONTEXT_NAMES = (
     "log_aspect_ratio", "normalized_links", "normalized_memory_tiles",
     "normalized_bisection_links",
 )
+CROSS_ATTENTION_CONTEXT_NAMES = (
+    "normalized_operation_pressure", "normalized_peak_pe_load",
+    "normalized_pe_load_entropy",
+)
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,7 @@ class Model2Config:
     residual_loss_weight: float = 1.0
     listwise_loss_weight: float = 1.0
     strict_tiebreak_loss_weight: float = 1.0
+    interaction_mode: str = "pooled"
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -103,6 +108,10 @@ class Model2Config:
             raise ValueError("message_passing_layers must be positive")
         if not 0.0 <= self.dropout < 1.0:
             raise ValueError("dropout must be in [0, 1)")
+        if self.interaction_mode not in {"pooled", "cross_attention"}:
+            raise ValueError(
+                "interaction_mode must be pooled or cross_attention"
+            )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
@@ -114,7 +123,12 @@ class Model2Config:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self.validate())
+        values = asdict(self.validate())
+        # Preserve the exact configuration contract of existing pooled-model
+        # checkpoints.  New architectures identify themselves explicitly.
+        if self.interaction_mode == "pooled":
+            values.pop("interaction_mode")
+        return values
 
 
 def _meaningful_roots(
@@ -357,7 +371,10 @@ if nn is not None:
                 nn.LayerNorm(hidden_dimension),
             )
 
-        def forward(self, graphs: Sequence[GraphData]) -> Tensor:
+        def encode_nodes(
+            self, graphs: Sequence[GraphData],
+        ) -> Tuple[Tensor, Tensor]:
+            """Return message-passed node states and their padding mask."""
             device = self.type_embedding.weight.device
             node_types, scalars, adjacency, mask = pad_graphs(
                 graphs, self.scalar_feature_count, device,
@@ -372,11 +389,19 @@ if nn is not None:
                 outgoing = torch.bmm(adjacency, hidden)
                 update = layer(torch.cat((hidden, incoming, outgoing), dim=-1))
                 hidden = normalization(hidden + update) * float_mask
+            return hidden, mask
+
+        def pool_nodes(self, hidden: Tensor, mask: Tensor) -> Tensor:
+            """Pool encoded nodes without discarding padding semantics."""
+            float_mask = mask.unsqueeze(-1).to(hidden.dtype)
             counts = float_mask.sum(dim=1).clamp_min(1.0)
             mean = hidden.sum(dim=1) / counts
             negative = torch.finfo(hidden.dtype).min
             maximum = hidden.masked_fill(~mask.unsqueeze(-1), negative).max(dim=1).values
             return self.readout(torch.cat((mean, maximum), dim=-1))
+
+        def forward(self, graphs: Sequence[GraphData]) -> Tensor:
+            return self.pool_nodes(*self.encode_nodes(graphs))
 
 
     class JointGraphShapeModel(nn.Module):
@@ -394,8 +419,29 @@ if nn is not None:
                 len(CGRA_NODE_FEATURE_NAMES), hidden,
                 self.config.message_passing_layers, self.config.dropout,
             )
+            interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
+            if self.config.interaction_mode == "cross_attention":
+                self.cross_dfg_query = nn.Linear(hidden, hidden)
+                self.cross_cgra_key = nn.Linear(hidden, hidden)
+                self.cross_cgra_value = nn.Linear(hidden, hidden)
+                self.cross_node_fusion = nn.Sequential(
+                    nn.Linear(hidden * 4, hidden * 2),
+                    nn.GELU(),
+                    nn.Dropout(self.config.dropout),
+                    nn.Linear(hidden * 2, hidden),
+                    nn.GELU(),
+                    nn.LayerNorm(hidden),
+                )
+                self.cross_readout = nn.Sequential(
+                    nn.Linear(hidden * 2, hidden),
+                    nn.GELU(),
+                    nn.LayerNorm(hidden),
+                )
+                interaction_width += (
+                    hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
+                )
             self.interaction = nn.Sequential(
-                nn.Linear(hidden * 4 + len(CANDIDATE_CONTEXT_NAMES), hidden * 2),
+                nn.Linear(interaction_width, hidden * 2),
                 nn.GELU(),
                 nn.Dropout(self.config.dropout),
                 nn.Linear(hidden * 2, hidden),
@@ -404,6 +450,78 @@ if nn is not None:
             )
             self.success_head = nn.Linear(hidden, 1)
             self.residual_head = nn.Linear(hidden, 1)
+
+        def _candidate_conditioned_interaction(
+            self, dfg_nodes: Tensor, dfg_mask: Tensor,
+            cgra_nodes: Tensor, cgra_mask: Tensor,
+        ) -> Tuple[Tensor, Tensor]:
+            """Attend every operation to the PEs of each candidate shape.
+
+            Besides a learned cross-graph summary, return differentiable load
+            statistics.  The latter exposes operation/PE pressure that global
+            mean/max pooling intentionally removes.
+            """
+            hidden_width = dfg_nodes.shape[-1]
+            query = self.cross_dfg_query(dfg_nodes)
+            key = self.cross_cgra_key(cgra_nodes)
+            value = self.cross_cgra_value(cgra_nodes)
+            logits = torch.einsum(
+                "bnh,cmh->bcnm", query, key,
+            ) / math.sqrt(float(hidden_width))
+            logits = logits.masked_fill(
+                ~cgra_mask[None, :, None, :],
+                torch.finfo(logits.dtype).min,
+            )
+            attention = torch.softmax(logits, dim=-1)
+            valid_operations = dfg_mask[:, None, :, None].to(attention.dtype)
+            attention = attention * valid_operations
+            attended = torch.einsum(
+                "bcnm,cmh->bcnh", attention, value,
+            )
+            batch, candidates, operation_count = attended.shape[:3]
+            operations = dfg_nodes[:, None, :, :].expand(
+                batch, candidates, operation_count, hidden_width,
+            )
+            local = self.cross_node_fusion(torch.cat((
+                operations, attended, operations * attended,
+                torch.abs(operations - attended),
+            ), dim=-1))
+            operation_mask = dfg_mask[:, None, :, None]
+            float_operation_mask = operation_mask.to(local.dtype)
+            counts = float_operation_mask.sum(dim=2).clamp_min(1.0)
+            mean = (local * float_operation_mask).sum(dim=2) / counts
+            maximum = local.masked_fill(
+                ~operation_mask, torch.finfo(local.dtype).min,
+            ).max(dim=2).values
+            cross_summary = self.cross_readout(torch.cat((mean, maximum), dim=-1))
+
+            pe_load = attention.sum(dim=2)
+            pe_mask = cgra_mask[None, :, :]
+            float_pe_mask = pe_mask.to(pe_load.dtype)
+            operation_counts = dfg_mask.sum(dim=1).to(pe_load.dtype)
+            pe_counts = cgra_mask.sum(dim=1).to(pe_load.dtype)
+            mean_load = (
+                operation_counts[:, None] / pe_counts[None, :].clamp_min(1.0)
+            )
+            pressure = (
+                torch.log1p(mean_load) / math.log(129.0)
+            ).clamp(max=1.0)
+            peak_load = pe_load.masked_fill(~pe_mask, 0.0).max(dim=-1).values
+            normalized_peak = (
+                peak_load / mean_load.clamp_min(1e-6) / 16.0
+            ).clamp(max=1.0)
+            load_probability = (
+                pe_load / operation_counts[:, None, None].clamp_min(1.0)
+            ) * float_pe_mask
+            entropy = -(
+                load_probability * load_probability.clamp_min(1e-8).log()
+            ).sum(dim=-1)
+            entropy_denominator = pe_counts.log().clamp_min(1.0)
+            normalized_entropy = entropy / entropy_denominator[None, :]
+            cross_context = torch.stack((
+                pressure, normalized_peak, normalized_entropy,
+            ), dim=-1)
+            return cross_summary, cross_context
 
         def forward(
             self, dfg_graphs: Sequence[GraphData],
@@ -419,12 +537,30 @@ if nn is not None:
                 raise ValueError("CGRA candidate count and context differ")
             device = next(self.parameters()).device
             context = context.to(device=device, dtype=torch.float32)
-            dfg = self.dfg_encoder(dfg_graphs)
-            cgra = self.cgra_encoder(cgra_graphs)
+            if self.config.interaction_mode == "cross_attention":
+                dfg_nodes, dfg_mask = self.dfg_encoder.encode_nodes(dfg_graphs)
+                cgra_nodes, cgra_mask = self.cgra_encoder.encode_nodes(cgra_graphs)
+                dfg = self.dfg_encoder.pool_nodes(dfg_nodes, dfg_mask)
+                cgra = self.cgra_encoder.pool_nodes(cgra_nodes, cgra_mask)
+                cross_summary, cross_context = (
+                    self._candidate_conditioned_interaction(
+                        dfg_nodes, dfg_mask, cgra_nodes, cgra_mask,
+                    )
+                )
+            else:
+                dfg = self.dfg_encoder(dfg_graphs)
+                cgra = self.cgra_encoder(cgra_graphs)
+                cross_summary = None
+                cross_context = None
             batch, candidates = context.shape[:2]
             dfg = dfg[:, None, :].expand(batch, candidates, -1)
             cgra = cgra[None, :, :].expand(batch, candidates, -1)
-            joint = torch.cat((dfg, cgra, dfg * cgra, torch.abs(dfg - cgra), context), dim=-1)
+            joint_parts = [
+                dfg, cgra, dfg * cgra, torch.abs(dfg - cgra), context,
+            ]
+            if cross_summary is not None and cross_context is not None:
+                joint_parts.extend((cross_summary, cross_context))
+            joint = torch.cat(joint_parts, dim=-1)
             hidden = self.interaction(joint)
             success_logits = self.success_head(hidden).squeeze(-1)
             residual = functional.softplus(self.residual_head(hidden).squeeze(-1))
@@ -438,13 +574,16 @@ if nn is not None:
                 success_probability * predicted_ii.clamp(max=timeout_cost) +
                 (1.0 - success_probability) * timeout_cost
             )
-            return {
+            result = {
                 "success_logits": success_logits,
                 "success_probability": success_probability,
                 "predicted_residual": residual,
                 "predicted_ii": predicted_ii,
                 "expected_cost": expected_cost,
             }
+            if cross_context is not None:
+                result["cross_attention_context"] = cross_context
+            return result
 
 
 else:  # pragma: no cover - exercised only in NumPy-only installations.
@@ -617,6 +756,7 @@ def censored_top1_metrics(
 
 __all__ = [
     "CANDIDATE_CONTEXT_NAMES", "CGRA_NODE_FEATURE_NAMES",
+    "CROSS_ATTENTION_CONTEXT_NAMES",
     "DFG_NODE_FEATURE_NAMES", "GraphData", "JointGraphShapeModel",
     "Model2Config", "OPERATION_TYPES", "candidate_context",
     "censored_top1_metrics", "make_cgra_graph", "model2_loss",

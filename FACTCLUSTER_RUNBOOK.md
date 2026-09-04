@@ -135,6 +135,20 @@ ssh factcluster \
   'cd /fact_home/yibozhang/cgra-ii-predictor && sbatch cluster/factcluster_model2_train.sbatch'
 ```
 
+候选条件化 cross-attention 对照实验使用同一清单、切分、loss、seed 和训练超参，
+只改变 DFG/CGRA 交互架构：
+
+```sh
+ssh factcluster \
+  'cd /fact_home/yibozhang/cgra-ii-predictor && sbatch cluster/factcluster_cross_attention_train.sbatch'
+```
+
+它的日志名为 `cross-attention-<JOB_ID>.log`，输出目录为
+`runs/cross-attention-<JOB_ID>/`。基线 pooled 模型是 Job `1472687`：测试 strict
+top-1 为 29.21%，optimal-II rate 为 51.84%，selected-success rate 为 92.89%，
+timeout-penalized regret 为 1.2605。后续架构比较必须使用这四项以及逐 family 指标，
+不能只比较训练 loss。
+
 记下输出的 job ID。低频查看队列：
 
 ```sh

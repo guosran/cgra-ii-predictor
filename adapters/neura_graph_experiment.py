@@ -28,6 +28,7 @@ import torch
 
 from cgra_ii_predictor.graph_model import (
     CANDIDATE_CONTEXT_NAMES,
+    CROSS_ATTENTION_CONTEXT_NAMES,
     GraphData,
     JointGraphShapeModel,
     Model2Config,
@@ -660,6 +661,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--message-passing-layers", type=int, default=3)
     parser.add_argument("--dropout", type=float, default=0.10)
     parser.add_argument("--strict-tiebreak-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--interaction-mode", choices=("pooled", "cross_attention"),
+        default="pooled",
+        help=("pooled reproduces Model 2; cross_attention performs "
+              "candidate-conditioned operation-to-PE interaction."),
+    )
     return parser.parse_args()
 
 
@@ -674,6 +681,7 @@ def main() -> int:
         message_passing_layers=args.message_passing_layers,
         dropout=args.dropout,
         strict_tiebreak_loss_weight=args.strict_tiebreak_loss_weight,
+        interaction_mode=args.interaction_mode,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
     generator_versions = sorted({
@@ -706,9 +714,17 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     model_path = args.output_dir / "model.pt"
     torch.save({
-        "schema_version": "cgra-ii-joint-graph-model-v1",
+        "schema_version": (
+            "cgra-ii-joint-graph-model-v2"
+            if config.interaction_mode == "cross_attention" else
+            "cgra-ii-joint-graph-model-v1"
+        ),
         "config": config.to_dict(),
         "candidate_context_names": list(CANDIDATE_CONTEXT_NAMES),
+        "cross_attention_context_names": (
+            list(CROSS_ATTENTION_CONTEXT_NAMES)
+            if config.interaction_mode == "cross_attention" else []
+        ),
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
     }, model_path)
@@ -749,7 +765,11 @@ def main() -> int:
             if generator_versions == ["motif-v6"] else
             "exploratory_combined_labels_already_disclosed"
         ),
-        "model_class": "joint_directed_gnn_dual_head_listwise_v1",
+        "model_class": (
+            "joint_directed_gnn_candidate_conditioned_dual_head_listwise_v2"
+            if config.interaction_mode == "cross_attention" else
+            "joint_directed_gnn_dual_head_listwise_v1"
+        ),
         "training_device": str(device),
         "manifest": {
             "path": str(args.manifest.resolve()),

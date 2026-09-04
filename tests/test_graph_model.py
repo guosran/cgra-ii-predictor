@@ -177,6 +177,56 @@ class GraphModelTest(unittest.TestCase):
             for parameter in model.parameters()
         ))
 
+    def test_cross_attention_is_candidate_conditioned_and_backpropagates(self):
+        source = """
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %d = "neura.mul"(%c, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """
+        graph = parse_neura_dfg(source)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="cross_attention",
+        )
+        model = JointGraphShapeModel(config)
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        context = torch.tensor([[
+            candidate_context(1, 1, 1, 4, 4),
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        output = model([graph], shapes, context)
+        cross_context = output["cross_attention_context"]
+        self.assertEqual(tuple(cross_context.shape), (1, 2, 3))
+        self.assertGreater(
+            float(cross_context[0, 0, 0]),
+            float(cross_context[0, 1, 0]),
+        )
+        losses = model2_loss(
+            output, torch.tensor([[0.0, 1.0]]),
+            torch.tensor([[0.0, 2.0]]), torch.tensor([[False, True]]),
+            torch.tensor([1]), config,
+        )
+        losses["total"].backward()
+        for name in (
+            "cross_dfg_query.weight", "cross_cgra_key.weight",
+            "cross_cgra_value.weight", "cross_node_fusion.0.weight",
+        ):
+            gradient = dict(model.named_parameters())[name].grad
+            self.assertIsNotNone(gradient, name)
+            self.assertTrue(torch.any(gradient != 0), name)
+
+    def test_pooled_config_keeps_legacy_checkpoint_contract(self):
+        self.assertNotIn("interaction_mode", Model2Config().to_dict())
+        self.assertEqual(
+            Model2Config(interaction_mode="cross_attention").to_dict()[
+                "interaction_mode"
+            ],
+            "cross_attention",
+        )
+        with self.assertRaisesRegex(ValueError, "interaction_mode"):
+            Model2Config(interaction_mode="unknown").validate()
+
     def test_split_keeps_queries_intact_and_balances_families(self):
         graph = parse_neura_dfg(
             '%a = "neura.constant"() : () -> !neura.data<i32, i1>'
