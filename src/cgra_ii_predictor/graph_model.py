@@ -61,6 +61,10 @@ CROSS_ATTENTION_CONTEXT_NAMES = (
     "normalized_operation_pressure", "normalized_peak_pe_load",
     "normalized_pe_load_entropy",
 )
+ROUTING_CONTEXT_NAMES = (
+    "normalized_mean_edge_distance", "normalized_max_edge_distance",
+    "normalized_routing_demand_per_link",
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +104,8 @@ class Model2Config:
     listwise_loss_weight: float = 1.0
     strict_tiebreak_loss_weight: float = 1.0
     interaction_mode: str = "pooled"
+    candidate_set_layers: int = 2
+    candidate_set_heads: int = 4
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -108,10 +114,22 @@ class Model2Config:
             raise ValueError("message_passing_layers must be positive")
         if not 0.0 <= self.dropout < 1.0:
             raise ValueError("dropout must be in [0, 1)")
-        if self.interaction_mode not in {"pooled", "cross_attention"}:
+        if self.interaction_mode not in {
+            "pooled", "cross_attention", "routing_set_attention",
+        }:
             raise ValueError(
-                "interaction_mode must be pooled or cross_attention"
+                "interaction_mode must be pooled, cross_attention, or "
+                "routing_set_attention"
             )
+        if self.interaction_mode == "routing_set_attention":
+            if self.candidate_set_layers < 1:
+                raise ValueError("candidate_set_layers must be positive")
+            if self.candidate_set_heads < 1:
+                raise ValueError("candidate_set_heads must be positive")
+            if self.hidden_dimension % self.candidate_set_heads != 0:
+                raise ValueError(
+                    "hidden_dimension must be divisible by candidate_set_heads"
+                )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
@@ -128,6 +146,9 @@ class Model2Config:
         # checkpoints.  New architectures identify themselves explicitly.
         if self.interaction_mode == "pooled":
             values.pop("interaction_mode")
+        if self.interaction_mode != "routing_set_attention":
+            values.pop("candidate_set_layers")
+            values.pop("candidate_set_heads")
         return values
 
 
@@ -337,6 +358,46 @@ def pad_graphs(
     return node_types, scalars, adjacency, mask
 
 
+def pad_shortest_path_distances(
+    graphs: Sequence[GraphData], device: Any,
+) -> Tensor:
+    """Return padded directed shortest-path distances for small graphs."""
+    _require_torch()
+    if not graphs:
+        raise ValueError("cannot batch an empty graph sequence")
+    maximum_nodes = max(len(graph.node_types) for graph in graphs)
+    matrices = torch.zeros(
+        (len(graphs), maximum_nodes, maximum_nodes),
+        dtype=torch.float32, device=device,
+    )
+    for graph_index, graph in enumerate(graphs):
+        node_count = len(graph.node_types)
+        distances = [[math.inf] * node_count for _ in range(node_count)]
+        for node in range(node_count):
+            distances[node][node] = 0.0
+        for source, target in graph.edges:
+            distances[source][target] = 1.0
+        for intermediate in range(node_count):
+            for source in range(node_count):
+                prefix = distances[source][intermediate]
+                if not math.isfinite(prefix):
+                    continue
+                for target in range(node_count):
+                    candidate = prefix + distances[intermediate][target]
+                    if candidate < distances[source][target]:
+                        distances[source][target] = candidate
+        if any(
+            not math.isfinite(distances[source][target])
+            for source in range(node_count)
+            for target in range(node_count)
+        ):
+            raise ValueError("routing graph must be strongly connected")
+        matrices[graph_index, :node_count, :node_count] = torch.tensor(
+            distances, dtype=torch.float32, device=device,
+        )
+    return matrices
+
+
 if nn is not None:
     class DirectedGraphEncoder(nn.Module):
         """Directed message passing followed by masked mean/max pooling."""
@@ -373,8 +434,8 @@ if nn is not None:
 
         def encode_nodes(
             self, graphs: Sequence[GraphData],
-        ) -> Tuple[Tensor, Tensor]:
-            """Return message-passed node states and their padding mask."""
+        ) -> Tuple[Tensor, Tensor, Tensor]:
+            """Return node states, padding mask, and directed adjacency."""
             device = self.type_embedding.weight.device
             node_types, scalars, adjacency, mask = pad_graphs(
                 graphs, self.scalar_feature_count, device,
@@ -389,7 +450,7 @@ if nn is not None:
                 outgoing = torch.bmm(adjacency, hidden)
                 update = layer(torch.cat((hidden, incoming, outgoing), dim=-1))
                 hidden = normalization(hidden + update) * float_mask
-            return hidden, mask
+            return hidden, mask, adjacency
 
         def pool_nodes(self, hidden: Tensor, mask: Tensor) -> Tensor:
             """Pool encoded nodes without discarding padding semantics."""
@@ -401,7 +462,40 @@ if nn is not None:
             return self.readout(torch.cat((mean, maximum), dim=-1))
 
         def forward(self, graphs: Sequence[GraphData]) -> Tensor:
-            return self.pool_nodes(*self.encode_nodes(graphs))
+            hidden, mask, _ = self.encode_nodes(graphs)
+            return self.pool_nodes(hidden, mask)
+
+
+    class CandidateSetBlock(nn.Module):
+        """Let candidate shapes compare themselves before final ranking."""
+
+        def __init__(self, hidden: int, heads: int, dropout: float) -> None:
+            super().__init__()
+            self.attention = nn.MultiheadAttention(
+                hidden, heads, dropout=dropout, batch_first=True,
+            )
+            self.attention_dropout = nn.Dropout(dropout)
+            self.attention_normalization = nn.LayerNorm(hidden)
+            self.feed_forward = nn.Sequential(
+                nn.Linear(hidden, hidden * 2),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden * 2, hidden),
+            )
+            self.feed_forward_dropout = nn.Dropout(dropout)
+            self.feed_forward_normalization = nn.LayerNorm(hidden)
+
+        def forward(self, candidates: Tensor) -> Tensor:
+            attended, _ = self.attention(
+                candidates, candidates, candidates, need_weights=False,
+            )
+            candidates = self.attention_normalization(
+                candidates + self.attention_dropout(attended)
+            )
+            update = self.feed_forward(candidates)
+            return self.feed_forward_normalization(
+                candidates + self.feed_forward_dropout(update)
+            )
 
 
     class JointGraphShapeModel(nn.Module):
@@ -420,7 +514,9 @@ if nn is not None:
                 self.config.message_passing_layers, self.config.dropout,
             )
             interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
-            if self.config.interaction_mode == "cross_attention":
+            if self.config.interaction_mode in {
+                "cross_attention", "routing_set_attention",
+            }:
                 self.cross_dfg_query = nn.Linear(hidden, hidden)
                 self.cross_cgra_key = nn.Linear(hidden, hidden)
                 self.cross_cgra_value = nn.Linear(hidden, hidden)
@@ -437,9 +533,9 @@ if nn is not None:
                     nn.GELU(),
                     nn.LayerNorm(hidden),
                 )
-                interaction_width += (
-                    hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
-                )
+                interaction_width += hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
+                if self.config.interaction_mode == "routing_set_attention":
+                    interaction_width += len(ROUTING_CONTEXT_NAMES)
             self.interaction = nn.Sequential(
                 nn.Linear(interaction_width, hidden * 2),
                 nn.GELU(),
@@ -450,11 +546,21 @@ if nn is not None:
             )
             self.success_head = nn.Linear(hidden, 1)
             self.residual_head = nn.Linear(hidden, 1)
+            if self.config.interaction_mode == "routing_set_attention":
+                self.candidate_set_blocks = nn.ModuleList([
+                    CandidateSetBlock(
+                        hidden, self.config.candidate_set_heads,
+                        self.config.dropout,
+                    )
+                    for _ in range(self.config.candidate_set_layers)
+                ])
+                self.candidate_set_normalization = nn.LayerNorm(hidden)
+                self.rank_head = nn.Linear(hidden, 1)
 
         def _candidate_conditioned_interaction(
             self, dfg_nodes: Tensor, dfg_mask: Tensor,
             cgra_nodes: Tensor, cgra_mask: Tensor,
-        ) -> Tuple[Tensor, Tensor]:
+        ) -> Tuple[Tensor, Tensor, Tensor]:
             """Attend every operation to the PEs of each candidate shape.
 
             Besides a learned cross-graph summary, return differentiable load
@@ -521,7 +627,47 @@ if nn is not None:
             cross_context = torch.stack((
                 pressure, normalized_peak, normalized_entropy,
             ), dim=-1)
-            return cross_summary, cross_context
+            return cross_summary, cross_context, attention
+
+        def _routing_context(
+            self, attention: Tensor, dfg_adjacency: Tensor,
+            cgra_graphs: Sequence[GraphData],
+        ) -> Tensor:
+            """Estimate route length and link pressure under soft placement."""
+            distances = pad_shortest_path_distances(
+                cgra_graphs, attention.device,
+            )
+            projected = torch.einsum(
+                "bcnm,cmp->bcnp", attention, distances,
+            )
+            pair_distances = torch.einsum(
+                "bcnp,bcjp->bcnj", projected, attention,
+            )
+            edge_mask = dfg_adjacency[:, None, :, :] > 0.0
+            edge_distances = pair_distances * edge_mask.to(
+                pair_distances.dtype
+            )
+            edge_counts = edge_mask.sum(dim=(-1, -2)).clamp_min(1).to(
+                pair_distances.dtype
+            )
+            mean_distance = edge_distances.sum(dim=(-1, -2)) / edge_counts
+            max_distance = edge_distances.masked_fill(
+                ~edge_mask, 0.0,
+            ).flatten(start_dim=2).max(dim=-1).values
+            link_counts = torch.tensor([
+                max(1.0, len(graph.edges) / 2.0) for graph in cgra_graphs
+            ], dtype=pair_distances.dtype, device=pair_distances.device)
+            demand_per_link = (
+                edge_distances.sum(dim=(-1, -2)) / link_counts[None, :]
+            )
+            normalized_demand = (
+                torch.log1p(demand_per_link) / math.log(129.0)
+            ).clamp(max=1.0)
+            return torch.stack((
+                (mean_distance / 6.0).clamp(max=1.0),
+                (max_distance / 6.0).clamp(max=1.0),
+                normalized_demand,
+            ), dim=-1)
 
         def forward(
             self, dfg_graphs: Sequence[GraphData],
@@ -537,21 +683,35 @@ if nn is not None:
                 raise ValueError("CGRA candidate count and context differ")
             device = next(self.parameters()).device
             context = context.to(device=device, dtype=torch.float32)
-            if self.config.interaction_mode == "cross_attention":
-                dfg_nodes, dfg_mask = self.dfg_encoder.encode_nodes(dfg_graphs)
-                cgra_nodes, cgra_mask = self.cgra_encoder.encode_nodes(cgra_graphs)
+            if self.config.interaction_mode in {
+                "cross_attention", "routing_set_attention",
+            }:
+                dfg_nodes, dfg_mask, dfg_adjacency = (
+                    self.dfg_encoder.encode_nodes(dfg_graphs)
+                )
+                cgra_nodes, cgra_mask, _ = self.cgra_encoder.encode_nodes(
+                    cgra_graphs
+                )
                 dfg = self.dfg_encoder.pool_nodes(dfg_nodes, dfg_mask)
                 cgra = self.cgra_encoder.pool_nodes(cgra_nodes, cgra_mask)
-                cross_summary, cross_context = (
+                cross_summary, cross_context, cross_attention = (
                     self._candidate_conditioned_interaction(
                         dfg_nodes, dfg_mask, cgra_nodes, cgra_mask,
                     )
+                )
+                routing_context = (
+                    self._routing_context(
+                        cross_attention, dfg_adjacency, cgra_graphs,
+                    )
+                    if self.config.interaction_mode == "routing_set_attention"
+                    else None
                 )
             else:
                 dfg = self.dfg_encoder(dfg_graphs)
                 cgra = self.cgra_encoder(cgra_graphs)
                 cross_summary = None
                 cross_context = None
+                routing_context = None
             batch, candidates = context.shape[:2]
             dfg = dfg[:, None, :].expand(batch, candidates, -1)
             cgra = cgra[None, :, :].expand(batch, candidates, -1)
@@ -560,6 +720,8 @@ if nn is not None:
             ]
             if cross_summary is not None and cross_context is not None:
                 joint_parts.extend((cross_summary, cross_context))
+            if routing_context is not None:
+                joint_parts.append(routing_context)
             joint = torch.cat(joint_parts, dim=-1)
             hidden = self.interaction(joint)
             success_logits = self.success_head(hidden).squeeze(-1)
@@ -574,15 +736,29 @@ if nn is not None:
                 success_probability * predicted_ii.clamp(max=timeout_cost) +
                 (1.0 - success_probability) * timeout_cost
             )
+            ranking_logits = None
+            selection_cost = expected_cost
+            if self.config.interaction_mode == "routing_set_attention":
+                ranked = hidden
+                for block in self.candidate_set_blocks:
+                    ranked = block(ranked)
+                ranked = self.candidate_set_normalization(ranked)
+                rank_adjustment = self.rank_head(ranked).squeeze(-1)
+                ranking_logits = -expected_cost + rank_adjustment
+                selection_cost = -ranking_logits
             result = {
                 "success_logits": success_logits,
                 "success_probability": success_probability,
                 "predicted_residual": residual,
                 "predicted_ii": predicted_ii,
                 "expected_cost": expected_cost,
+                "selection_cost": selection_cost,
             }
             if cross_context is not None:
                 result["cross_attention_context"] = cross_context
+            if routing_context is not None and ranking_logits is not None:
+                result["routing_context"] = routing_context
+                result["ranking_logits"] = ranking_logits
             return result
 
 
@@ -623,8 +799,11 @@ def model2_loss(
         residual_loss = logits.sum() * 0.0
     eligible = optimal_ii_target.any(dim=1)
     if eligible.any():
+        ranking_logits = output.get(
+            "ranking_logits", -output["expected_cost"],
+        )
         listwise_logits = (
-            -output["expected_cost"][eligible] / config.listwise_temperature
+            ranking_logits[eligible] / config.listwise_temperature
         )
         log_probabilities = functional.log_softmax(listwise_logits, dim=1)
         optimal_log_mass = torch.logsumexp(
@@ -757,8 +936,9 @@ def censored_top1_metrics(
 __all__ = [
     "CANDIDATE_CONTEXT_NAMES", "CGRA_NODE_FEATURE_NAMES",
     "CROSS_ATTENTION_CONTEXT_NAMES",
-    "DFG_NODE_FEATURE_NAMES", "GraphData", "JointGraphShapeModel",
+    "DFG_NODE_FEATURE_NAMES", "ROUTING_CONTEXT_NAMES", "GraphData",
+    "JointGraphShapeModel",
     "Model2Config", "OPERATION_TYPES", "candidate_context",
     "censored_top1_metrics", "make_cgra_graph", "model2_loss",
-    "pad_graphs", "parse_neura_dfg",
+    "pad_graphs", "pad_shortest_path_distances", "parse_neura_dfg",
 ]

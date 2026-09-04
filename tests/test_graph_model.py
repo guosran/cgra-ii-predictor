@@ -18,7 +18,7 @@ class GraphModelTest(unittest.TestCase):
         global CandidateRecord, QueryRecord, resolve_device, split_queries
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
-        global parse_neura_dfg
+        global pad_shortest_path_distances, parse_neura_dfg
         global frozen_adapter, neura_motifs_v7
         import torch
         from adapters import neura_graph_frozen as frozen_adapter
@@ -29,7 +29,7 @@ class GraphModelTest(unittest.TestCase):
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
             censored_top1_metrics, make_cgra_graph, model2_loss,
-            parse_neura_dfg,
+            pad_shortest_path_distances, parse_neura_dfg,
         )
 
     def test_device_selection_never_silently_ignores_explicit_cuda(self):
@@ -226,6 +226,64 @@ class GraphModelTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "interaction_mode"):
             Model2Config(interaction_mode="unknown").validate()
+
+    def test_routing_set_ranker_models_paths_and_candidate_competition(self):
+        source = """
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %d = "neura.mul"(%c, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """
+        graph = parse_neura_dfg(source)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="routing_set_attention",
+            candidate_set_layers=1, candidate_set_heads=4,
+        )
+        model = JointGraphShapeModel(config)
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        context = torch.tensor([[
+            candidate_context(1, 1, 1, 4, 4),
+            candidate_context(1, 2, 1, 2, 2),
+        ]])
+        output = model([graph], shapes, context)
+        self.assertEqual(tuple(output["routing_context"].shape), (1, 2, 3))
+        self.assertEqual(tuple(output["ranking_logits"].shape), (1, 2))
+        self.assertGreater(float(output["routing_context"][0, 1, 0]), 0.0)
+
+        changed_context = context.clone()
+        changed_context[0, 1] = torch.tensor(
+            candidate_context(1, 2, 1, 10, 10)
+        )
+        changed = model([graph], shapes, changed_context)
+        self.assertFalse(torch.allclose(
+            output["ranking_logits"][0, 0],
+            changed["ranking_logits"][0, 0],
+        ))
+
+        losses = model2_loss(
+            output, torch.tensor([[0.0, 1.0]]),
+            torch.tensor([[0.0, 2.0]]), torch.tensor([[False, True]]),
+            torch.tensor([1]), config,
+        )
+        losses["total"].backward()
+        for name in (
+            "candidate_set_blocks.0.attention.in_proj_weight",
+            "candidate_set_blocks.0.feed_forward.0.weight",
+            "rank_head.weight",
+        ):
+            gradient = dict(model.named_parameters())[name].grad
+            self.assertIsNotNone(gradient, name)
+            self.assertTrue(torch.any(gradient != 0), name)
+
+    def test_cgra_shortest_paths_match_mesh_distance(self):
+        distances = pad_shortest_path_distances(
+            [make_cgra_graph(2, 2)], torch.device("cpu")
+        )
+        self.assertEqual(tuple(distances.shape), (1, 4, 4))
+        self.assertEqual(float(distances[0, 0, 0]), 0.0)
+        self.assertEqual(float(distances[0, 0, 1]), 1.0)
+        self.assertEqual(float(distances[0, 0, 3]), 2.0)
 
     def test_split_keeps_queries_intact_and_balances_families(self):
         graph = parse_neura_dfg(

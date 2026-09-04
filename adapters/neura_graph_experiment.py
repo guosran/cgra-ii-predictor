@@ -29,6 +29,7 @@ import torch
 from cgra_ii_predictor.graph_model import (
     CANDIDATE_CONTEXT_NAMES,
     CROSS_ATTENTION_CONTEXT_NAMES,
+    ROUTING_CONTEXT_NAMES,
     GraphData,
     JointGraphShapeModel,
     Model2Config,
@@ -323,7 +324,7 @@ def evaluate_model(
             for name, value in losses.items():
                 loss_sums[name] += float(value) * len(batch)
             loss_query_count += len(batch)
-            expected = output["expected_cost"].cpu().tolist()
+            selection_cost = output["selection_cost"].cpu().tolist()
             predicted_ii = output["predicted_ii"].cpu().tolist()
             probability = output["success_probability"].cpu().tolist()
             for query_index, query in enumerate(batch):
@@ -340,7 +341,9 @@ def evaluate_model(
                     }
                     query_graph_rows.append({
                         **common,
-                        "selection_cost": expected[query_index][candidate_index],
+                        "selection_cost": (
+                            selection_cost[query_index][candidate_index]
+                        ),
                     })
                     query_baseline_rows.append({
                         **common,
@@ -662,11 +665,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.10)
     parser.add_argument("--strict-tiebreak-loss-weight", type=float, default=1.0)
     parser.add_argument(
-        "--interaction-mode", choices=("pooled", "cross_attention"),
+        "--interaction-mode", choices=(
+            "pooled", "cross_attention", "routing_set_attention",
+        ),
         default="pooled",
         help=("pooled reproduces Model 2; cross_attention performs "
-              "candidate-conditioned operation-to-PE interaction."),
+              "candidate-conditioned operation-to-PE interaction; "
+              "routing_set_attention adds route pressure and joint "
+              "candidate ranking."),
     )
+    parser.add_argument("--candidate-set-layers", type=int, default=2)
+    parser.add_argument("--candidate-set-heads", type=int, default=4)
     return parser.parse_args()
 
 
@@ -682,6 +691,8 @@ def main() -> int:
         dropout=args.dropout,
         strict_tiebreak_loss_weight=args.strict_tiebreak_loss_weight,
         interaction_mode=args.interaction_mode,
+        candidate_set_layers=args.candidate_set_layers,
+        candidate_set_heads=args.candidate_set_heads,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
     generator_versions = sorted({
@@ -715,6 +726,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v3"
+            if config.interaction_mode == "routing_set_attention" else
             "cgra-ii-joint-graph-model-v2"
             if config.interaction_mode == "cross_attention" else
             "cgra-ii-joint-graph-model-v1"
@@ -723,7 +736,13 @@ def main() -> int:
         "candidate_context_names": list(CANDIDATE_CONTEXT_NAMES),
         "cross_attention_context_names": (
             list(CROSS_ATTENTION_CONTEXT_NAMES)
-            if config.interaction_mode == "cross_attention" else []
+            if config.interaction_mode in {
+                "cross_attention", "routing_set_attention",
+            } else []
+        ),
+        "routing_context_names": (
+            list(ROUTING_CONTEXT_NAMES)
+            if config.interaction_mode == "routing_set_attention" else []
         ),
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
@@ -766,6 +785,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "routing_aware_candidate_set_ranker_v3"
+            if config.interaction_mode == "routing_set_attention" else
             "joint_directed_gnn_candidate_conditioned_dual_head_listwise_v2"
             if config.interaction_mode == "cross_attention" else
             "joint_directed_gnn_dual_head_listwise_v1"
@@ -804,7 +825,13 @@ def main() -> int:
                 "optimal_ii_set_log_mass_plus_weighted_strict_tiebreak_cross_entropy"
             ),
             "selection_cost": (
+                "negative_candidate_set_ranking_logit"
+                if config.interaction_mode == "routing_set_attention" else
                 "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)"
+            ),
+            "ranking_prior": (
+                "negative_timeout_aware_expected_cost_plus_learned_set_adjustment"
+                if config.interaction_mode == "routing_set_attention" else None
             ),
             "numeric_ii_imputation_for_censored_candidates": False,
         },
