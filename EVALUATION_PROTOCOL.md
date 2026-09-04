@@ -162,6 +162,29 @@ strictly greater than the analytical Rec/Res-floor Top-1 accuracy. The v5
 transfer, point-quality, coverage, model-rank, and separate timeout-risk gates
 remain in force. The exact contract is `protocols/motif-v6.json`.
 
+### Motif-v7 censored-aware Model 2 acceptance
+
+V6 produced enough successful point labels but too few complete 16-shape
+blocks, so its complete-case formal gate failed. V7 treats mapper failure as a
+categorical outcome instead: every query retains all 16 declared candidates,
+numeric II loss applies only to successes, and ranking is eligible when at
+least two candidates succeeded.
+
+The frozen model is a directed message-passing encoder over the semantic DFG
+and oriented CGRA mesh, followed by mapper-success and nonnegative-II-residual
+heads. Its selection score is
+`p(success) * predicted_ii + (1-p(success)) * 21`. Hyperparameters and the
+28-epoch all-v6 refit are fixed from the disclosed v6 development split before
+v7 label collection. The v7 evaluation command loads weights read-only and
+does not construct an optimizer.
+
+Strict Top-1 shape accuracy is primary and must strictly improve over the
+analytical lower-bound selector. Optimal-II and selected-success rates must
+not regress overall or in any generator family; timeout-penalized regret must
+strictly improve. Coverage requires at least 240 analyzed and 200
+ranking-eligible bases in every family. Training and evaluation canonical DFG
+hashes must be disjoint. The exact contract is `protocols/motif-v7.json`.
+
 ## Frozen blind evaluation
 
 A frozen claim requires a separate workflow, not a command-line status flag:

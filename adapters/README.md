@@ -126,6 +126,14 @@ This is a single-coordinator/single-writer manifest contract; no cross-process
 lock is provided.  Do not run two fresh or resume processes concurrently
 against the same output directory.
 
+`motif-v7` is the held-out Model-2 protocol. It requires either
+`--motif-predeclare-only` or `--motif-collect-only`, preventing its labels from
+falling through to the legacy Ridge fitter. The first command declares all 16
+oriented rectangles for 250 bases per family at seed 20260906. Resume with
+`--motif-collect-only` to collect a terminal manifest, then use
+`neura_graph_frozen.py evaluate`; that path loads the v6-only frozen graph
+model and never constructs an optimizer.
+
 The recurrence, predicated-control, and pointer/load paths remain structural
 generators rather than real workload semantics. V3 requests 250 bases per
 family and admits a base only after both of its declared shape cells succeed.

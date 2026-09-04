@@ -325,9 +325,22 @@ Compiled-II regret and pairwise concordance are secondary diagnostics. Point
 training still uses every successful label, while ranking uses only complete
 16-shape blocks.
 
-If the predeclared v6 gates fail, the next backup is a mapping-aware graph model
-inspired by `references/TCAD-2026-1434_Proof_hi.pdf`; reinforcement learning is
-deferred until a supervised or bandit-warm-start baseline exists.
+V6 collection is complete: 20,188/24,000 candidates succeeded and 3,812 were
+censored. Only 352 queries were complete across all 16 shapes, with zero
+complete memory, pointer, or mixed blocks, so the predeclared complete-case
+coverage gate failed. V6 is retained as disclosed Model-2 development data.
+
+The selected Model 2 is a mapping-aware joint DFG/CGRA graph network inspired
+by `references/TCAD-2026-1434_Proof_hi.pdf`. On the fixed v6 test split it
+improves strict Top-1 from 12.50% to 23.21%, optimal-II rate from 31.25% to
+49.11%, selected-success rate from 68.30% to 92.41%, and timeout-penalized
+regret from 3.77 to 1.54. It uses no numeric II imputation for censorship.
+
+The new blind boundary is motif-v7: a canonically disjoint 1,500-DFG draw at
+seed 20260906, crossed with all 16 oriented shapes. Model configuration and
+the 28-epoch all-v6 refit are frozen before v7 mapping. V7 labels may only be
+consumed by the read-only evaluator. Reinforcement learning remains a backup
+and cannot be selected using v7 results.
 
 The following three steps apply only to the historical motif-v3 frozen
 artifact. They do not authorize revealing labels for the failed-closed v4

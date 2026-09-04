@@ -1,0 +1,142 @@
+{
+  "schema_version": "cgra-ii-motif-protocol-v2",
+  "protocol_status": "model_frozen_before_motif_v7_mapper_labels",
+  "generator_version": "motif-v7",
+  "manifest_schema_version": "cgra-ii-motif-corpus-v7",
+  "root_seed": 20260906,
+  "supersedes": {
+    "protocol": "motif-v6",
+    "reason": "evaluate_a_joint_graph_model_with_censored_16_shape_top1",
+    "motif_v6_role": "disclosed_model_development_and_training_only",
+    "motif_v7_base_draw": "new_seed_from_the_frozen_motif_v5_grammar"
+  },
+  "families": [
+    "compute",
+    "recurrence",
+    "predicated",
+    "memory",
+    "pointer",
+    "mixed"
+  ],
+  "mechanism_profiles_per_family": [
+    "layered_sparse",
+    "reconvergent_fork_join",
+    "long_range_cutwidth",
+    "live_range_pressure",
+    "mixed_path_pressure"
+  ],
+  "operation_bands": {
+    "low": [8, 11],
+    "medium": [12, 15],
+    "high": [16, 20]
+  },
+  "shape_block": [
+    "1x1", "1x2", "1x3", "1x4",
+    "2x1", "2x2", "2x3", "2x4",
+    "3x1", "3x2", "3x3", "3x4",
+    "4x1", "4x2", "4x3", "4x4"
+  ],
+  "shape_identity": "oriented_rows_by_columns",
+  "population": {
+    "requested_bases_per_family": 250,
+    "requested_base_count": 1500,
+    "candidates_per_base": 16,
+    "predeclared_candidate_count": 24000,
+    "minimum_analyzed_bases_per_family": 240,
+    "minimum_ranking_eligible_bases_per_family": 200,
+    "minimum_successful_candidates_per_ranking_query": 2,
+    "ranking_population": "all_declared_16_shape_queries_with_at_least_two_successes",
+    "censored_candidates": "categorical_outcomes_without_numeric_ii_imputation"
+  },
+  "architecture": {
+    "neura_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "yaml_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "rows": 4,
+    "columns": 4,
+    "registers_per_tile": 32,
+    "mapper_ii_ceiling": 20,
+    "valid_tiles": ""
+  },
+  "collection_contract": {
+    "analysis_argument": "--analyze-rec-res-mii",
+    "mapping_strategy": "heuristic",
+    "timeout_seconds_per_stage": 60,
+    "mapper_ii_ceiling": 20,
+    "outside_mapper_search_interval": "censored_without_mapper_attempt",
+    "candidate_order": "family_then_base_then_rows_then_columns"
+  },
+  "development_selection": {
+    "corpus": "motif-v6",
+    "terminal_training_manifest_sha256": "c2569e3fc0145ff334f0c8f06ae174f813cb5e54943ff31267993705cce78d1b",
+    "development_report_sha256": "064b0bbf2f5b3fd51adc94227c30c6777eea2e11a0d86070b765cb85fd1da9fc",
+    "split": "70_15_15_exact_generator_family_stratification",
+    "split_seed": 20260905,
+    "selected_best_epoch": 28,
+    "refit": "all_1500_motif_v6_queries_for_exactly_28_epochs",
+    "motif_v7_labels_may_refit_or_select_model": false
+  },
+  "model2": {
+    "class": "joint_directed_gnn_dual_head_listwise_v1",
+    "hidden_dimension": 64,
+    "message_passing_layers": 3,
+    "dropout": 0.1,
+    "mapper_ii_ceiling": 20.0,
+    "listwise_temperature": 1.0,
+    "success_loss_weight": 1.0,
+    "residual_loss_weight": 1.0,
+    "listwise_loss_weight": 1.0,
+    "strict_tiebreak_loss_weight": 1.0,
+    "optimizer": "adamw",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "batch_size_queries": 32,
+    "development_split_seed": 20260905,
+    "development_best_epoch": 28,
+    "frozen_refit_epochs_on_all_v6_queries": 28
+  },
+  "loss_contract": {
+    "success": "binary_cross_entropy_all_declared_candidates",
+    "ii": "smooth_l1_successful_candidates_only",
+    "listwise": "optimal_ii_set_log_mass_plus_strict_tiebreak_cross_entropy",
+    "numeric_ii_imputation_for_censored_candidates": false
+  },
+  "shape_selection": {
+    "primary_metric": "strict_top1_accuracy",
+    "selection_cost": "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)",
+    "oracle_order": [
+      "successful_mapper_status", "compiled_ii", "tile_count", "rows",
+      "columns", "candidate_id"
+    ],
+    "prediction_order": [
+      "expected_timeout_aware_cost", "tile_count", "rows", "columns",
+      "candidate_id"
+    ],
+    "secondary_metrics": [
+      "optimal_ii_rate",
+      "selected_success_rate",
+      "mean_timeout_penalized_regret",
+      "successful_candidate_point_mae"
+    ]
+  },
+  "acceptance_gates": {
+    "primary_top1": "model2_strict_top1_accuracy_strictly_higher_than_analytical_lower_bound",
+    "optimal_ii_rate": "model2_not_lower_than_analytical_lower_bound",
+    "selected_success_rate": "model2_not_lower_than_analytical_lower_bound",
+    "timeout_penalized_regret": "model2_strictly_lower_than_analytical_lower_bound",
+    "per_family_optimal_ii_rate": "no_generator_family_regression",
+    "per_family_selected_success_rate": "no_generator_family_regression",
+    "coverage": "minimum_analyzed_and_ranking_eligible_bases_in_every_family"
+  },
+  "blind_test_boundary": {
+    "training_labels": "terminal_motif_v6_only",
+    "motif_v7_mapper_labels_revealed_at_declaration": 0,
+    "motif_v7_labels_may_select_features_hyperparameters_epoch_or_weights": false,
+    "training_and_evaluation_canonical_dfgs_must_be_disjoint": true,
+    "evaluation_command_constructs_optimizer": false,
+    "trusted_external_timestamp": false
+  },
+  "backup_models_not_selected_by_motif_v7": [
+    "analytical_model2_hybrid_gate",
+    "reinforcement_learning_shape_policy"
+  ]
+}

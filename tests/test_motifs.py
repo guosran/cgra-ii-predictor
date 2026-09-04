@@ -9,11 +9,75 @@ from unittest import mock
 
 from adapters import (
     neura_experiment, neura_motifs, neura_motifs_v4, neura_motifs_v5,
-    neura_motifs_v6,
+    neura_motifs_v6, neura_motifs_v7,
 )
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v7_protocol_matches_runtime_model2_contract(self):
+        project_root = Path(neura_motifs_v7.__file__).resolve().parents[1]
+        protocol = json.loads((project_root / "protocols/motif-v7.json").read_text())
+        self.assertEqual(protocol["generator_version"], "motif-v7")
+        self.assertEqual(protocol["root_seed"], neura_motifs_v7.DEFAULT_SEED)
+        self.assertEqual(protocol["model2"], neura_motifs_v7.MODEL2_CONFIG)
+        self.assertEqual(protocol["shape_block"], [
+            f"{rows}x{columns}"
+            for rows, columns in neura_motifs_v7.DEFAULT_SHAPES
+        ])
+        self.assertEqual(
+            protocol["population"]["predeclared_candidate_count"], 24000
+        )
+        self.assertEqual(
+            protocol["shape_selection"]["primary_metric"],
+            "strict_top1_accuracy",
+        )
+        self.assertFalse(protocol["blind_test_boundary"][
+            "motif_v7_labels_may_select_features_hyperparameters_epoch_or_weights"
+        ])
+
+    def test_v7_complete_draw_is_canonically_disjoint_from_v6(self):
+        def canonical_set(module, bases):
+            return {
+                module.canonical_dfg_sha256(module.generate_motif_mlir(
+                    base.motif, base.operation_count, base.base_seed,
+                    base.mechanism_profile,
+                ))
+                for base in bases
+            }
+
+        v6_bases = neura_motifs_v6.make_base_specs(
+            250, neura_motifs_v6.DEFAULT_SEED,
+        )
+        v7_bases = neura_motifs_v7.make_base_specs(
+            250, neura_motifs_v7.DEFAULT_SEED,
+        )
+        v6_hashes = canonical_set(neura_motifs_v6, v6_bases)
+        v7_hashes = canonical_set(neura_motifs_v7, v7_bases)
+        self.assertEqual(len(v6_hashes), 1500)
+        self.assertEqual(len(v7_hashes), 1500)
+        self.assertFalse(v6_hashes & v7_hashes)
+
+    def test_v7_one_base_materializes_a_label_free_complete_block(self):
+        base = neura_motifs_v7.make_base_specs(
+            1, seed=neura_motifs_v7.DEFAULT_SEED, motifs=("mixed",)
+        )[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v7.make_candidates((base,), root)
+            manifest = neura_motifs_v7.make_manifest(
+                candidates, root, neura_motifs_v7.DEFAULT_SEED,
+                ("mixed",), neura_motifs_v7.DEFAULT_SHAPES,
+            )
+        self.assertEqual(len(candidates), 16)
+        self.assertEqual(manifest["schema_version"], "cgra-ii-motif-corpus-v7")
+        self.assertEqual(manifest["generator"]["version"], "motif-v7")
+        self.assertEqual(manifest["acceptance_policy"],
+                         neura_motifs_v7.ACCEPTANCE_POLICY)
+        self.assertTrue(all(
+            row["status"] == "declared" and "compiled_ii" not in row
+            for row in manifest["candidates"]
+        ))
+
     def test_v6_predeclaration_attestation_matches_frozen_sources(self):
         project_root = Path(neura_motifs_v6.__file__).resolve().parents[1]
         attestation = json.loads(

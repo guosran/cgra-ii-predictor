@@ -293,6 +293,55 @@ python3 adapters/neura_experiment.py \
   --tree-depth 0 --timeout 60
 ~~~
 
+V6 collection completed with 20,188 successful candidates and 3,812 censored
+outcomes. Its complete-16 coverage gate failed: only 352 bases had all 16
+successful mappings, and memory, pointer, and mixed had no complete blocks.
+V6 is therefore Model-2 development data, not a successful formal result.
+
+Model 2 is a joint DFG/CGRA graph model with separate mapper-success and
+successful-II heads plus a listwise 16-shape loss. Censored candidates train
+only the success head and never receive a fabricated II. On the fixed v6
+development test split, the selected configuration improved strict Top-1 from
+12.50% to 23.21%, optimal-II rate from 31.25% to 49.11%, selected-success rate
+from 68.30% to 92.41%, and timeout-penalized regret from 3.77 to 1.54. These
+are disclosed development results, not blind evidence.
+
+The held-out contract is [`protocols/motif-v7.json`](protocols/motif-v7.json).
+It freezes that configuration, refits exactly 28 epochs on all v6 queries, and
+then evaluates without an optimizer on a canonically disjoint v7 draw:
+
+~~~sh
+python3 adapters/neura_graph_frozen.py freeze \
+  --training-manifest corpora/motif-v6-formal-seed-20260904/corpus-manifest.json \
+  --development-report corpora/model2-v6-development-strict1/report.json \
+  --output-dir models/model2-v7-frozen
+
+python3 adapters/neura_experiment.py \
+  --neura-root /path/to/pinned/neura \
+  --motif-generator-version motif-v7 \
+  --motif-samples-per-family 250 \
+  --motif-predeclare-only --seed 20260906 --timeout 60 \
+  --output-dir /path/to/motif-v7-formal
+
+python3 adapters/neura_experiment.py \
+  --neura-root /path/to/pinned/neura \
+  --motif-generator-version motif-v7 --motif-resume \
+  --motif-collect-only --motif-jobs 12 \
+  --motif-checkpoint-every 32 --timeout 60 \
+  --output-dir /path/to/motif-v7-formal
+
+python3 adapters/neura_graph_frozen.py evaluate \
+  --model models/model2-v7-frozen/model.pt \
+  --manifest /path/to/motif-v7-formal/corpus-manifest.json \
+  --output-dir /path/to/motif-v7-formal/model2-evaluation
+~~~
+
+Strict deterministic Top-1 is primary. Optimal-II and selected-success rates
+must not regress overall or in any family, timeout-penalized regret must
+improve, and every family must retain at least 200 ranking-eligible bases with
+two or more successful shapes. The local declaration is tamper-evident but is
+not an external trusted timestamp.
+
 V4 fails closed unless generator-family LOGO MAE strictly improves on the
 Rec/Res floor, held-out predictions recover positive residuals in every
 family, positive-subset and shape-balanced MAE improve, tie-aware shape

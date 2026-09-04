@@ -42,12 +42,14 @@ import numpy as np
 try:
     from adapters import (
         neura_motifs, neura_motifs_v4, neura_motifs_v5, neura_motifs_v6,
+        neura_motifs_v7,
     )
 except ImportError:  # Running the file directly from its adapters directory.
     import neura_motifs  # type: ignore
     import neura_motifs_v4  # type: ignore
     import neura_motifs_v5  # type: ignore
     import neura_motifs_v6  # type: ignore
+    import neura_motifs_v7  # type: ignore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -59,11 +61,13 @@ MOTIF_PROTOCOLS = {
     neura_motifs_v4.GENERATOR_VERSION: neura_motifs_v4,
     neura_motifs_v5.GENERATOR_VERSION: neura_motifs_v5,
     neura_motifs_v6.GENERATOR_VERSION: neura_motifs_v6,
+    neura_motifs_v7.GENERATOR_VERSION: neura_motifs_v7,
 }
 STRICT_MOTIF_GENERATOR_VERSIONS = frozenset({
     neura_motifs_v4.GENERATOR_VERSION,
     neura_motifs_v5.GENERATOR_VERSION,
     neura_motifs_v6.GENERATOR_VERSION,
+    neura_motifs_v7.GENERATOR_VERSION,
 })
 
 
@@ -5037,6 +5041,12 @@ def parse_args() -> argparse.Namespace:
               "manifest, then exit before any compiler or mapper invocation."),
     )
     parser.add_argument(
+        "--motif-collect-only", action="store_true",
+        help=("Collect/checkpoint the declared motif corpus and exit before "
+              "the legacy Model-1 fitting path. Intended for a separate "
+              "Model-2 trainer."),
+    )
+    parser.add_argument(
         "--motif", dest="motif", action="append", default=[],
         metavar="NAME[,NAME...]",
         help=("Compute motif family to generate; repeat or use commas. "
@@ -5199,6 +5209,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--clean and --motif-resume are mutually exclusive")
     if args.motif_predeclare_only and args.motif_resume:
         parser.error("--motif-predeclare-only cannot be combined with --motif-resume")
+    if args.motif_predeclare_only and args.motif_collect_only:
+        parser.error(
+            "--motif-predeclare-only cannot be combined with --motif-collect-only"
+        )
     if args.opt is None:
         if args.neura_root is None:
             parser.error(
@@ -5246,6 +5260,14 @@ def main() -> int:
         raise SystemExit(
             "--model-report is prediction-only and cannot be combined with "
             "motif resume or label collection"
+        )
+    if args.motif_collect_only and any((
+        args.samples, args.random_c_samples, args.input_report,
+        args.real_fixture, args.mapped_real_fixture, args.predict_fixture,
+        args.real_random_masks,
+    )):
+        raise SystemExit(
+            "--motif-collect-only cannot be combined with non-motif inputs"
         )
     # Motif inputs and the complete manifest are prepared before inspecting
     # the compiler executable or running any other subprocess.  On resume,
@@ -5302,6 +5324,20 @@ def main() -> int:
         raise SystemExit(str(error))
     if args.seed is None:
         args.seed = int(getattr(active_motif_protocol, "DEFAULT_SEED", DEFAULT_SEED))
+    if args.motif_collect_only and motif_count <= 0:
+        raise SystemExit(
+            "--motif-collect-only requires --motif-samples-per-family or a "
+            "resume manifest that declares count_per_family"
+        )
+    if (
+        active_motif_protocol.GENERATOR_VERSION ==
+        neura_motifs_v7.GENERATOR_VERSION and
+        not (args.motif_predeclare_only or args.motif_collect_only)
+    ):
+        raise SystemExit(
+            "motif-v7 requires --motif-predeclare-only or "
+            "--motif-collect-only; its labels may not enter Model 1"
+        )
     if args.motif_predeclare_only:
         if motif_count <= 0:
             raise SystemExit(
@@ -5567,6 +5603,13 @@ def main() -> int:
             # Do not fit or emit a training report from an interrupted corpus;
             # resume can continue from the atomically checkpointed manifest.
             return 130
+        if args.motif_collect_only:
+            print(
+                "motif_collection=terminal model1_fit=skipped "
+                "next_step=neura_graph_experiment",
+                flush=True,
+            )
+            return 0
 
     for index in range(args.random_c_samples):
         rows, columns = rng.choice(((3, 3), (3, 4), (4, 4)))
@@ -5782,7 +5825,11 @@ def main() -> int:
         active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v6.GENERATOR_VERSION
     )
-    hybrid_active = v5_active or v6_active
+    v7_active = (
+        active_motif_protocol.GENERATOR_VERSION ==
+        neura_motifs_v7.GENERATOR_VERSION
+    )
+    hybrid_active = v5_active or v6_active or v7_active
     if hybrid_active:
         training_samples = list(samples)
         training_selection = {
