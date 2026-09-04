@@ -165,6 +165,38 @@ timeout-penalized regret 为 1.2605。后续架构比较必须使用这四项以
 25.53% -> 21.28%、recurrence 55.41% -> 52.70% 出现回退。该结果仍使用已经披露
 标签的探索性切分，不是新的盲测结论。
 
+routing-aware candidate-set 对照使用：
+
+```sh
+ssh factcluster \
+  'cd /fact_home/yibozhang/cgra-ii-predictor && sbatch cluster/factcluster_routing_set_train.sbatch'
+```
+
+Job `1474607` 对应代码提交
+`e86f3794f61d51d66b33a0f539228a416bed5c90`，最佳 epoch 25，early stopping
+于 epoch 33。该模型在软 operation-to-PE placement 上计算平均/峰值 DFG-edge
+路由距离和单位 link demand，再让 16 个 shape 通过 set self-attention 直接排序。
+
+| 指标 | pooled | cross-attention | routing-set |
+| --- | ---: | ---: | ---: |
+| strict top-1 | 29.21% | 34.47% | 35.26% |
+| optimal-II rate | 51.84% | 55.26% | 58.95% |
+| selected-success rate | 92.89% | 97.11% | 94.47% |
+| timeout-penalized regret | 1.2605 | 1.0211 | 1.0842 |
+
+在固定 validation split 上预先搜索 Borda rank ensemble 的权重后，选择
+`0.85 * routing-set rank + 0.15 * cross-attention rank`。一次性应用到 test 得到：
+
+| 指标 | validation-selected Borda hybrid |
+| --- | ---: |
+| strict top-1 | 36.84%（140/380） |
+| optimal-II rate | 60.53%（230/380） |
+| selected-success rate | 96.58%（367/380） |
+| timeout-penalized regret | 0.8947 |
+
+这个 hybrid 目前是探索性诊断，不是已导出的单模型 artifact；部署时需要同时加载
+cross-attention 与 routing-set 两个模型，或后续把组合结果蒸馏到一个 ranker。
+
 记下输出的 job ID。低频查看队列：
 
 ```sh
