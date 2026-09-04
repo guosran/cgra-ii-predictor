@@ -199,12 +199,11 @@ class GraphModelTest(unittest.TestCase):
             config.to_dict()["dfg_representation"], "route_expanded_v2"
         )
         self.assertEqual(config.to_dict()["dfg_message_mode"], "dual_mean")
-        with self.assertRaisesRegex(ValueError, "partial targets"):
-            Model2Config(
-                interaction_mode="residual_pointwise",
-                dfg_representation="route_expanded_v2",
-                placement_loss_weight=0.1,
-            ).validate()
+        self.assertEqual(Model2Config(
+            interaction_mode="residual_pointwise",
+            dfg_representation="route_expanded_v2",
+            placement_loss_weight=0.1,
+        ).validate().placement_loss_weight, 0.1)
         with self.assertRaisesRegex(ValueError, "route_expanded_v2"):
             Model2Config(dfg_message_mode="dual_mean").validate()
 
@@ -769,6 +768,40 @@ class GraphModelTest(unittest.TestCase):
                 attached, 1, torch.device("cpu"),
             )
             self.assertTrue(torch.equal(targets, torch.tensor([[[0]]])))
+
+    def test_route_expanded_placement_targets_align_to_materialized_nodes(self):
+        graph = parse_neura_route_expanded_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %m = "neura.data_mov"(%a) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %b = "neura.add"(%m, %a) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        func.return
+        """)
+        candidate = CandidateRecord(
+            candidate_id="q/1x2", ranking_query_id="q", rows=1, columns=2,
+            rec_mii=1, res_mii=2, lower_bound=2,
+            status="success", compiled_ii=3,
+        )
+        query = QueryRecord(
+            ranking_query_id="q", generator_family="family", graph=graph,
+            candidates=(candidate,),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            supervision_path = Path(directory) / "placement.json"
+            supervision_path.write_text(json.dumps({
+                "schema_version": "cgra-ii-placement-supervision-v1",
+                "placements": {"q/1x2": [0, 1]},
+            }))
+            attached, metadata = attach_placement_supervision(
+                [query], supervision_path,
+            )
+        self.assertEqual(attached[0].candidates[0].placement, (0, -1, 1, -1))
+        self.assertEqual(metadata["attached_supervised_node_count"], 2)
+        targets = batch_placement_targets(
+            attached, 4, torch.device("cpu"),
+        )
+        self.assertTrue(torch.equal(
+            targets, torch.tensor([[[0, -1, 1, -1]]]),
+        ))
 
 
 if __name__ == "__main__":

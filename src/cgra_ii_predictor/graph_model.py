@@ -212,14 +212,6 @@ class Model2Config:
             raise ValueError(
                 "placement supervision requires a cross-attention mode"
             )
-        if (
-            self.placement_loss_weight > 0.0 and
-            self.dfg_representation == "route_expanded_v2"
-        ):
-            raise ValueError(
-                "route_expanded_v2 placement supervision needs aligned "
-                "partial targets and is not implemented"
-            )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",

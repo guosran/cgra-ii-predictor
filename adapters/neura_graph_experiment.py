@@ -31,6 +31,7 @@ from cgra_ii_predictor.graph_model import (
     CROSS_ATTENTION_CONTEXT_NAMES,
     DFG_NODE_FEATURE_NAMES,
     ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES,
+    ROUTE_EXPANDED_OPERATION_TYPES,
     ROUTING_CONTEXT_NAMES,
     GraphData,
     JointGraphShapeModel,
@@ -283,6 +284,7 @@ def attach_placement_supervision(
     if not isinstance(records, Mapping):
         raise ValueError("placement supervision lacks placement records")
     attached = 0
+    supervised_nodes = 0
     result: List[QueryRecord] = []
     for query in queries:
         candidates = []
@@ -297,14 +299,40 @@ def attach_placement_supervision(
                     )
                 candidates.append(candidate)
                 continue
-            if not isinstance(target, list) or len(target) != operation_count:
+            if not isinstance(target, list):
                 raise ValueError(
                     "successful candidate lacks complete placement supervision: "
                     + candidate.candidate_id
                 )
+            if len(target) != operation_count and len(
+                query.graph.node_features[0]
+            ) == len(ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES):
+                materialized_index = (
+                    ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
+                        "is_materialized"
+                    )
+                )
+                aligned_indices = [
+                    node_index
+                    for node_index, (node_type, features) in enumerate(zip(
+                        query.graph.node_types, query.graph.node_features,
+                    ))
+                    if features[materialized_index] > 0.5 and
+                    ROUTE_EXPANDED_OPERATION_TYPES[node_type] != "return"
+                ]
+                if len(target) == len(aligned_indices):
+                    expanded_target = [-1] * operation_count
+                    for node_index, value in zip(aligned_indices, target):
+                        expanded_target[node_index] = value
+                    target = expanded_target
+            if len(target) != operation_count:
+                raise ValueError(
+                    "successful candidate placement count cannot align to DFG: "
+                    + candidate.candidate_id
+                )
             if any(
                 isinstance(value, bool) or not isinstance(value, int) or
-                value < 0 or value >= candidate.rows * candidate.columns
+                value < -1 or value >= candidate.rows * candidate.columns
                 for value in target
             ):
                 raise ValueError(
@@ -313,6 +341,7 @@ def attach_placement_supervision(
                 )
             candidates.append(replace(candidate, placement=tuple(target)))
             attached += 1
+            supervised_nodes += sum(value >= 0 for value in target)
         result.append(replace(query, candidates=tuple(candidates)))
     return result, {
         "path": str(path.resolve()),
@@ -320,6 +349,7 @@ def attach_placement_supervision(
         "schema_version": raw["schema_version"],
         "available_candidate_count": len(records),
         "attached_training_candidate_count": attached,
+        "attached_supervised_node_count": supervised_nodes,
     }
 
 
