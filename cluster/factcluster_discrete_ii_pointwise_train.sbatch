@@ -34,6 +34,7 @@ MESSAGE_PASSING_LAYERS=${MESSAGE_PASSING_LAYERS:-3}
 DROPOUT=${DROPOUT:-0.10}
 LEARNING_RATE_SCHEDULE=${LEARNING_RATE_SCHEDULE:-none}
 MINIMUM_LEARNING_RATE=${MINIMUM_LEARNING_RATE:-1e-5}
+DISCRETE_II_LOSS_WEIGHT=${DISCRETE_II_LOSS_WEIGHT:-1.0}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -97,6 +98,7 @@ echo "message_passing_layers=${MESSAGE_PASSING_LAYERS}"
 echo "dropout=${DROPOUT}"
 echo "learning_rate_schedule=${LEARNING_RATE_SCHEDULE}"
 echo "minimum_learning_rate=${MINIMUM_LEARNING_RATE}"
+echo "discrete_ii_loss_weight=${DISCRETE_II_LOSS_WEIGHT}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
@@ -119,7 +121,7 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --hidden-dimension "${HIDDEN_DIMENSION}" \
   --message-passing-layers "${MESSAGE_PASSING_LAYERS}" \
   --dropout "${DROPOUT}" \
-  --discrete-ii-loss-weight 1.0 \
+  --discrete-ii-loss-weight "${DISCRETE_II_LOSS_WEIGHT}" \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \
   "${placement_arguments[@]}" \

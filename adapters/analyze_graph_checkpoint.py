@@ -151,7 +151,10 @@ def analyze(
 ) -> Dict[str, Any]:
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     config = Model2Config(**checkpoint["config"]).validate()
-    if config.interaction_mode not in {"discrete_pointwise", "residual_pointwise"}:
+    if config.interaction_mode not in {
+        "discrete_pointwise", "residual_pointwise",
+        "continuous_residual_pointwise",
+    }:
         raise ValueError("checkpoint is not an independent pointwise II model")
     _, queries = load_terminal_manifest(
         manifest_path, config.dfg_representation,

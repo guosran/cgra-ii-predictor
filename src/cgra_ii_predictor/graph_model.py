@@ -134,12 +134,13 @@ class Model2Config:
         if self.interaction_mode not in {
             "pooled", "cross_attention", "routing_set_attention",
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
-            "strict_set_classifier",
+            "continuous_residual_pointwise", "strict_set_classifier",
         }:
             raise ValueError(
                 "interaction_mode must be pooled, cross_attention, "
                 "routing_set_attention, discrete_routing_set, "
-                "discrete_pointwise, residual_pointwise, or "
+                "discrete_pointwise, residual_pointwise, "
+                "continuous_residual_pointwise, or "
                 "strict_set_classifier"
             )
         if self.dfg_representation not in {
@@ -150,10 +151,12 @@ class Model2Config:
             )
         if (
             self.dfg_representation == "route_expanded_v2" and
-            self.interaction_mode != "residual_pointwise"
+            self.interaction_mode not in {
+                "residual_pointwise", "continuous_residual_pointwise",
+            }
         ):
             raise ValueError(
-                "route_expanded_v2 currently requires residual_pointwise"
+                "route_expanded_v2 currently requires a residual pointwise mode"
             )
         if self.dfg_message_mode not in {"sum", "mean", "dual_mean"}:
             raise ValueError(
@@ -180,6 +183,7 @@ class Model2Config:
                 )
         if self.interaction_mode in {
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
+            "continuous_residual_pointwise",
         } and (
             not float(self.mapper_ii_ceiling).is_integer()
         ):
@@ -188,6 +192,7 @@ class Model2Config:
             )
         if self.interaction_mode in {
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
+            "continuous_residual_pointwise",
         }:
             if not 0.0 <= self.discrete_success_threshold <= 1.0:
                 raise ValueError(
@@ -207,7 +212,7 @@ class Model2Config:
         if self.placement_loss_weight > 0.0 and self.interaction_mode not in {
             "cross_attention", "routing_set_attention",
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
-            "strict_set_classifier",
+            "continuous_residual_pointwise", "strict_set_classifier",
         }:
             raise ValueError(
                 "placement supervision requires a cross-attention mode"
@@ -237,6 +242,7 @@ class Model2Config:
             values.pop("candidate_set_heads")
         if self.interaction_mode not in {
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
+            "continuous_residual_pointwise",
         }:
             values.pop("discrete_ii_loss_weight")
             values.pop("discrete_success_threshold")
@@ -908,7 +914,7 @@ if nn is not None:
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
-                "residual_pointwise",
+                "residual_pointwise", "continuous_residual_pointwise",
                 "strict_set_classifier",
             }:
                 self.cross_dfg_query = nn.Linear(hidden, hidden)
@@ -931,6 +937,7 @@ if nn is not None:
                 if self.config.interaction_mode in {
                     "routing_set_attention", "discrete_routing_set",
                     "discrete_pointwise", "residual_pointwise",
+                    "continuous_residual_pointwise",
                     "strict_set_classifier",
                 }:
                     interaction_width += len(ROUTING_CONTEXT_NAMES)
@@ -944,6 +951,12 @@ if nn is not None:
             )
             self.success_head = nn.Linear(hidden, 1)
             self.residual_head = nn.Linear(hidden, 1)
+            if self.config.interaction_mode == "continuous_residual_pointwise":
+                # A neutral sigmoid would begin near half of the mapper's II
+                # interval (roughly residual 8--10), far above this corpus's
+                # median residual.  Preserve random feature sensitivity while
+                # starting the bounded head near a realistic residual.
+                nn.init.constant_(self.residual_head.bias, -2.0)
             if self.config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
                 "strict_set_classifier",
@@ -962,11 +975,14 @@ if nn is not None:
                 self.rank_head = nn.Linear(hidden, 1)
             elif self.config.interaction_mode in {
                 "discrete_routing_set", "discrete_pointwise",
-                "residual_pointwise",
+                "residual_pointwise", "continuous_residual_pointwise",
             }:
                 self.discrete_ii_head = nn.Linear(
                     hidden, int(self.config.mapper_ii_ceiling) + int(
-                        self.config.interaction_mode == "residual_pointwise"
+                        self.config.interaction_mode in {
+                            "residual_pointwise",
+                            "continuous_residual_pointwise",
+                        }
                     ),
                 )
 
@@ -1099,7 +1115,7 @@ if nn is not None:
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
-                "residual_pointwise",
+                "residual_pointwise", "continuous_residual_pointwise",
                 "strict_set_classifier",
             }:
                 dfg_nodes, dfg_mask, dfg_adjacency = (
@@ -1140,6 +1156,7 @@ if nn is not None:
                     if self.config.interaction_mode in {
                         "routing_set_attention", "discrete_routing_set",
                         "discrete_pointwise", "residual_pointwise",
+                        "continuous_residual_pointwise",
                         "strict_set_classifier",
                     }
                     else None
@@ -1164,10 +1181,17 @@ if nn is not None:
             joint = torch.cat(joint_parts, dim=-1)
             hidden = self.interaction(joint)
             success_logits = self.success_head(hidden).squeeze(-1)
-            residual = functional.softplus(self.residual_head(hidden).squeeze(-1))
             lower_bound = context[..., CANDIDATE_CONTEXT_NAMES.index(
                 "normalized_lower_bound"
             )] * self.config.mapper_ii_ceiling
+            residual_logits = self.residual_head(hidden).squeeze(-1)
+            if self.config.interaction_mode == "continuous_residual_pointwise":
+                maximum_residual = torch.floor(
+                    self.config.mapper_ii_ceiling - lower_bound + 1e-6
+                ).clamp_min(0.0)
+                residual = maximum_residual * torch.sigmoid(residual_logits)
+            else:
+                residual = functional.softplus(residual_logits)
             predicted_ii = lower_bound + residual
             success_probability = torch.sigmoid(success_logits)
             timeout_cost = self.config.mapper_ii_ceiling + 1.0
@@ -1197,7 +1221,7 @@ if nn is not None:
                 selection_cost = -ranking_logits
             elif self.config.interaction_mode in {
                 "discrete_routing_set", "discrete_pointwise",
-                "residual_pointwise",
+                "residual_pointwise", "continuous_residual_pointwise",
             }:
                 discrete_features = (
                     ranked
@@ -1205,9 +1229,9 @@ if nn is not None:
                     else hidden
                 )
                 ii_class_logits = self.discrete_ii_head(discrete_features)
-                residual_classes = (
-                    self.config.interaction_mode == "residual_pointwise"
-                )
+                residual_classes = self.config.interaction_mode in {
+                    "residual_pointwise", "continuous_residual_pointwise",
+                }
                 if residual_classes:
                     class_values = torch.arange(
                         0, int(self.config.mapper_ii_ceiling) + 1,
@@ -1238,10 +1262,13 @@ if nn is not None:
                 predicted_class_value = (
                     ii_probabilities * class_values[None, None, :]
                 ).sum(dim=-1)
-                predicted_ii = (
-                    lower_bound + predicted_class_value
-                    if residual_classes else predicted_class_value
-                )
+                if self.config.interaction_mode != (
+                    "continuous_residual_pointwise"
+                ):
+                    predicted_ii = (
+                        lower_bound + predicted_class_value
+                        if residual_classes else predicted_class_value
+                    )
                 predicted_ii_variance = (
                     ii_probabilities * (
                         class_values[None, None, :] -
@@ -1336,6 +1363,7 @@ if nn is not None:
                 result["predicted_ii_std"] = predicted_ii_std
                 if self.config.interaction_mode in {
                     "discrete_pointwise", "residual_pointwise",
+                    "continuous_residual_pointwise",
                 }:
                     result["predicted_residual"] = (
                         predicted_ii - lower_bound
@@ -1407,7 +1435,9 @@ def model2_loss(
                 placement_target[supervised_placements],
             )
     if "ii_class_logits" in output and successful.any():
-        residual_classes = config.interaction_mode == "residual_pointwise"
+        residual_classes = config.interaction_mode in {
+            "residual_pointwise", "continuous_residual_pointwise",
+        }
         target_class = (
             residual_target[successful]
             if residual_classes else
@@ -1429,6 +1459,7 @@ def model2_loss(
     eligible = optimal_ii_target.any(dim=1)
     if config.interaction_mode in {
         "discrete_pointwise", "residual_pointwise",
+        "continuous_residual_pointwise",
     }:
         optimal_ii_loss = logits.sum() * 0.0
         strict_tiebreak_loss = logits.sum() * 0.0
@@ -1466,6 +1497,7 @@ def model2_loss(
         total = strict_tiebreak_loss
     elif config.interaction_mode in {
         "discrete_pointwise", "residual_pointwise",
+        "continuous_residual_pointwise",
     }:
         total = (
             config.success_loss_weight * success_loss +

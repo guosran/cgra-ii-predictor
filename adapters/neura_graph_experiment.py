@@ -600,7 +600,7 @@ def evaluate_model(
                 config.discrete_ii_decision
                 if config.interaction_mode in {
                     "discrete_routing_set", "discrete_pointwise",
-                    "residual_pointwise",
+                    "residual_pointwise", "continuous_residual_pointwise",
                 } else
                 "round_to_nearest_integer"
             ),
@@ -969,7 +969,7 @@ def parse_args() -> argparse.Namespace:
         "--interaction-mode", choices=(
             "pooled", "cross_attention", "routing_set_attention",
             "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
-            "strict_set_classifier",
+            "continuous_residual_pointwise", "strict_set_classifier",
         ),
         default="pooled",
         help=("pooled reproduces Model 2; cross_attention performs "
@@ -981,6 +981,8 @@ def parse_args() -> argparse.Namespace:
               "for each DFG/CGRA pair; "
               "residual_pointwise predicts the independent integer residual "
               "distribution above the analytical lower bound; "
+              "continuous_residual_pointwise directly regresses a bounded "
+              "residual while retaining integer classes as an auxiliary; "
               "strict_set_classifier directly optimizes deterministic "
               "oracle-shape cross-entropy only."),
     )
@@ -1112,6 +1114,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v11"
+            if config.interaction_mode == "continuous_residual_pointwise" else
             "cgra-ii-joint-graph-model-v10"
             if config.dfg_message_mode == "dual_mean" else
             "cgra-ii-joint-graph-model-v9"
@@ -1144,7 +1148,7 @@ def main() -> int:
             if config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
-                "residual_pointwise",
+                "residual_pointwise", "continuous_residual_pointwise",
                 "strict_set_classifier",
             } else []
         ),
@@ -1153,6 +1157,7 @@ def main() -> int:
             if config.interaction_mode in {
                 "routing_set_attention", "discrete_routing_set",
                 "discrete_pointwise", "residual_pointwise",
+                "continuous_residual_pointwise",
                 "strict_set_classifier",
             } else []
         ),
@@ -1200,6 +1205,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "continuous_residual_ii_pointwise_predictor_v11"
+            if config.interaction_mode == "continuous_residual_pointwise" else
             "dual_channel_route_residual_ii_pointwise_predictor_v10"
             if config.dfg_message_mode == "dual_mean" else
             "route_expanded_residual_ii_pointwise_predictor_v9"
@@ -1279,6 +1286,8 @@ def main() -> int:
             ),
             "ii": (
                 None if config.interaction_mode == "strict_set_classifier"
+                else "smooth_l1_direct_continuous_residual_successful_candidates_only"
+                if config.interaction_mode == "continuous_residual_pointwise"
                 else "smooth_l1_distribution_mean_successful_candidates_only"
                 if config.interaction_mode in {
                     "discrete_pointwise", "residual_pointwise",
@@ -1286,10 +1295,12 @@ def main() -> int:
                 else "smooth_l1_successful_candidates_only"
             ),
             "discrete_ii": (
+                "auxiliary_cross_entropy_integer_residual_successful_candidates_only"
+                if config.interaction_mode == "continuous_residual_pointwise" else
                 "cross_entropy_integer_ii_successful_candidates_only"
                 if config.interaction_mode in {
                     "discrete_routing_set", "discrete_pointwise",
-                    "residual_pointwise",
+                    "residual_pointwise", "continuous_residual_pointwise",
                 } else None
             ),
             "placement": (
@@ -1299,6 +1310,7 @@ def main() -> int:
             "listwise": (
                 None if config.interaction_mode in {
                     "discrete_pointwise", "residual_pointwise",
+                    "continuous_residual_pointwise",
                 } else
                 "strict_oracle_shape_cross_entropy_only"
                 if config.interaction_mode == "strict_set_classifier" else
@@ -1308,6 +1320,7 @@ def main() -> int:
                 "exported_timeout_aware_expected_ii_frontend_owned"
                 if config.interaction_mode in {
                     "discrete_pointwise", "residual_pointwise",
+                    "continuous_residual_pointwise",
                 } else
                 "predicted_success_then_integer_ii_then_area_rows_columns"
                 if config.interaction_mode == "discrete_routing_set" else
@@ -1320,6 +1333,7 @@ def main() -> int:
             "ranking_prior": (
                 None if config.interaction_mode in {
                     "discrete_pointwise", "residual_pointwise",
+                    "continuous_residual_pointwise",
                 } else
                 "negative_timeout_aware_expected_discrete_ii"
                 if config.interaction_mode == "discrete_routing_set" else
@@ -1331,7 +1345,9 @@ def main() -> int:
             "numeric_ii_imputation_for_censored_candidates": False,
             "ii_class_basis": (
                 "nonnegative_residual_above_analytical_lower_bound"
-                if config.interaction_mode == "residual_pointwise" else
+                if config.interaction_mode in {
+                    "residual_pointwise", "continuous_residual_pointwise",
+                } else
                 "absolute_ii"
                 if config.interaction_mode in {
                     "discrete_routing_set", "discrete_pointwise",
