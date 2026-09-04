@@ -54,7 +54,7 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --manifest "${MANIFEST}" \
   --output-dir "${OUTPUT_DIR}" \
   --epochs 40 \
-  --patience 8 \
+  --patience 40 \
   --batch-size 32 \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
