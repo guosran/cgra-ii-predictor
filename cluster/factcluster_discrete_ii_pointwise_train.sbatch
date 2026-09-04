@@ -26,6 +26,8 @@ PLACEMENT_LOSS_WEIGHT=${PLACEMENT_LOSS_WEIGHT:-0.1}
 INTERACTION_MODE=${INTERACTION_MODE:-discrete_pointwise}
 DFG_REPRESENTATION=${DFG_REPRESENTATION:-semantic_v1}
 DFG_MESSAGE_MODE=${DFG_MESSAGE_MODE:-sum}
+DFG_POOL_MODE=${DFG_POOL_MODE:-all}
+DFG_SUMMARY_MODE=${DFG_SUMMARY_MODE:-none}
 LEARNING_RATE=${LEARNING_RATE:-1e-3}
 WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
 BATCH_SIZE=${BATCH_SIZE:-32}
@@ -86,6 +88,8 @@ echo "placement_supervision_sha256=${actual_placement_sha256}"
 echo "architecture=${INTERACTION_MODE}"
 echo "dfg_representation=${DFG_REPRESENTATION}"
 echo "dfg_message_mode=${DFG_MESSAGE_MODE}"
+echo "dfg_pool_mode=${DFG_POOL_MODE}"
+echo "dfg_summary_mode=${DFG_SUMMARY_MODE}"
 echo "primary_metric=successful_candidate_continuous_ii_mae"
 echo "epochs=${EPOCHS}"
 echo "patience=${PATIENCE}"
@@ -118,6 +122,8 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --interaction-mode "${INTERACTION_MODE}" \
   --dfg-representation "${DFG_REPRESENTATION}" \
   --dfg-message-mode "${DFG_MESSAGE_MODE}" \
+  --dfg-pool-mode "${DFG_POOL_MODE}" \
+  --dfg-summary-mode "${DFG_SUMMARY_MODE}" \
   --hidden-dimension "${HIDDEN_DIMENSION}" \
   --message-passing-layers "${MESSAGE_PASSING_LAYERS}" \
   --dropout "${DROPOUT}" \

@@ -30,6 +30,7 @@ from cgra_ii_predictor.graph_model import (
     CANDIDATE_CONTEXT_NAMES,
     CROSS_ATTENTION_CONTEXT_NAMES,
     DFG_NODE_FEATURE_NAMES,
+    DFG_STRUCTURAL_CONTEXT_NAMES,
     ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES,
     ROUTE_EXPANDED_OPERATION_TYPES,
     ROUTING_CONTEXT_NAMES,
@@ -1005,6 +1006,18 @@ def parse_args() -> argparse.Namespace:
               "degree-normalized route-expanded and semantic channels."),
     )
     parser.add_argument(
+        "--dfg-pool-mode", choices=("all", "materialized_only"),
+        default="all",
+        help=("Global DFG pooling mask. materialized_only retains movement "
+              "nodes for message passing but excludes them from readout."),
+    )
+    parser.add_argument(
+        "--dfg-summary-mode", choices=("none", "structural_v1"),
+        default="none",
+        help=("Optional exact long-range DFG depth, width, cutwidth, and "
+              "raw/semantic size context for the candidate interaction."),
+    )
+    parser.add_argument(
         "--discrete-success-threshold", type=float, default=0.5,
     )
     parser.add_argument(
@@ -1034,6 +1047,8 @@ def main() -> int:
         placement_loss_weight=args.placement_loss_weight,
         dfg_representation=args.dfg_representation,
         dfg_message_mode=args.dfg_message_mode,
+        dfg_pool_mode=args.dfg_pool_mode,
+        dfg_summary_mode=args.dfg_summary_mode,
     ).validate()
     manifest, queries = load_terminal_manifest(
         args.manifest, config.dfg_representation,
@@ -1114,6 +1129,10 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v13"
+            if config.dfg_summary_mode == "structural_v1" else
+            "cgra-ii-joint-graph-model-v12"
+            if config.dfg_pool_mode == "materialized_only" else
             "cgra-ii-joint-graph-model-v11"
             if config.interaction_mode == "continuous_residual_pointwise" else
             "cgra-ii-joint-graph-model-v10"
@@ -1143,6 +1162,10 @@ def main() -> int:
             DFG_NODE_FEATURE_NAMES
         ),
         "candidate_context_names": list(CANDIDATE_CONTEXT_NAMES),
+        "dfg_structural_context_names": (
+            list(DFG_STRUCTURAL_CONTEXT_NAMES)
+            if config.dfg_summary_mode == "structural_v1" else []
+        ),
         "cross_attention_context_names": (
             list(CROSS_ATTENTION_CONTEXT_NAMES)
             if config.interaction_mode in {
@@ -1205,6 +1228,10 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "structural_context_residual_ii_pointwise_predictor_v13"
+            if config.dfg_summary_mode == "structural_v1" else
+            "materialized_pool_residual_ii_pointwise_predictor_v12"
+            if config.dfg_pool_mode == "materialized_only" else
             "continuous_residual_ii_pointwise_predictor_v11"
             if config.interaction_mode == "continuous_residual_pointwise" else
             "dual_channel_route_residual_ii_pointwise_predictor_v10"

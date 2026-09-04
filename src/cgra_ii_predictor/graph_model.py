@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 try:
@@ -74,6 +75,12 @@ ROUTING_CONTEXT_NAMES = (
     "normalized_mean_edge_distance", "normalized_max_edge_distance",
     "normalized_routing_demand_per_link",
 )
+DFG_STRUCTURAL_CONTEXT_NAMES = (
+    "log_raw_nodes", "log_raw_edges", "log_raw_depth",
+    "log_raw_width", "log_raw_cutwidth", "log_semantic_nodes",
+    "log_semantic_edges", "log_semantic_depth", "log_semantic_width",
+    "log_semantic_cutwidth", "recurrence_node_fraction",
+)
 
 
 @dataclass(frozen=True)
@@ -123,6 +130,8 @@ class Model2Config:
     placement_loss_weight: float = 0.0
     dfg_representation: str = "semantic_v1"
     dfg_message_mode: str = "sum"
+    dfg_pool_mode: str = "all"
+    dfg_summary_mode: str = "none"
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -168,6 +177,21 @@ class Model2Config:
         ):
             raise ValueError(
                 "dual_mean message passing requires route_expanded_v2"
+            )
+        if self.dfg_pool_mode not in {"all", "materialized_only"}:
+            raise ValueError(
+                "dfg_pool_mode must be all or materialized_only"
+            )
+        if (
+            self.dfg_pool_mode == "materialized_only" and
+            self.dfg_representation != "route_expanded_v2"
+        ):
+            raise ValueError(
+                "materialized-only pooling requires route_expanded_v2"
+            )
+        if self.dfg_summary_mode not in {"none", "structural_v1"}:
+            raise ValueError(
+                "dfg_summary_mode must be none or structural_v1"
             )
         if self.interaction_mode in {
             "routing_set_attention", "discrete_routing_set",
@@ -253,6 +277,10 @@ class Model2Config:
             values.pop("dfg_representation")
         if self.dfg_message_mode == "sum":
             values.pop("dfg_message_mode")
+        if self.dfg_pool_mode == "all":
+            values.pop("dfg_pool_mode")
+        if self.dfg_summary_mode == "none":
+            values.pop("dfg_summary_mode")
         return values
 
 
@@ -712,6 +740,92 @@ def pad_node_feature_mask(
     return mask
 
 
+def _forward_structure_statistics(
+    node_indices: Tuple[int, ...], edges: Tuple[Tuple[int, int], ...],
+) -> Tuple[int, int, int, int, int]:
+    """Summarize one forward DAG in linear time after node ordering."""
+    if not node_indices:
+        return 0, 0, 0, 0, 0
+    rank = {node: index for index, node in enumerate(node_indices)}
+    forward_edges = [
+        (rank[source], rank[target]) for source, target in edges
+        if source in rank and target in rank and rank[source] < rank[target]
+    ]
+    parents: List[List[int]] = [[] for _ in node_indices]
+    for source, target in forward_edges:
+        parents[target].append(source)
+    depths = [1] * len(node_indices)
+    for node in range(len(node_indices)):
+        if parents[node]:
+            depths[node] = 1 + max(depths[parent] for parent in parents[node])
+    layer_counts: Dict[int, int] = {}
+    for depth in depths:
+        layer_counts[depth] = layer_counts.get(depth, 0) + 1
+    difference = [0] * (len(node_indices) + 1)
+    for source, target in forward_edges:
+        difference[source] += 1
+        difference[target] -= 1
+    live_edges = 0
+    cutwidth = 0
+    for cut in range(max(0, len(node_indices) - 1)):
+        live_edges += difference[cut]
+        cutwidth = max(cutwidth, live_edges)
+    return (
+        len(node_indices), len(forward_edges), max(depths),
+        max(layer_counts.values()), cutwidth,
+    )
+
+
+@lru_cache(maxsize=8192)
+def dfg_structural_context(graph: GraphData) -> Tuple[float, ...]:
+    """Expose long-range graph facts a shallow MPNN cannot reconstruct."""
+    all_nodes = tuple(range(len(graph.node_types)))
+    route_expanded = (
+        len(graph.node_features[0]) ==
+        len(ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES)
+    )
+    if route_expanded:
+        materialized_index = ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
+            "is_materialized"
+        )
+        semantic_nodes = tuple(
+            index for index, features in enumerate(graph.node_features)
+            if features[materialized_index] > 0.5
+        )
+        recurrence_index = ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
+            "is_recurrence_cycle"
+        )
+        recurrence_fraction = sum(
+            features[recurrence_index] > 0.5
+            for features in graph.node_features
+        ) / float(max(1, len(graph.node_types)))
+    else:
+        semantic_nodes = all_nodes
+        recurrence_fraction = 0.0
+    raw = _forward_structure_statistics(all_nodes, graph.edges)
+    semantic = _forward_structure_statistics(
+        semantic_nodes,
+        graph.semantic_edges if graph.semantic_edges is not None else graph.edges,
+    )
+    denominator = math.log1p(4096.0)
+    normalized = [
+        min(1.0, math.log1p(float(value)) / denominator)
+        for value in (*raw, *semantic)
+    ]
+    return tuple((*normalized, recurrence_fraction))
+
+
+def batch_dfg_structural_context(
+    graphs: Sequence[GraphData], device: Any,
+) -> Tensor:
+    """Batch cached structural summaries on the active model device."""
+    _require_torch()
+    return torch.tensor(
+        [dfg_structural_context(graph) for graph in graphs],
+        dtype=torch.float32, device=device,
+    )
+
+
 def pad_shortest_path_distances(
     graphs: Sequence[GraphData], device: Any,
 ) -> Tensor:
@@ -911,6 +1025,8 @@ if nn is not None:
                 self.config.message_passing_layers, self.config.dropout,
             )
             interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
+            if self.config.dfg_summary_mode == "structural_v1":
+                interaction_width += len(DFG_STRUCTURAL_CONTEXT_NAMES)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
                 "discrete_routing_set", "discrete_pointwise",
@@ -1138,7 +1254,12 @@ if nn is not None:
                 cgra_nodes, cgra_mask, _ = self.cgra_encoder.encode_nodes(
                     cgra_graphs
                 )
-                dfg = self.dfg_encoder.pool_nodes(dfg_nodes, dfg_mask)
+                dfg_pool_mask = (
+                    dfg_interaction_mask
+                    if self.config.dfg_pool_mode == "materialized_only" else
+                    dfg_mask
+                )
+                dfg = self.dfg_encoder.pool_nodes(dfg_nodes, dfg_pool_mask)
                 cgra = self.cgra_encoder.pool_nodes(cgra_nodes, cgra_mask)
                 (
                     cross_summary, cross_context, cross_attention,
@@ -1174,6 +1295,11 @@ if nn is not None:
             joint_parts = [
                 dfg, cgra, dfg * cgra, torch.abs(dfg - cgra), context,
             ]
+            if self.config.dfg_summary_mode == "structural_v1":
+                structural = batch_dfg_structural_context(
+                    dfg_graphs, device,
+                )[:, None, :].expand(batch, candidates, -1)
+                joint_parts.append(structural)
             if cross_summary is not None and cross_context is not None:
                 joint_parts.extend((cross_summary, cross_context))
             if routing_context is not None:
@@ -1685,11 +1811,13 @@ def censored_top1_metrics(
 __all__ = [
     "CANDIDATE_CONTEXT_NAMES", "CGRA_NODE_FEATURE_NAMES",
     "CROSS_ATTENTION_CONTEXT_NAMES",
-    "DFG_NODE_FEATURE_NAMES", "ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES",
+    "DFG_NODE_FEATURE_NAMES", "DFG_STRUCTURAL_CONTEXT_NAMES",
+    "ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES",
     "ROUTE_EXPANDED_OPERATION_TYPES", "ROUTING_CONTEXT_NAMES", "GraphData",
     "JointGraphShapeModel",
     "Model2Config", "OPERATION_TYPES", "candidate_context",
-    "censored_top1_metrics", "make_cgra_graph", "model2_loss",
+    "batch_dfg_structural_context", "censored_top1_metrics",
+    "dfg_structural_context", "make_cgra_graph", "model2_loss",
     "pad_graphs", "pad_node_feature_mask", "pad_semantic_adjacency",
     "pad_shortest_path_distances", "parse_neura_dfg",
     "parse_neura_dfg_representation", "parse_neura_route_expanded_dfg",

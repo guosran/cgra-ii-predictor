@@ -21,6 +21,7 @@ class GraphModelTest(unittest.TestCase):
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
         global pad_shortest_path_distances, parse_neura_dfg
+        global dfg_structural_context, DFG_STRUCTURAL_CONTEXT_NAMES
         global parse_neura_route_expanded_dfg
         global ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES
         global parse_neura_mapped_placements
@@ -36,6 +37,7 @@ class GraphModelTest(unittest.TestCase):
         from cgra_ii_predictor.graph_model import (
             JointGraphShapeModel, Model2Config, candidate_context,
             censored_top1_metrics, make_cgra_graph, model2_loss,
+            dfg_structural_context, DFG_STRUCTURAL_CONTEXT_NAMES,
             pad_shortest_path_distances, parse_neura_dfg,
             parse_neura_route_expanded_dfg,
             parse_neura_mapped_placements,
@@ -206,6 +208,77 @@ class GraphModelTest(unittest.TestCase):
         ).validate().placement_loss_weight, 0.1)
         with self.assertRaisesRegex(ValueError, "route_expanded_v2"):
             Model2Config(dfg_message_mode="dual_mean").validate()
+
+    def test_route_expanded_materialized_pool_excludes_movement_nodes(self):
+        graph = parse_neura_route_expanded_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %m = "neura.data_mov"(%a) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %b = "neura.add"(%m, %a) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        func.return %b : !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="residual_pointwise",
+            dfg_representation="route_expanded_v2",
+            dfg_message_mode="dual_mean",
+            dfg_pool_mode="materialized_only",
+        )
+        model = JointGraphShapeModel(config).eval()
+        original_pool = model.dfg_encoder.pool_nodes
+        with mock.patch.object(
+            model.dfg_encoder, "pool_nodes", wraps=original_pool,
+        ) as pool:
+            model(
+                [graph], [make_cgra_graph(1, 2)],
+                torch.tensor([[candidate_context(1, 2, 1, 2, 2)]]),
+            )
+        pool_mask = pool.call_args.args[1]
+        self.assertEqual(int(pool_mask.sum()), 3)
+        structural = dfg_structural_context(graph)
+        self.assertGreater(structural[0], structural[5])
+        self.assertEqual(config.to_dict()["dfg_pool_mode"], "materialized_only")
+        with self.assertRaisesRegex(ValueError, "materialized-only"):
+            Model2Config(dfg_pool_mode="materialized_only").validate()
+
+    def test_structural_context_exposes_exact_long_range_graph_facts(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %d = "neura.mul"(%c, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        values = dfg_structural_context(graph)
+        self.assertEqual(len(values), len(DFG_STRUCTURAL_CONTEXT_NAMES))
+        denominator = math.log1p(4096.0)
+        expected = [
+            math.log1p(value) / denominator
+            for value in (4, 4, 3, 2, 3)
+        ]
+        # Four unique edges: a->c, b->c, c->d, and b->d.  Their maximum
+        # live-edge cut is three after node b.
+        np_values = torch.tensor(values)
+        self.assertTrue(torch.allclose(
+            np_values[:5], torch.tensor(expected), atol=1e-7,
+        ))
+        self.assertTrue(torch.allclose(
+            np_values[:5], np_values[5:10], atol=1e-7,
+        ))
+        self.assertEqual(values[-1], 0.0)
+
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="continuous_residual_pointwise",
+            dfg_summary_mode="structural_v1",
+        )
+        model = JointGraphShapeModel(config).eval()
+        output = model(
+            [graph], [make_cgra_graph(2, 2)],
+            torch.tensor([[candidate_context(2, 2, 1, 2, 2)]]),
+        )
+        self.assertEqual(tuple(output["predicted_ii"].shape), (1, 1))
+        self.assertEqual(config.to_dict()["dfg_summary_mode"], "structural_v1")
+        with self.assertRaisesRegex(ValueError, "dfg_summary_mode"):
+            Model2Config(dfg_summary_mode="unknown").validate()
 
     def test_mapped_placements_align_materialized_operations_to_pes(self):
         source = """
