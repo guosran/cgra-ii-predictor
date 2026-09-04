@@ -1101,7 +1101,12 @@ def censored_top1_metrics(
         raise ValueError("minimum_successful_candidates must be positive")
     if not math.isfinite(mapper_ii_ceiling) or mapper_ii_ceiling <= 0.0:
         raise ValueError("mapper_ii_ceiling must be finite and positive")
-    strict_correct = optimal_ii_correct = selected_success = 0
+    evaluated_topk = (1, 2, 3)
+    strict_correct = {k: 0 for k in evaluated_topk}
+    transpose_correct = {k: 0 for k in evaluated_topk}
+    optimal_ii_correct = {k: 0 for k in evaluated_topk}
+    any_success = {k: 0 for k in evaluated_topk}
+    selected_success = 0
     eligible = 0
     total_regret = total_penalized_regret = 0.0
     exclusions: Dict[str, int] = {}
@@ -1111,6 +1116,9 @@ def censored_top1_metrics(
         rows = int(row["rows"])
         columns = int(row["columns"])
         return rows * columns, rows, columns, str(row["candidate_id"])
+
+    def transpose_identity(row: Mapping[str, Any]) -> Tuple[int, int]:
+        return tuple(sorted((int(row["rows"]), int(row["columns"]))))
 
     for query_rows in queries:
         if not query_rows:
@@ -1133,19 +1141,37 @@ def censored_top1_metrics(
         oracle = min(successful, key=lambda row: (
             float(row["compiled_ii"]), *identity(row),
         ))
-        selected = min(query_rows, key=lambda row: (
+        ranked = sorted(query_rows, key=lambda row: (
             float(row[prediction_key]), *identity(row),
         ))
+        selected = ranked[0]
         eligible += 1
         is_success = selected.get("status") == "success"
         selected_success += int(is_success)
         exact = str(selected["candidate_id"]) == str(oracle["candidate_id"])
-        strict_correct += int(exact)
+        oracle_ii = float(oracle["compiled_ii"])
+        oracle_transpose = transpose_identity(oracle)
+        for k in evaluated_topk:
+            topk = ranked[:k]
+            strict_correct[k] += int(any(
+                str(row["candidate_id"]) == str(oracle["candidate_id"])
+                for row in topk
+            ))
+            transpose_correct[k] += int(any(
+                transpose_identity(row) == oracle_transpose for row in topk
+            ))
+            optimal_ii_correct[k] += int(any(
+                row.get("status") == "success" and
+                float(row["compiled_ii"]) == oracle_ii
+                for row in topk
+            ))
+            any_success[k] += int(any(
+                row.get("status") == "success" for row in topk
+            ))
         regret: Optional[float] = None
         if is_success:
-            regret = float(selected["compiled_ii"]) - float(oracle["compiled_ii"])
+            regret = float(selected["compiled_ii"]) - oracle_ii
             total_regret += regret
-            optimal_ii_correct += int(regret == 0.0)
             total_penalized_regret += regret
         else:
             total_penalized_regret += (
@@ -1159,18 +1185,55 @@ def censored_top1_metrics(
             "selected_shape": f"{selected['rows']}x{selected['columns']}",
             "selected_status": selected.get("status"),
             "strict_top1_correct": exact,
+            "transpose_equivalent_top1_correct": (
+                transpose_identity(selected) == oracle_transpose
+            ),
+            "top3_candidate_ids": [
+                row["candidate_id"] for row in ranked[:3]
+            ],
+            "top3_shapes": [
+                f"{row['rows']}x{row['columns']}" for row in ranked[:3]
+            ],
             "compiled_ii_regret": regret,
         }
+    topk_metrics = {
+        f"strict_top{k}_accuracy": (
+            strict_correct[k] / eligible if eligible else None
+        )
+        for k in evaluated_topk
+    }
+    topk_metrics.update({
+        f"transpose_equivalent_top{k}_accuracy": (
+            transpose_correct[k] / eligible if eligible else None
+        )
+        for k in evaluated_topk
+    })
+    topk_metrics.update({
+        f"optimal_ii_top{k}_rate": (
+            optimal_ii_correct[k] / eligible if eligible else None
+        )
+        for k in evaluated_topk
+    })
+    topk_metrics.update({
+        f"any_success_top{k}_rate": (
+            any_success[k] / eligible if eligible else None
+        )
+        for k in evaluated_topk
+    })
     return {
         "status": "ok" if eligible else "unavailable_no_eligible_queries",
         "population": "all_declared_shapes_with_censorship_categorical",
         "minimum_successful_candidates": minimum_successful_candidates,
         "censored_selection_penalty_ii": mapper_ii_ceiling + 1.0,
         "eligible_query_count": eligible,
-        "strict_correct_query_count": strict_correct,
-        "strict_top1_accuracy": strict_correct / eligible if eligible else None,
-        "optimal_ii_query_count": optimal_ii_correct,
-        "optimal_ii_rate": optimal_ii_correct / eligible if eligible else None,
+        "primary_shape_metric": "transpose_equivalent_top1_accuracy",
+        "strict_correct_query_count": strict_correct[1],
+        "transpose_equivalent_correct_query_count": transpose_correct[1],
+        "optimal_ii_query_count": optimal_ii_correct[1],
+        "optimal_ii_rate": (
+            optimal_ii_correct[1] / eligible if eligible else None
+        ),
+        **topk_metrics,
         "selected_success_query_count": selected_success,
         "selected_success_rate": selected_success / eligible if eligible else None,
         "mean_regret_over_successful_selections": (

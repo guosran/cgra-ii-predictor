@@ -173,6 +173,35 @@ class GraphModelTest(unittest.TestCase):
         )
         self.assertGreater(result["mean_timeout_penalized_regret"], 0.0)
 
+    def test_topk_reports_transpose_equivalent_and_optimal_ii_recall(self):
+        rows = [[
+            {"candidate_id": "q/1x1", "ranking_query_id": "q",
+             "rows": 1, "columns": 1, "status": "censored",
+             "compiled_ii": None, "score": 1.0},
+            {"candidate_id": "q/3x2", "ranking_query_id": "q",
+             "rows": 3, "columns": 2, "status": "success",
+             "compiled_ii": 6, "score": 2.0},
+            {"candidate_id": "q/2x3", "ranking_query_id": "q",
+             "rows": 2, "columns": 3, "status": "success",
+             "compiled_ii": 5, "score": 3.0},
+            {"candidate_id": "q/2x2", "ranking_query_id": "q",
+             "rows": 2, "columns": 2, "status": "success",
+             "compiled_ii": 7, "score": 4.0},
+        ]]
+        result = censored_top1_metrics(rows, "score")
+        self.assertEqual(
+            result["primary_shape_metric"],
+            "transpose_equivalent_top1_accuracy",
+        )
+        self.assertEqual(result["strict_top2_accuracy"], 0.0)
+        self.assertEqual(result["strict_top3_accuracy"], 1.0)
+        self.assertEqual(result["transpose_equivalent_top1_accuracy"], 0.0)
+        self.assertEqual(result["transpose_equivalent_top2_accuracy"], 1.0)
+        self.assertEqual(result["optimal_ii_top2_rate"], 0.0)
+        self.assertEqual(result["optimal_ii_top3_rate"], 1.0)
+        self.assertEqual(result["any_success_top1_rate"], 0.0)
+        self.assertEqual(result["any_success_top2_rate"], 1.0)
+
     def test_joint_model_loss_backpropagates_all_three_heads(self):
         source = """
         %a = "neura.constant"() : () -> !neura.data<i32, i1>

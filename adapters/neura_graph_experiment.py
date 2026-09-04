@@ -588,7 +588,7 @@ def evaluate_by_family(
 def _validation_score(evaluation: Mapping[str, Any]) -> Tuple[float, ...]:
     top1 = evaluation["model2_top1"]
     return (
-        -float(top1["strict_top1_accuracy"]),
+        -float(top1["transpose_equivalent_top1_accuracy"]),
         -float(top1["optimal_ii_rate"]),
         -float(top1["selected_success_rate"]),
         float(top1["mean_timeout_penalized_regret"]),
@@ -693,7 +693,8 @@ def train_model(
         top1 = validation["model2_top1"]
         print(
             f"epoch={epoch} loss={record['training_loss']['total']:.4f} "
-            f"validation_top1={top1['strict_top1_accuracy']:.4f} "
+            "validation_transpose_top1="
+            f"{top1['transpose_equivalent_top1_accuracy']:.4f} "
             f"validation_success={top1['selected_success_rate']:.4f} "
             f"best_epoch={best_epoch}",
             flush=True,
@@ -707,7 +708,7 @@ def train_model(
         "best_epoch": best_epoch,
         "executed_epochs": len(history),
         "selection_order": [
-            "maximum_validation_strict_top1_accuracy",
+            "maximum_validation_transpose_equivalent_top1_accuracy",
             "maximum_validation_optimal_ii_rate",
             "maximum_validation_selected_success_rate",
             "minimum_validation_timeout_penalized_regret",
@@ -1010,9 +1011,9 @@ def main() -> int:
     test_baseline = evaluations["test"]["analytical_top1"]
     test_model = evaluations["test"]["model2_top1"]
     gates = {
-        "strict_top1_improvement": (
-            float(test_model["strict_top1_accuracy"]) >
-            float(test_baseline["strict_top1_accuracy"])
+        "transpose_equivalent_top1_improvement": (
+            float(test_model["transpose_equivalent_top1_accuracy"]) >
+            float(test_baseline["transpose_equivalent_top1_accuracy"])
         ),
         "selected_success_non_degradation": (
             float(test_model["selected_success_rate"]) >=
@@ -1140,6 +1141,15 @@ def main() -> int:
             ),
             "numeric_ii_imputation_for_censored_candidates": False,
         },
+        "evaluation_contract": {
+            "primary_shape_metric": "transpose_equivalent_top1_accuracy",
+            "reported_shape_topk": [1, 2, 3],
+            "strict_oriented_shape_metrics": "diagnostic_only",
+            "optimal_ii_topk_definition": (
+                "at_least_one_of_the_top_k_ranked_shapes_has_the_minimum_"
+                "compiled_ii_among_successful_candidates"
+            ),
+        },
         "training": training,
         "evaluation": evaluations,
         "evaluation_by_generator_family": family_evaluations,
@@ -1151,8 +1161,10 @@ def main() -> int:
     report_path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(
         f"model2_report={report_path.resolve()} "
-        f"test_top1={test_model['strict_top1_accuracy']:.4f} "
-        f"baseline_top1={test_baseline['strict_top1_accuracy']:.4f} "
+        "test_transpose_top1="
+        f"{test_model['transpose_equivalent_top1_accuracy']:.4f} "
+        "baseline_transpose_top1="
+        f"{test_baseline['transpose_equivalent_top1_accuracy']:.4f} "
         f"gates_passed={all(gates.values())}",
         flush=True,
     )

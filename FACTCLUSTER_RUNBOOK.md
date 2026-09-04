@@ -261,6 +261,26 @@ validation-only quantile/UCB 搜索仍选择原来的 `success>=0.9 + floor(expe
 三模型 Borda ensemble 虽把 validation strict Top-1 提到 46.07%，测试只有 43.95%，
 不应采用。
 
+从后续实验开始，shape 主指标统一改为 transpose-equivalent，exact-oriented 只作为
+诊断项保留。Top-k 表示按模型 selection cost 排名前 k 的候选中是否包含 oracle 的
+转置等价 shape；optimal-II Top-k 表示前 k 个候选中是否至少有一个成功候选的
+compiled II 等于该查询所有成功 shape 的最小值。censored 候选不填入数值 II。
+固定测试集 380 个合格查询的结果为：
+
+| 排序器 | 转置等价 Top-1/2/3 | optimal-II Top-1/2/3 |
+| --- | ---: | ---: |
+| analytical lower bound | 18.42% / 27.89% / 39.74% | 31.32% / 46.84% / 65.53% |
+| 无 placement `1475408` | 52.89% / 63.95% / 70.26% | 56.58% / 70.00% / 74.47% |
+| placement 0.1 `1475561` | **55.53% / 73.95% / 79.21%** | **58.16% / 76.58% / 82.89%** |
+| placement 0.5 `1475562` | 51.32% / 64.21% / 68.68% | 57.37% / 71.05% / 73.42% |
+
+`1475561` 的前 1/2/3 个候选中至少有一个 mapper 成功的比例分别为
+93.42% / 98.68% / 99.47%。因此当前主要瓶颈不是候选召回，而是把已进入 Top-2/3
+的最优候选排到第一。下一轮优先保持 placement weight 0.1，移除 exact-oriented
+one-hot tie-break，改用 transpose-equivalent target，并按 validation
+transpose-equivalent Top-1 选择 checkpoint；若允许少量 mapper 调用，则直接映射
+模型 Top-2 后按真实 II 选择，是当前收益/开销最明确的 hybrid 路径。
+
 记下输出的 job ID。低频查看队列：
 
 ```sh
