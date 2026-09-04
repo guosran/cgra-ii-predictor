@@ -14,6 +14,52 @@ from adapters import (
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v7_predeclaration_attestation_matches_frozen_sources_and_model(self):
+        project_root = Path(neura_motifs_v7.__file__).resolve().parents[1]
+        attestation = json.loads((
+            project_root / "protocols/motif-v7-predeclaration.json"
+        ).read_text())
+        declaration_revision = attestation["predictor_declaration_revision"]
+        implementation = attestation["implementation"]
+        for path_key, hash_key in (
+            ("generator_path", "generator_sha256"),
+            ("parent_generator_path", "parent_generator_sha256"),
+            ("base_generator_path", "base_generator_sha256"),
+            ("collection_adapter_path", "collection_adapter_sha256"),
+            ("development_trainer_path", "development_trainer_sha256"),
+            ("frozen_evaluator_path", "frozen_evaluator_sha256"),
+            ("graph_model_path", "graph_model_sha256"),
+        ):
+            historical = subprocess.run(
+                ["git", "show", f"{declaration_revision}:{implementation[path_key]}"],
+                cwd=project_root, check=True, stdout=subprocess.PIPE,
+            ).stdout
+            self.assertEqual(hashlib.sha256(historical).hexdigest(),
+                             implementation[hash_key])
+        protocol_path = project_root / attestation["protocol"]["path"]
+        self.assertEqual(hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
+                         attestation["protocol"]["sha256"])
+        frozen_revision = attestation["frozen_model_revision"]
+        for path_key, hash_key in (
+            ("path", "sha256"),
+            ("freeze_report_path", "freeze_report_sha256"),
+        ):
+            historical = subprocess.run(
+                ["git", "show", f"{frozen_revision}:"
+                 f"{attestation['frozen_model'][path_key]}"],
+                cwd=project_root, check=True, stdout=subprocess.PIPE,
+            ).stdout
+            self.assertEqual(hashlib.sha256(historical).hexdigest(),
+                             attestation["frozen_model"][hash_key])
+        manifest_path = project_root / attestation["manifest"]["path"]
+        if manifest_path.is_file():
+            self.assertEqual(hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                             attestation["manifest"]["sha256"])
+        self.assertFalse(attestation["frozen_model"]["motif_v7_labels_accessed"])
+        self.assertFalse(attestation["label_boundary"][
+            "motif_v7_mapper_collection_started"
+        ])
+
     def test_v7_protocol_matches_runtime_model2_contract(self):
         project_root = Path(neura_motifs_v7.__file__).resolve().parents[1]
         protocol = json.loads((project_root / "protocols/motif-v7.json").read_text())

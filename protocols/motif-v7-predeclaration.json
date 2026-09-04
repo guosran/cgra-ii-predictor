@@ -1,0 +1,76 @@
+{
+  "schema_version": "cgra-ii-model2-predeclaration-attestation-v1",
+  "status": "model_frozen_and_manifest_materialized_label_free_before_motif_v7_collection",
+  "date": "2026-09-04",
+  "predictor_base_revision": "1c33fab4ae87646b73caa71e607f46c5f5e11905",
+  "predictor_declaration_revision": "ead566defb72a2a03b1f8aa149e2bb623306b4be",
+  "frozen_model_revision": "955e5aec2a77555812e7fc9d4465df888b3bac76",
+  "protocol": {
+    "path": "protocols/motif-v7.json",
+    "sha256": "f8f6ff12168a54b8daf39cbcd75449f70a494ef0e102d1b86772ae4f39ecb3ff"
+  },
+  "implementation": {
+    "generator_path": "adapters/neura_motifs_v7.py",
+    "generator_sha256": "3872ed6c3698899a5e248fe14bd7297c4fd32262f3f551d67e9d3d87f60161e9",
+    "parent_generator_path": "adapters/neura_motifs_v6.py",
+    "parent_generator_sha256": "7aea6d4d79faec1e5eea4ecbdd2f6687ce10e98bb96bdc0de9dedcc9213236b8",
+    "base_generator_path": "adapters/neura_motifs_v5.py",
+    "base_generator_sha256": "488dfe331c54c90a6dab8e5e25d563211223e9c36107f44db5cc882269c6d760",
+    "collection_adapter_path": "adapters/neura_experiment.py",
+    "collection_adapter_sha256": "4f9ec95614a317e79ee1828484d3ca8ffb40276be29d489a520110f8e49378d1",
+    "development_trainer_path": "adapters/neura_graph_experiment.py",
+    "development_trainer_sha256": "2a5fc498d8e5e6e727f4e81a7be3a2669095b5bcdb9bf887a38b630c49f25f0a",
+    "frozen_evaluator_path": "adapters/neura_graph_frozen.py",
+    "frozen_evaluator_sha256": "37e6f8210a52374c6e7b783bf9e861dc6bf0975cd150a412b7b265f79b62c5b7",
+    "graph_model_path": "src/cgra_ii_predictor/graph_model.py",
+    "graph_model_sha256": "744118f3ce4dd1ad0d0591c1f17a6989c0a949e5c2320d094858207e0b4a730b"
+  },
+  "development_selection": {
+    "training_manifest_path": "corpora/motif-v6-formal-seed-20260904/corpus-manifest.json",
+    "training_manifest_sha256": "c2569e3fc0145ff334f0c8f06ae174f813cb5e54943ff31267993705cce78d1b",
+    "development_report_path": "corpora/model2-v6-development-strict1/report.json",
+    "development_report_sha256": "064b0bbf2f5b3fd51adc94227c30c6777eea2e11a0d86070b765cb85fd1da9fc",
+    "selected_epoch": 28,
+    "motif_v7_labels_used": false
+  },
+  "frozen_model": {
+    "path": "models/model2-v7-frozen/model.pt",
+    "sha256": "0b00171daa2cb436d532112efd54a04bfae4ccb0147e67cb946af1f5945b32b5",
+    "freeze_report_path": "models/model2-v7-frozen/freeze-report.json",
+    "freeze_report_sha256": "93a6076034b9ef94be40cc6559927383317c320534b02f8c2e0e6243127e9021",
+    "training_generator_version": "motif-v6",
+    "training_query_count": 1500,
+    "training_candidate_count": 24000,
+    "refit_epochs": 28,
+    "motif_v7_labels_accessed": false
+  },
+  "manifest": {
+    "path": "corpora/motif-v7-formal-seed-20260906/corpus-manifest.predeclared.json",
+    "sha256": "c75f74bf53bb22959f0f3c50dd5855390d0037d1a92213f7bfd0f87c93706fbd",
+    "schema_version": "cgra-ii-motif-corpus-v7",
+    "status": "predeclared",
+    "base_count": 1500,
+    "candidate_count": 24000,
+    "shapes_per_base": 16,
+    "unique_candidate_id_count": 24000,
+    "non_declared_candidate_count": 0,
+    "records_with_label_or_analysis_artifact_fields": 0,
+    "source_hash_mismatch_count": 0,
+    "canonical_dfg_overlap_with_motif_v6": 0
+  },
+  "toolchain": {
+    "neura_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "mlir_neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+    "timeout_seconds_per_stage": 60
+  },
+  "label_boundary": {
+    "compiler_or_mapper_executed_by_predeclaration_command": false,
+    "compiled_ii_fields_present": 0,
+    "rec_res_analysis_fields_present": 0,
+    "motif_v7_mapper_collection_started": false,
+    "motif_v7_labels_may_refit_or_select_model": false,
+    "evaluation_constructs_optimizer": false
+  },
+  "trusted_external_timestamp": false
+}
