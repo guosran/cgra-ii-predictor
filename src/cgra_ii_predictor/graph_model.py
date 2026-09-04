@@ -106,6 +106,7 @@ class Model2Config:
     interaction_mode: str = "pooled"
     candidate_set_layers: int = 2
     candidate_set_heads: int = 4
+    discrete_ii_loss_weight: float = 1.0
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -116,12 +117,15 @@ class Model2Config:
             raise ValueError("dropout must be in [0, 1)")
         if self.interaction_mode not in {
             "pooled", "cross_attention", "routing_set_attention",
+            "discrete_routing_set",
         }:
             raise ValueError(
                 "interaction_mode must be pooled, cross_attention, or "
-                "routing_set_attention"
+                "a routing set mode"
             )
-        if self.interaction_mode == "routing_set_attention":
+        if self.interaction_mode in {
+            "routing_set_attention", "discrete_routing_set",
+        }:
             if self.candidate_set_layers < 1:
                 raise ValueError("candidate_set_layers must be positive")
             if self.candidate_set_heads < 1:
@@ -130,10 +134,17 @@ class Model2Config:
                 raise ValueError(
                     "hidden_dimension must be divisible by candidate_set_heads"
                 )
+        if self.interaction_mode == "discrete_routing_set" and (
+            not float(self.mapper_ii_ceiling).is_integer()
+        ):
+            raise ValueError(
+                "discrete_routing_set requires an integer mapper_ii_ceiling"
+            )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
             "listwise_loss_weight", "strict_tiebreak_loss_weight",
+            "discrete_ii_loss_weight",
         ):
             value = float(getattr(self, name))
             if not math.isfinite(value) or value <= 0.0:
@@ -146,9 +157,13 @@ class Model2Config:
         # checkpoints.  New architectures identify themselves explicitly.
         if self.interaction_mode == "pooled":
             values.pop("interaction_mode")
-        if self.interaction_mode != "routing_set_attention":
+        if self.interaction_mode not in {
+            "routing_set_attention", "discrete_routing_set",
+        }:
             values.pop("candidate_set_layers")
             values.pop("candidate_set_heads")
+        if self.interaction_mode != "discrete_routing_set":
+            values.pop("discrete_ii_loss_weight")
         return values
 
 
@@ -516,6 +531,7 @@ if nn is not None:
             interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
+                "discrete_routing_set",
             }:
                 self.cross_dfg_query = nn.Linear(hidden, hidden)
                 self.cross_cgra_key = nn.Linear(hidden, hidden)
@@ -534,7 +550,9 @@ if nn is not None:
                     nn.LayerNorm(hidden),
                 )
                 interaction_width += hidden + len(CROSS_ATTENTION_CONTEXT_NAMES)
-                if self.config.interaction_mode == "routing_set_attention":
+                if self.config.interaction_mode in {
+                    "routing_set_attention", "discrete_routing_set",
+                }:
                     interaction_width += len(ROUTING_CONTEXT_NAMES)
             self.interaction = nn.Sequential(
                 nn.Linear(interaction_width, hidden * 2),
@@ -546,7 +564,9 @@ if nn is not None:
             )
             self.success_head = nn.Linear(hidden, 1)
             self.residual_head = nn.Linear(hidden, 1)
-            if self.config.interaction_mode == "routing_set_attention":
+            if self.config.interaction_mode in {
+                "routing_set_attention", "discrete_routing_set",
+            }:
                 self.candidate_set_blocks = nn.ModuleList([
                     CandidateSetBlock(
                         hidden, self.config.candidate_set_heads,
@@ -555,7 +575,12 @@ if nn is not None:
                     for _ in range(self.config.candidate_set_layers)
                 ])
                 self.candidate_set_normalization = nn.LayerNorm(hidden)
+            if self.config.interaction_mode == "routing_set_attention":
                 self.rank_head = nn.Linear(hidden, 1)
+            elif self.config.interaction_mode == "discrete_routing_set":
+                self.discrete_ii_head = nn.Linear(
+                    hidden, int(self.config.mapper_ii_ceiling),
+                )
 
         def _candidate_conditioned_interaction(
             self, dfg_nodes: Tensor, dfg_mask: Tensor,
@@ -685,6 +710,7 @@ if nn is not None:
             context = context.to(device=device, dtype=torch.float32)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
+                "discrete_routing_set",
             }:
                 dfg_nodes, dfg_mask, dfg_adjacency = (
                     self.dfg_encoder.encode_nodes(dfg_graphs)
@@ -703,7 +729,9 @@ if nn is not None:
                     self._routing_context(
                         cross_attention, dfg_adjacency, cgra_graphs,
                     )
-                    if self.config.interaction_mode == "routing_set_attention"
+                    if self.config.interaction_mode in {
+                        "routing_set_attention", "discrete_routing_set",
+                    }
                     else None
                 )
             else:
@@ -737,20 +765,80 @@ if nn is not None:
                 (1.0 - success_probability) * timeout_cost
             )
             ranking_logits = None
+            ii_class_logits = None
+            predicted_ii_class = None
             selection_cost = expected_cost
-            if self.config.interaction_mode == "routing_set_attention":
+            ranked = None
+            if self.config.interaction_mode in {
+                "routing_set_attention", "discrete_routing_set",
+            }:
                 ranked = hidden
                 for block in self.candidate_set_blocks:
                     ranked = block(ranked)
                 ranked = self.candidate_set_normalization(ranked)
+            if self.config.interaction_mode == "routing_set_attention":
                 rank_adjustment = self.rank_head(ranked).squeeze(-1)
                 ranking_logits = -expected_cost + rank_adjustment
                 selection_cost = -ranking_logits
+            elif self.config.interaction_mode == "discrete_routing_set":
+                ii_class_logits = self.discrete_ii_head(ranked)
+                class_values = torch.arange(
+                    1, int(self.config.mapper_ii_ceiling) + 1,
+                    dtype=ii_class_logits.dtype, device=ii_class_logits.device,
+                )
+                valid_classes = (
+                    class_values[None, None, :] >=
+                    torch.ceil(lower_bound - 1e-6)[..., None]
+                )
+                ii_class_logits = ii_class_logits.masked_fill(
+                    ~valid_classes, torch.finfo(ii_class_logits.dtype).min,
+                )
+                ii_probabilities = torch.softmax(ii_class_logits, dim=-1)
+                predicted_ii = (
+                    ii_probabilities * class_values[None, None, :]
+                ).sum(dim=-1)
+                predicted_ii_class = (
+                    ii_class_logits.argmax(dim=-1) + 1
+                ).to(predicted_ii.dtype)
+                expected_cost = (
+                    success_probability * predicted_ii +
+                    (1.0 - success_probability) * timeout_cost
+                )
+                ranking_logits = -expected_cost
+
+                rows = torch.round(
+                    context[..., CANDIDATE_CONTEXT_NAMES.index(
+                        "normalized_rows"
+                    )] * 4.0
+                )
+                columns = torch.round(
+                    context[..., CANDIDATE_CONTEXT_NAMES.index(
+                        "normalized_columns"
+                    )] * 4.0
+                )
+                identity_tiebreak = (
+                    rows * columns * 100.0 + rows * 10.0 + columns
+                )
+                predicted_safe = success_probability >= 0.5
+                fallback = success_probability == success_probability.max(
+                    dim=1, keepdim=True
+                ).values
+                eligible = torch.where(
+                    predicted_safe.any(dim=1, keepdim=True),
+                    predicted_safe, fallback,
+                )
+                discrete_cost = (
+                    predicted_ii_class * 10000.0 + identity_tiebreak
+                )
+                selection_cost = discrete_cost.masked_fill(
+                    ~eligible, 1_000_000.0,
+                )
             result = {
                 "success_logits": success_logits,
                 "success_probability": success_probability,
                 "predicted_residual": residual,
                 "predicted_ii": predicted_ii,
+                "lower_bound": lower_bound,
                 "expected_cost": expected_cost,
                 "selection_cost": selection_cost,
             }
@@ -759,6 +847,9 @@ if nn is not None:
             if routing_context is not None and ranking_logits is not None:
                 result["routing_context"] = routing_context
                 result["ranking_logits"] = ranking_logits
+            if ii_class_logits is not None and predicted_ii_class is not None:
+                result["ii_class_logits"] = ii_class_logits
+                result["predicted_ii_class"] = predicted_ii_class
             return result
 
 
@@ -797,6 +888,23 @@ def model2_loss(
         )
     else:
         residual_loss = logits.sum() * 0.0
+    discrete_ii_loss = logits.sum() * 0.0
+    if "ii_class_logits" in output and successful.any():
+        target_ii = (
+            output["lower_bound"] + residual_target
+        )[successful]
+        rounded_target_ii = target_ii.round()
+        class_count = output["ii_class_logits"].shape[-1]
+        if torch.any(torch.abs(target_ii - rounded_target_ii) > 1e-5):
+            raise ValueError("discrete-II targets must be integers")
+        if torch.any(
+            (rounded_target_ii < 1) | (rounded_target_ii > class_count)
+        ):
+            raise ValueError("discrete-II target is outside the class range")
+        discrete_ii_loss = functional.cross_entropy(
+            output["ii_class_logits"][successful],
+            rounded_target_ii.to(dtype=torch.long) - 1,
+        )
     eligible = optimal_ii_target.any(dim=1)
     if eligible.any():
         ranking_logits = output.get(
@@ -828,12 +936,14 @@ def model2_loss(
     total = (
         config.success_loss_weight * success_loss +
         config.residual_loss_weight * residual_loss +
-        config.listwise_loss_weight * listwise_loss
+        config.listwise_loss_weight * listwise_loss +
+        config.discrete_ii_loss_weight * discrete_ii_loss
     )
     return {
         "total": total,
         "success": success_loss,
         "residual": residual_loss,
+        "discrete_ii": discrete_ii_loss,
         "listwise": listwise_loss,
         "listwise_optimal_ii": optimal_ii_loss,
         "listwise_strict_tiebreak": strict_tiebreak_loss,

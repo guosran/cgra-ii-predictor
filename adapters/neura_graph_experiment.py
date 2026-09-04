@@ -667,15 +667,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--interaction-mode", choices=(
             "pooled", "cross_attention", "routing_set_attention",
+            "discrete_routing_set",
         ),
         default="pooled",
         help=("pooled reproduces Model 2; cross_attention performs "
               "candidate-conditioned operation-to-PE interaction; "
               "routing_set_attention adds route pressure and joint "
-              "candidate ranking."),
+              "candidate ranking; discrete_routing_set predicts integer II "
+              "classes and applies deterministic shape tie-breaking."),
     )
     parser.add_argument("--candidate-set-layers", type=int, default=2)
     parser.add_argument("--candidate-set-heads", type=int, default=4)
+    parser.add_argument("--discrete-ii-loss-weight", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -693,6 +696,7 @@ def main() -> int:
         interaction_mode=args.interaction_mode,
         candidate_set_layers=args.candidate_set_layers,
         candidate_set_heads=args.candidate_set_heads,
+        discrete_ii_loss_weight=args.discrete_ii_loss_weight,
     ).validate()
     manifest, queries = load_terminal_manifest(args.manifest)
     generator_versions = sorted({
@@ -726,6 +730,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v4"
+            if config.interaction_mode == "discrete_routing_set" else
             "cgra-ii-joint-graph-model-v3"
             if config.interaction_mode == "routing_set_attention" else
             "cgra-ii-joint-graph-model-v2"
@@ -738,11 +744,14 @@ def main() -> int:
             list(CROSS_ATTENTION_CONTEXT_NAMES)
             if config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
+                "discrete_routing_set",
             } else []
         ),
         "routing_context_names": (
             list(ROUTING_CONTEXT_NAMES)
-            if config.interaction_mode == "routing_set_attention" else []
+            if config.interaction_mode in {
+                "routing_set_attention", "discrete_routing_set",
+            } else []
         ),
         "state_dict": model.state_dict(),
         "training_manifest_sha256": sha256_file(args.manifest.resolve()),
@@ -785,6 +794,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "discrete_ii_routing_candidate_set_ranker_v4"
+            if config.interaction_mode == "discrete_routing_set" else
             "routing_aware_candidate_set_ranker_v3"
             if config.interaction_mode == "routing_set_attention" else
             "joint_directed_gnn_candidate_conditioned_dual_head_listwise_v2"
@@ -821,15 +832,23 @@ def main() -> int:
         "loss_contract": {
             "success": "binary_cross_entropy_all_declared_candidates",
             "ii": "smooth_l1_successful_candidates_only",
+            "discrete_ii": (
+                "cross_entropy_integer_ii_successful_candidates_only"
+                if config.interaction_mode == "discrete_routing_set" else None
+            ),
             "listwise": (
                 "optimal_ii_set_log_mass_plus_weighted_strict_tiebreak_cross_entropy"
             ),
             "selection_cost": (
+                "predicted_success_then_integer_ii_then_area_rows_columns"
+                if config.interaction_mode == "discrete_routing_set" else
                 "negative_candidate_set_ranking_logit"
                 if config.interaction_mode == "routing_set_attention" else
                 "p_success*predicted_ii+(1-p_success)*(mapper_ii_ceiling+1)"
             ),
             "ranking_prior": (
+                "negative_timeout_aware_expected_discrete_ii"
+                if config.interaction_mode == "discrete_routing_set" else
                 "negative_timeout_aware_expected_cost_plus_learned_set_adjustment"
                 if config.interaction_mode == "routing_set_attention" else None
             ),

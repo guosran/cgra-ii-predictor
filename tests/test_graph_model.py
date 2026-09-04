@@ -285,6 +285,58 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(float(distances[0, 0, 1]), 1.0)
         self.assertEqual(float(distances[0, 0, 3]), 2.0)
 
+    def test_discrete_ii_head_masks_lower_bound_and_tiebreaks_shape(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="discrete_routing_set",
+            candidate_set_layers=1, candidate_set_heads=4,
+        )
+        model = JointGraphShapeModel(config)
+        with torch.no_grad():
+            model.success_head.weight.zero_()
+            model.success_head.bias.fill_(10.0)
+            model.discrete_ii_head.weight.zero_()
+            model.discrete_ii_head.bias.zero_()
+        shapes = [make_cgra_graph(1, 1), make_cgra_graph(1, 2)]
+        context = torch.tensor([[
+            candidate_context(1, 1, 1, 4, 4),
+            candidate_context(1, 2, 1, 4, 4),
+        ]])
+        output = model([graph], shapes, context)
+        self.assertTrue(torch.equal(
+            output["predicted_ii_class"], torch.tensor([[4.0, 4.0]])
+        ))
+        self.assertTrue(torch.all(
+            output["ii_class_logits"][..., :3] < -1e20
+        ))
+        self.assertLess(
+            float(output["selection_cost"][0, 0]),
+            float(output["selection_cost"][0, 1]),
+        )
+
+        losses = model2_loss(
+            output, torch.tensor([[1.0, 1.0]]),
+            torch.tensor([[1.0, 1.0]]), torch.tensor([[True, True]]),
+            torch.tensor([0]), config,
+        )
+        self.assertGreater(float(losses["discrete_ii"]), 0.0)
+        losses["total"].backward()
+        gradient = model.discrete_ii_head.weight.grad
+        self.assertIsNotNone(gradient)
+        self.assertTrue(torch.any(gradient != 0))
+
+    def test_discrete_mode_requires_integer_ii_ceiling(self):
+        with self.assertRaisesRegex(ValueError, "integer mapper_ii_ceiling"):
+            Model2Config(
+                interaction_mode="discrete_routing_set",
+                mapper_ii_ceiling=20.5,
+            ).validate()
+
     def test_split_keeps_queries_intact_and_balances_families(self):
         graph = parse_neura_dfg(
             '%a = "neura.constant"() : () -> !neura.data<i32, i1>'
