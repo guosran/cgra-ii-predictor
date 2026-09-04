@@ -289,12 +289,36 @@ placement 辅助监督。它输出连续分布均值 `predicted_ii_mean`、整�
 概率分布、标准差与 mapper success 概率。训练仍可并行计算同一 DFG 的 16 个标签，
 但网络中没有跨候选信息流，单独推理与批量推理必须一致。
 
-首次 pointwise 基线使用已有数据和 placement weight 0.1，无需重新采集：
+首次 pointwise 基线 Job `1476240` 使用已有数据、placement weight 0.1 和 80 epoch。
+最佳 checkpoint 位于边界 epoch 80，结果为：
+
+| 指标 | validation | 固定 test |
+| --- | ---: | ---: |
+| 连续 expected-II MAE | 0.4470 | **0.4695** |
+| macro-query MAE | 0.4705 | 0.4991 |
+| floor 后 exact-II | 56.51% | **54.59%** |
+| floor 后 ±1-II | 92.41% | **90.85%** |
+| floor 后 MAE | 0.5229 | **0.5704** |
+| success accuracy / recall | 96.79% / 98.30% | 96.70% / 98.65% |
+
+测试集 mean signed error 为 -0.0112，整体近似无偏。连续 expected II 比 floor 后的
+数值 MAE 低 17.7%，因此前端解析模型应使用带小数的 `predicted_ii_mean`，而整数
+mode/floor 只作为诊断输出。所有 generator family 的连续 MAE 均优于 analytical
+lower bound；最难的是 predicated（0.7270），最好的是 recurrence（0.1768）。
+旧 candidate-set `1475561` 的 expected-II MAE 为 0.6373，因此新 pointwise 模型在
+满足真实接口约束的同时降低了 26.3%。该结果仍是已披露开发切分，不是新的 blind
+test。
+
+由于最佳点仍在 epoch 80 边界，下一轮运行 160 epoch 的 placement 0.1 与无
+placement 对照。脚本通过将 `PLACEMENT_SUPERVISION` 显式设为空关闭辅助监督：
 
 ```sh
 ssh factcluster
 cd /fact_home/yibozhang/cgra-ii-predictor
-sbatch cluster/factcluster_discrete_ii_pointwise_train.sbatch
+sbatch --export=ALL,EPOCHS=160,PATIENCE=160 \
+  cluster/factcluster_discrete_ii_pointwise_train.sbatch
+sbatch --export=ALL,EPOCHS=160,PATIENCE=160,PLACEMENT_SUPERVISION=,PLACEMENT_LOSS_WEIGHT=0 \
+  cluster/factcluster_discrete_ii_pointwise_train.sbatch
 ```
 
 记下输出的 job ID。低频查看队列：

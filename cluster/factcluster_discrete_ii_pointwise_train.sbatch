@@ -15,7 +15,7 @@ RUN_ROOT=/fact_data/yibozhang/cgra-ii-model2/runs
 PYTHON=/fact_home/yibozhang/.conda/envs/awq-vggt/bin/python
 MANIFEST=${DATA_ROOT}/training-manifest.json
 ADDITIONAL_MANIFEST=${DATA_ROOT}/motif-v7-formal-seed-20260906/corpus-manifest.json
-PLACEMENT_SUPERVISION=${DATA_ROOT}/placement-supervision.json
+PLACEMENT_SUPERVISION=${PLACEMENT_SUPERVISION-${DATA_ROOT}/placement-supervision.json}
 OUTPUT_DIR=${RUN_ROOT}/pointwise-v7-${SLURM_JOB_ID}
 EXPECTED_MANIFEST_SHA256=74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9
 EXPECTED_ADDITIONAL_SHA256=9ef9ee0ba648430c6a594a20f3e32fb55038af505560dfc2f9b91d613ea6b062
@@ -33,7 +33,6 @@ cd "${PROJECT_ROOT}"
 
 actual_manifest_sha256=$(sha256sum "${MANIFEST}" | awk '{print $1}')
 actual_additional_sha256=$(sha256sum "${ADDITIONAL_MANIFEST}" | awk '{print $1}')
-actual_placement_sha256=$(sha256sum "${PLACEMENT_SUPERVISION}" | awk '{print $1}')
 if [[ "${actual_manifest_sha256}" != "${EXPECTED_MANIFEST_SHA256}" ]]; then
   echo "training manifest hash mismatch" >&2
   exit 2
@@ -42,8 +41,20 @@ if [[ "${actual_additional_sha256}" != "${EXPECTED_ADDITIONAL_SHA256}" ]]; then
   echo "additional training manifest hash mismatch" >&2
   exit 2
 fi
-if [[ "${actual_placement_sha256}" != "${EXPECTED_PLACEMENT_SHA256}" ]]; then
-  echo "placement supervision hash mismatch" >&2
+placement_arguments=()
+actual_placement_sha256=none
+if [[ -n "${PLACEMENT_SUPERVISION}" ]]; then
+  actual_placement_sha256=$(sha256sum "${PLACEMENT_SUPERVISION}" | awk '{print $1}')
+  if [[ "${actual_placement_sha256}" != "${EXPECTED_PLACEMENT_SHA256}" ]]; then
+    echo "placement supervision hash mismatch" >&2
+    exit 2
+  fi
+  placement_arguments=(
+    --placement-supervision "${PLACEMENT_SUPERVISION}"
+    --placement-loss-weight "${PLACEMENT_LOSS_WEIGHT}"
+  )
+elif [[ "${PLACEMENT_LOSS_WEIGHT}" != "0" && "${PLACEMENT_LOSS_WEIGHT}" != "0.0" ]]; then
+  echo "placement loss requires placement supervision" >&2
   exit 2
 fi
 
@@ -71,8 +82,6 @@ nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --manifest "${MANIFEST}" \
   --additional-training-manifest "${ADDITIONAL_MANIFEST}" \
-  --placement-supervision "${PLACEMENT_SUPERVISION}" \
-  --placement-loss-weight "${PLACEMENT_LOSS_WEIGHT}" \
   --output-dir "${OUTPUT_DIR}" \
   --epochs "${EPOCHS}" \
   --patience "${PATIENCE}" \
@@ -83,4 +92,5 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --discrete-ii-loss-weight 1.0 \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \
+  "${placement_arguments[@]}" \
   --device cuda
