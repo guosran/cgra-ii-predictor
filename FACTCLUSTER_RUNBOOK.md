@@ -123,8 +123,14 @@ SHA-256: 74f19a30e3cd2ce843a8f50edd7b8ef97f50df0c952ec71c0fa72011de76a6f9
 
 它包含 v6 的 1500 个完整查询和快照时 v7 的 1058 个完整查询，共 2558 个
 DFG/query、40928 个候选；每个查询都有 `1x1` 到 `4x4` 的全部 16 个矩形 shape。
-v7 尚未完成的查询没有混入训练。由于标签和切分已经在开发过程中查看过，本轮只能
-作为探索性训练，不能当作冻结盲测结论。
+该快照建立时 v7 尚未完成，未完成查询没有混入其中。现在 v7 的 1500 个查询均已
+完成；为保持原 validation/test 身份不变，训练脚本通过
+`--additional-training-manifest` 只把快照中缺失的 442 个 v7 查询追加到 train，切分从
+`1790/383/385` 变为 `2232/383/385`。完整 v7 manifest 的 SHA-256 是
+`9ef9ee0ba648430c6a594a20f3e32fb55038af505560dfc2f9b91d613ea6b062`。
+
+由于标签和切分已经在开发过程中查看过，本轮只能作为探索性训练，不能当作冻结盲测
+结论。
 
 ## 5. 提交、查看和停止训练
 
@@ -196,6 +202,64 @@ Job `1474607` 对应代码提交
 
 这个 hybrid 目前是探索性诊断，不是已导出的单模型 artifact；部署时需要同时加载
 cross-attention 与 routing-set 两个模型，或后续把组合结果蒸馏到一个 ranker。
+
+离散 II 模型先预测 `1..20` 的成功候选 II 类别，再按 success 阈值、II 和确定性的
+area/rows/columns 次序选 shape。Job `1475159` 使用原 2558-query 快照、40 epoch、
+`success>=0.9` 与 `floor(expected II)`；测试 strict Top-1 为 38.95%（148/380），
+optimal-II 为 53.42%，selected-success 为 94.74%，timeout-penalized regret 为
+1.1868。strict-only 诊断 Job `1475233` 直接优化 oracle shape 交叉熵，80 epoch 的
+训练 loss 降到 0.399，但最佳 checkpoint 的 train/validation/test strict Top-1 仅为
+45.45%/34.82%/28.95%；直接 Top-1 loss 不能解决泛化问题。
+
+加入现成但此前漏用的 442 个 v7 train-only 查询后，Job `1475372`（40 epoch）测试
+strict Top-1 为 40.79%（155/380）。同配置延长至 80 epoch 的 Job `1475408` 最佳
+epoch 为 55，结果为：
+
+| 指标 | `1475159` 旧快照 40 epoch | `1475408` 全 v7 train-only 80 epoch |
+| --- | ---: | ---: |
+| strict Top-1 | 38.95% | 42.89%（163/380） |
+| optimal-II rate | 53.42% | 56.58% |
+| selected-success rate | 94.74% | 95.00% |
+| timeout-penalized regret | 1.1868 | 1.2553 |
+| train strict Top-1 | 49.69% | 62.41% |
+
+训练结果中存在显著转置搜索效应。固定测试集的 2280 个非方形转置候选对里，452 对
+compiled II 不同、63 对一边成功一边 timeout，共 22.6%。因此必须同时报告：
+
+- exact-oriented Top-1：`rows`、`columns` 均须与 oracle 完全一致；
+- transpose-equivalent Top-1：`RxC` 与 `CxR` 视为同一几何 shape。
+
+Job `1475408` 的两项指标分别为 42.89% 和 52.89%。当前 pinned mesh、双向链路和
+L 形内存 tile 集合在交换 x/y 后基本同构，因此 exact-oriented 指标还测量了 mapper
+枚举、剪枝和 timeout 行为，不能单独解释成硬件代价预测能力。
+
+现有成功候选的 `mapped.mlir` 已被压缩成 operation-to-PE 辅助监督：
+
+```text
+远端: /fact_data/yibozhang/cgra-ii-model2/current/placement-supervision.json
+SHA-256: 9ad9434c4207a77bb5b549b23485a973e7c0168ba4626edc17aa5c547a75aa43
+覆盖: 40041 个成功候选；固定 train 实际使用 29481 个
+```
+
+sidecar 可由 `adapters/neura_placement_supervision.py` 从 v6/v7 现有 mapper 输出重新
+生成。placement 标签只接到 train，validation/test 不使用。80-epoch 结果：
+
+| 指标 | 无 placement `1475408` | weight=0.1 `1475561` | weight=0.5 `1475562` |
+| --- | ---: | ---: | ---: |
+| exact-oriented Top-1 | 42.89% | **45.53%** | 41.32% |
+| transpose-equivalent Top-1 | 52.89% | **55.53%** | 51.32% |
+| optimal-II rate | 56.58% | **58.16%** | 57.37% |
+| selected-success rate | 95.00% | 93.42% | **97.11%** |
+| timeout-penalized regret | 1.2553 | 1.2289 | **1.0000** |
+| 成功候选 exact-II accuracy | 52.63% | **54.04%** | 45.94% |
+| 成功候选 ±1-II accuracy | 86.80% | **88.09%** | 81.67% |
+| 成功候选离散 II MAE | 0.6405 | **0.6230** | 0.7918 |
+
+若以 strict Top-1 为主，当前最好是 `1475561`；若以避免 timeout 和降低 regret 为主，
+`1475562` 更保守。精确 placement 权重过大会损害 II 校准。对 `1475561` 做
+validation-only quantile/UCB 搜索仍选择原来的 `success>=0.9 + floor(expected II)`；
+三模型 Borda ensemble 虽把 validation strict Top-1 提到 46.07%，测试只有 43.95%，
+不应采用。
 
 记下输出的 job ID。低频查看队列：
 
