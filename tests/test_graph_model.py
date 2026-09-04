@@ -185,6 +185,7 @@ class GraphModelTest(unittest.TestCase):
             hidden_dimension=16, message_passing_layers=1, dropout=0.0,
             interaction_mode="residual_pointwise",
             dfg_representation="route_expanded_v2",
+            dfg_message_mode="dual_mean",
         )
         model = JointGraphShapeModel(config).eval()
         context = torch.tensor([[candidate_context(1, 2, 1, 2, 2)]])
@@ -197,12 +198,15 @@ class GraphModelTest(unittest.TestCase):
         self.assertEqual(
             config.to_dict()["dfg_representation"], "route_expanded_v2"
         )
+        self.assertEqual(config.to_dict()["dfg_message_mode"], "dual_mean")
         with self.assertRaisesRegex(ValueError, "partial targets"):
             Model2Config(
                 interaction_mode="residual_pointwise",
                 dfg_representation="route_expanded_v2",
                 placement_loss_weight=0.1,
             ).validate()
+        with self.assertRaisesRegex(ValueError, "route_expanded_v2"):
+            Model2Config(dfg_message_mode="dual_mean").validate()
 
     def test_mapped_placements_align_materialized_operations_to_pes(self):
         source = """

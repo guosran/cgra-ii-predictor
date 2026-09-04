@@ -25,6 +25,15 @@ PATIENCE=${PATIENCE:-${EPOCHS}}
 PLACEMENT_LOSS_WEIGHT=${PLACEMENT_LOSS_WEIGHT:-0.1}
 INTERACTION_MODE=${INTERACTION_MODE:-discrete_pointwise}
 DFG_REPRESENTATION=${DFG_REPRESENTATION:-semantic_v1}
+DFG_MESSAGE_MODE=${DFG_MESSAGE_MODE:-sum}
+LEARNING_RATE=${LEARNING_RATE:-1e-3}
+WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
+BATCH_SIZE=${BATCH_SIZE:-32}
+HIDDEN_DIMENSION=${HIDDEN_DIMENSION:-64}
+MESSAGE_PASSING_LAYERS=${MESSAGE_PASSING_LAYERS:-3}
+DROPOUT=${DROPOUT:-0.10}
+LEARNING_RATE_SCHEDULE=${LEARNING_RATE_SCHEDULE:-none}
+MINIMUM_LEARNING_RATE=${MINIMUM_LEARNING_RATE:-1e-5}
 
 export PYTHONUNBUFFERED=1
 export PYTHONHASHSEED=20260906
@@ -75,10 +84,19 @@ echo "additional_manifest_sha256=${actual_additional_sha256}"
 echo "placement_supervision_sha256=${actual_placement_sha256}"
 echo "architecture=${INTERACTION_MODE}"
 echo "dfg_representation=${DFG_REPRESENTATION}"
+echo "dfg_message_mode=${DFG_MESSAGE_MODE}"
 echo "primary_metric=successful_candidate_continuous_ii_mae"
 echo "epochs=${EPOCHS}"
 echo "patience=${PATIENCE}"
 echo "placement_loss_weight=${PLACEMENT_LOSS_WEIGHT}"
+echo "learning_rate=${LEARNING_RATE}"
+echo "weight_decay=${WEIGHT_DECAY}"
+echo "batch_size=${BATCH_SIZE}"
+echo "hidden_dimension=${HIDDEN_DIMENSION}"
+echo "message_passing_layers=${MESSAGE_PASSING_LAYERS}"
+echo "dropout=${DROPOUT}"
+echo "learning_rate_schedule=${LEARNING_RATE_SCHEDULE}"
+echo "minimum_learning_rate=${MINIMUM_LEARNING_RATE}"
 echo "output_dir=${OUTPUT_DIR}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
@@ -88,11 +106,19 @@ srun --unbuffered "${PYTHON}" adapters/neura_graph_experiment.py \
   --output-dir "${OUTPUT_DIR}" \
   --epochs "${EPOCHS}" \
   --patience "${PATIENCE}" \
-  --batch-size 32 \
+  --batch-size "${BATCH_SIZE}" \
+  --learning-rate "${LEARNING_RATE}" \
+  --learning-rate-schedule "${LEARNING_RATE_SCHEDULE}" \
+  --minimum-learning-rate "${MINIMUM_LEARNING_RATE}" \
+  --weight-decay "${WEIGHT_DECAY}" \
   --threads "${SLURM_CPUS_PER_TASK}" \
   --seed 20260906 \
   --interaction-mode "${INTERACTION_MODE}" \
   --dfg-representation "${DFG_REPRESENTATION}" \
+  --dfg-message-mode "${DFG_MESSAGE_MODE}" \
+  --hidden-dimension "${HIDDEN_DIMENSION}" \
+  --message-passing-layers "${MESSAGE_PASSING_LAYERS}" \
+  --dropout "${DROPOUT}" \
   --discrete-ii-loss-weight 1.0 \
   --discrete-success-threshold 0.90 \
   --discrete-ii-decision floor \

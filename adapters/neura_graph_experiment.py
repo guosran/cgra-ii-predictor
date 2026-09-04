@@ -679,10 +679,16 @@ def train_model(
     *, epochs: int, batch_size: int, learning_rate: float,
     weight_decay: float, patience: int, seed: int, threads: int,
     device: Optional[torch.device] = None,
+    learning_rate_schedule: str = "none",
+    minimum_learning_rate: float = 1e-5,
 ) -> Tuple[JointGraphShapeModel, Dict[str, Any]]:
     config.validate()
     if epochs < 1 or batch_size < 1 or patience < 1 or threads < 1:
         raise ValueError("epochs, batch size, patience, and threads must be positive")
+    if learning_rate_schedule not in {"none", "cosine"}:
+        raise ValueError("learning rate schedule must be none or cosine")
+    if not 0.0 <= minimum_learning_rate <= learning_rate:
+        raise ValueError("minimum learning rate must be in [0, learning_rate]")
     torch.manual_seed(seed)
     torch.set_num_threads(threads)
     torch.use_deterministic_algorithms(True)
@@ -693,6 +699,12 @@ def train_model(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay,
     )
+    scheduler = (
+        torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=epochs, eta_min=minimum_learning_rate,
+        )
+        if learning_rate_schedule == "cosine" else None
+    )
     shapes = [(rows, columns) for rows in range(1, 5) for columns in range(1, 5)]
     shape_graphs = [make_cgra_graph(rows, columns) for rows, columns in shapes]
     best_state: Optional[Dict[str, torch.Tensor]] = None
@@ -701,6 +713,7 @@ def train_model(
     history = []
     epochs_without_improvement = 0
     for epoch in range(1, epochs + 1):
+        epoch_learning_rate = float(optimizer.param_groups[0]["lr"])
         model.train()
         training_loss: Dict[str, float] = defaultdict(float)
         training_queries = 0
@@ -745,6 +758,7 @@ def train_model(
             epochs_without_improvement += 1
         record = {
             "epoch": epoch,
+            "learning_rate": epoch_learning_rate,
             "training_loss": {
                 name: value / max(1, training_queries)
                 for name, value in sorted(training_loss.items())
@@ -762,6 +776,8 @@ def train_model(
             f"best_epoch={best_epoch}",
             flush=True,
         )
+        if scheduler is not None:
+            scheduler.step()
         if epochs_without_improvement >= patience:
             break
     if best_state is None:
@@ -778,6 +794,9 @@ def train_model(
             "maximum_validation_within_one_ii_accuracy",
             "minimum_validation_success_brier_score",
         ],
+        "learning_rate_schedule": learning_rate_schedule,
+        "initial_learning_rate": learning_rate,
+        "minimum_learning_rate": minimum_learning_rate,
         "history": history,
     }
 
@@ -898,6 +917,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument(
+        "--learning-rate-schedule", choices=("none", "cosine"),
+        default="none",
+    )
+    parser.add_argument("--minimum-learning-rate", type=float, default=1e-5)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--seed", type=int, default=DEFAULT_SPLIT_SEED)
@@ -943,6 +967,12 @@ def parse_args() -> argparse.Namespace:
               "loop-carried control feedback."),
     )
     parser.add_argument(
+        "--dfg-message-mode", choices=("sum", "mean", "dual_mean"),
+        default="sum",
+        help=("Aggregation used by the DFG encoder. dual_mean keeps separate "
+              "degree-normalized route-expanded and semantic channels."),
+    )
+    parser.add_argument(
         "--discrete-success-threshold", type=float, default=0.5,
     )
     parser.add_argument(
@@ -971,6 +1001,7 @@ def main() -> int:
         discrete_ii_decision=args.discrete_ii_decision,
         placement_loss_weight=args.placement_loss_weight,
         dfg_representation=args.dfg_representation,
+        dfg_message_mode=args.dfg_message_mode,
     ).validate()
     manifest, queries = load_terminal_manifest(
         args.manifest, config.dfg_representation,
@@ -1028,6 +1059,8 @@ def main() -> int:
         learning_rate=args.learning_rate, weight_decay=args.weight_decay,
         patience=args.patience, seed=args.seed, threads=args.threads,
         device=device,
+        learning_rate_schedule=args.learning_rate_schedule,
+        minimum_learning_rate=args.minimum_learning_rate,
     )
     shape_graphs = [
         make_cgra_graph(rows, columns)
@@ -1049,6 +1082,8 @@ def main() -> int:
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v10"
+            if config.dfg_message_mode == "dual_mean" else
             "cgra-ii-joint-graph-model-v9"
             if config.dfg_representation == "route_expanded_v2" else
             "cgra-ii-joint-graph-model-v8"
@@ -1135,6 +1170,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "dual_channel_route_residual_ii_pointwise_predictor_v10"
+            if config.dfg_message_mode == "dual_mean" else
             "route_expanded_residual_ii_pointwise_predictor_v9"
             if config.dfg_representation == "route_expanded_v2" else
             "placement_supervised_residual_ii_pointwise_predictor_v8"

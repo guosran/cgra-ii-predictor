@@ -122,6 +122,7 @@ class Model2Config:
     discrete_ii_decision: str = "map"
     placement_loss_weight: float = 0.0
     dfg_representation: str = "semantic_v1"
+    dfg_message_mode: str = "sum"
 
     def validate(self) -> "Model2Config":
         if self.hidden_dimension < 8:
@@ -153,6 +154,17 @@ class Model2Config:
         ):
             raise ValueError(
                 "route_expanded_v2 currently requires residual_pointwise"
+            )
+        if self.dfg_message_mode not in {"sum", "mean", "dual_mean"}:
+            raise ValueError(
+                "dfg_message_mode must be sum, mean, or dual_mean"
+            )
+        if (
+            self.dfg_message_mode == "dual_mean" and
+            self.dfg_representation != "route_expanded_v2"
+        ):
+            raise ValueError(
+                "dual_mean message passing requires route_expanded_v2"
             )
         if self.interaction_mode in {
             "routing_set_attention", "discrete_routing_set",
@@ -241,6 +253,8 @@ class Model2Config:
             values.pop("placement_loss_weight")
         if self.dfg_representation == "semantic_v1":
             values.pop("dfg_representation")
+        if self.dfg_message_mode == "sum":
+            values.pop("dfg_message_mode")
         return values
 
 
@@ -748,9 +762,13 @@ if nn is not None:
             self, scalar_feature_count: int, hidden_dimension: int,
             layers: int, dropout: float,
             node_type_count: int = len(OPERATION_TYPES),
+            message_mode: str = "sum",
         ) -> None:
             super().__init__()
+            if message_mode not in {"sum", "mean", "dual_mean"}:
+                raise ValueError("unsupported directed message mode")
             self.scalar_feature_count = scalar_feature_count
+            self.message_mode = message_mode
             self.type_embedding = nn.Embedding(
                 node_type_count, hidden_dimension, padding_idx=0,
             )
@@ -759,7 +777,12 @@ if nn is not None:
             )
             self.layers = nn.ModuleList([
                 nn.Sequential(
-                    nn.Linear(hidden_dimension * 3, hidden_dimension * 2),
+                    nn.Linear(
+                        hidden_dimension * (
+                            5 if message_mode == "dual_mean" else 3
+                        ),
+                        hidden_dimension * 2,
+                    ),
                     nn.GELU(),
                     nn.Dropout(dropout),
                     nn.Linear(hidden_dimension * 2, hidden_dimension),
@@ -788,10 +811,32 @@ if nn is not None:
             ), dim=-1))
             float_mask = mask.unsqueeze(-1).to(hidden.dtype)
             hidden = hidden * float_mask
+            semantic_adjacency = (
+                pad_semantic_adjacency(graphs, device)
+                if self.message_mode == "dual_mean" else None
+            )
+
+            def aggregate(edges: Tensor, states: Tensor) -> Tuple[Tensor, Tensor]:
+                incoming = torch.bmm(edges.transpose(1, 2), states)
+                outgoing = torch.bmm(edges, states)
+                if self.message_mode in {"mean", "dual_mean"}:
+                    incoming = incoming / edges.sum(
+                        dim=1, keepdim=False,
+                    ).clamp_min(1.0).unsqueeze(-1)
+                    outgoing = outgoing / edges.sum(
+                        dim=2, keepdim=False,
+                    ).clamp_min(1.0).unsqueeze(-1)
+                return incoming, outgoing
+
             for layer, normalization in zip(self.layers, self.normalizations):
-                incoming = torch.bmm(adjacency.transpose(1, 2), hidden)
-                outgoing = torch.bmm(adjacency, hidden)
-                update = layer(torch.cat((hidden, incoming, outgoing), dim=-1))
+                incoming, outgoing = aggregate(adjacency, hidden)
+                messages = [hidden, incoming, outgoing]
+                if semantic_adjacency is not None:
+                    semantic_incoming, semantic_outgoing = aggregate(
+                        semantic_adjacency, hidden,
+                    )
+                    messages.extend((semantic_incoming, semantic_outgoing))
+                update = layer(torch.cat(messages, dim=-1))
                 hidden = normalization(hidden + update) * float_mask
             return hidden, mask, adjacency
 
@@ -861,6 +906,7 @@ if nn is not None:
                     len(ROUTE_EXPANDED_OPERATION_TYPES)
                     if route_expanded else len(OPERATION_TYPES)
                 ),
+                message_mode=self.config.dfg_message_mode,
             )
             self.cgra_encoder = DirectedGraphEncoder(
                 len(CGRA_NODE_FEATURE_NAMES), hidden,
