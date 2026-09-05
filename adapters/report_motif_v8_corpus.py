@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit a motif-v8 corpus without inventing labels for censored candidates."""
+"""Audit a motif-v8/v9 corpus without inventing censored numeric labels."""
 
 from __future__ import annotations
 
@@ -84,8 +84,11 @@ def build_report(manifest_path: Path) -> Dict[str, Any]:
     manifest_path = manifest_path.resolve()
     root = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
-    if manifest.get("schema_version") != "cgra-ii-motif-corpus-v8":
-        raise ValueError("report requires a motif-v8 manifest")
+    corpus_schema = manifest.get("schema_version")
+    if corpus_schema not in {
+        "cgra-ii-motif-corpus-v8", "cgra-ii-motif-corpus-v9",
+    }:
+        raise ValueError("report requires a motif-v8 or motif-v9 manifest")
     protocol = manifest.get("shape_protocol")
     if not isinstance(protocol, Mapping) or protocol.get("protocol_id") != (
         "amoeba-static-rectangles-4x4-tiles-v1"
@@ -99,7 +102,7 @@ def build_report(manifest_path: Path) -> Dict[str, Any]:
         record.get("status") not in {"success", "censored"}
         for record in records
     ):
-        raise ValueError("motif-v8 audit requires a fully terminal manifest")
+        raise ValueError("motif-v8/v9 audit requires a fully terminal manifest")
 
     by_shape = defaultdict(list)
     by_family = defaultdict(list)
@@ -173,7 +176,15 @@ def build_report(manifest_path: Path) -> Dict[str, Any]:
     architecture = manifest.get("architecture", {})
     collection = manifest.get("collection", {})
     return {
-        "schema_version": "cgra-ii-motif-v8-corpus-audit-v1",
+        "schema_version": (
+            "cgra-ii-motif-v8-corpus-audit-v1"
+            if corpus_schema == "cgra-ii-motif-corpus-v8" else
+            "cgra-ii-motif-v9-corpus-audit-v1"
+        ),
+        **(
+            {"corpus_schema_version": corpus_schema}
+            if corpus_schema == "cgra-ii-motif-corpus-v9" else {}
+        ),
         "manifest": {
             "path": str(manifest_path),
             "sha256": sha256_file(manifest_path),

@@ -144,8 +144,12 @@ The remaining `test/multi-cgra/taskflow` cases need different treatment:
 - `attention` has eight static tasks. The op-count heuristic plus incremental
   exact packing reduces `8^8 = 16,777,216` candidates to 3,643; this is a
   constrained search result, not a full-space oracle.
-- `resnet` lowers to thirteen top-level affine tasks, making complete
-  enumeration `8^13 = 549,755,813,888`; it needs beam/incremental search.
+- `resnet` lowers to thirteen top-level affine tasks (ten after the earlier
+  memory-access streaming fusion). Its current lit path retains resource-aware
+  profiling and latency reporting, but disables resource-aware task fusion and
+  imports a fixed all-1x1 allocation so balance/fission cannot change resources.
+  If fusion/fission search is re-enabled, its mapper-backed search needs
+  shortlist/beam-style pruning rather than repeated unrestricted mapper calls.
 - `symbol-dynamic/*` has runtime trip counts and is outside the current static
   manifest contract.
 - `pipeline-interval/*`, `allocation-with-resource-binding`, and `replica-set`
@@ -153,19 +157,23 @@ The remaining `test/multi-cgra/taskflow` cases need different treatment:
   not II-prediction benchmarks.
 
 Accordingly, this report does not claim that the complete
-`test/multi-cgra/taskflow` directory has passed. `parallel-nested` and
+`test/multi-cgra/taskflow` directory passes. `parallel-nested` and
 `multi-nested` have complete pointwise prediction, exact physical-grid
 filtering, direct mapper replay, and oracle-regret results. `irregular-loop`
 now has an equivalent global-optimum result despite one non-critical censored
 query. `attention` has only the constrained result above.
 
-The built-in lit run was also limited to `irregular-loop` and `attention`.
-Both pass in the isolated Amoeba revision `2b7d75b`. In the user's current
-dirty Amoeba checkout, attention passes while irregular-loop reaches the end
-of resource-aware optimization and then fails FileCheck because the pass now
-chooses 1x1 for the fused task while the test expects 1x2. This allocation
-expectation drift is separate from the extractor/parser workaround, and the
-predictor work does not overwrite those in-progress Amoeba changes.
+The complete built-in taskflow lit directory was subsequently run. After the
+user-directed ResNet no-fusion/no-fission configuration, its latest result is 9 pass,
+6 fail, 0 timeout, and 1 unsupported. ResNet itself passes in 0.31 seconds.
+Five failures are only the missing `torch_mlir` environment dependency. In the
+user's current dirty Amoeba checkout, attention passes while irregular-loop
+reaches the end of resource-aware optimization and then fails FileCheck because
+the pass now chooses 1x1 for the fused task while the test expects 1x2. This
+allocation expectation drift is separate from the extractor/parser workaround,
+and the predictor work does not overwrite those in-progress Amoeba changes. Per
+the user's current scope, the five missing-`torch_mlir` failures and this one
+FileCheck drift are ignored; the remaining nine taskflow tests pass.
 
 ## Incremental candidate generation
 

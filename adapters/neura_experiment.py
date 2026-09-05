@@ -42,7 +42,7 @@ import numpy as np
 try:
     from adapters import (
         neura_motifs, neura_motifs_v4, neura_motifs_v5, neura_motifs_v6,
-        neura_motifs_v7, neura_motifs_v8,
+        neura_motifs_v7, neura_motifs_v8, neura_motifs_v9,
     )
 except ImportError:  # Running the file directly from its adapters directory.
     import neura_motifs  # type: ignore
@@ -51,6 +51,7 @@ except ImportError:  # Running the file directly from its adapters directory.
     import neura_motifs_v6  # type: ignore
     import neura_motifs_v7  # type: ignore
     import neura_motifs_v8  # type: ignore
+    import neura_motifs_v9  # type: ignore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +65,7 @@ MOTIF_PROTOCOLS = {
     neura_motifs_v6.GENERATOR_VERSION: neura_motifs_v6,
     neura_motifs_v7.GENERATOR_VERSION: neura_motifs_v7,
     neura_motifs_v8.GENERATOR_VERSION: neura_motifs_v8,
+    neura_motifs_v9.GENERATOR_VERSION: neura_motifs_v9,
 }
 STRICT_MOTIF_GENERATOR_VERSIONS = frozenset({
     neura_motifs_v4.GENERATOR_VERSION,
@@ -71,6 +73,7 @@ STRICT_MOTIF_GENERATOR_VERSIONS = frozenset({
     neura_motifs_v6.GENERATOR_VERSION,
     neura_motifs_v7.GENERATOR_VERSION,
     neura_motifs_v8.GENERATOR_VERSION,
+    neura_motifs_v9.GENERATOR_VERSION,
 })
 
 
@@ -1344,25 +1347,28 @@ def _candidate_from_manifest(
     if missing:
         raise ValueError("manifest candidate missing fields: " + ", ".join(missing))
     candidate_id = str(record["id"])
-    if str(record["generator_version"]) == neura_motifs_v8.GENERATOR_VERSION:
+    if str(record["generator_version"]) in {
+        neura_motifs_v8.GENERATOR_VERSION,
+        neura_motifs_v9.GENERATOR_VERSION,
+    }:
         missing_v8 = [
             field for field in MOTIF_V8_IMMUTABLE_FIELDS if field not in record
         ]
         if missing_v8:
             raise ValueError(
-                "motif-v8 candidate missing fields: " + ", ".join(missing_v8)
+                "motif-v8/v9 candidate missing fields: " + ", ".join(missing_v8)
             )
         mapper_shape = (int(record["rows"]), int(record["columns"]))
         if mapper_shape != (
             int(record["mapper_tile_rows"]), int(record["mapper_tile_cols"]),
         ):
-            raise ValueError("motif-v8 rows/columns are mapper-tile aliases")
+            raise ValueError("motif-v8/v9 rows/columns are mapper-tile aliases")
         physical_shape = (
             int(record["physical_cgra_rows"]),
             int(record["physical_cgra_cols"]),
         )
         if (physical_shape, mapper_shape) not in neura_motifs_v8.PHYSICAL_TO_MAPPER:
-            raise ValueError("motif-v8 physical/mapper shape mapping is invalid")
+            raise ValueError("motif-v8/v9 physical/mapper shape mapping is invalid")
     return neura_motifs.MotifCandidate(
         candidate_id=candidate_id,
         lineage=str(record["lineage"]),
@@ -5361,11 +5367,12 @@ def main() -> int:
         active_motif_protocol.GENERATOR_VERSION in {
             neura_motifs_v7.GENERATOR_VERSION,
             neura_motifs_v8.GENERATOR_VERSION,
+            neura_motifs_v9.GENERATOR_VERSION,
         } and
         not (args.motif_predeclare_only or args.motif_collect_only)
     ):
         raise SystemExit(
-            "motif-v7/v8 requires --motif-predeclare-only or "
+            "motif-v7/v8/v9 requires --motif-predeclare-only or "
             "--motif-collect-only; its labels may not enter Model 1"
         )
     if args.motif_predeclare_only:
@@ -5863,7 +5870,11 @@ def main() -> int:
         active_motif_protocol.GENERATOR_VERSION ==
         neura_motifs_v8.GENERATOR_VERSION
     )
-    hybrid_active = v5_active or v6_active or v7_active or v8_active
+    v9_active = (
+        active_motif_protocol.GENERATOR_VERSION ==
+        neura_motifs_v9.GENERATOR_VERSION
+    )
+    hybrid_active = v5_active or v6_active or v7_active or v8_active or v9_active
     if hybrid_active:
         training_samples = list(samples)
         training_selection = {

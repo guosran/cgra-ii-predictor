@@ -9,11 +9,94 @@ from unittest import mock
 
 from adapters import (
     neura_experiment, neura_motifs, neura_motifs_v4, neura_motifs_v5,
-    neura_motifs_v6, neura_motifs_v7, neura_motifs_v8,
+    neura_motifs_v6, neura_motifs_v7, neura_motifs_v8, neura_motifs_v9,
 )
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v9_large_operation_strata_are_disjoint_and_use_v8_shapes(self):
+        bases = neura_motifs_v9.make_base_specs(
+            6, seed=neura_motifs_v9.DEFAULT_SEED, motifs=("compute",)
+        )
+        self.assertEqual(
+            [base.operation_band for base in bases],
+            ["low", "medium", "high"] * 2,
+        )
+        for base in bases:
+            bounds = dict(zip(
+                ("low", "medium", "high"),
+                neura_motifs_v9.OPERATION_BANDS,
+            ))[base.operation_band]
+            self.assertGreaterEqual(base.operation_count, bounds[0])
+            self.assertLessEqual(base.operation_count, bounds[1])
+            self.assertEqual(base.generator_version, "motif-v9")
+            self.assertTrue(base.lineage.startswith("generated/motif-v9/"))
+        v8_hashes = {
+            neura_motifs_v8.canonical_dfg_sha256(
+                neura_motifs_v8.generate_motif_mlir(
+                    base.motif, base.operation_count, base.base_seed,
+                    base.mechanism_profile,
+                )
+            )
+            for base in neura_motifs_v8.make_base_specs(
+                6, seed=neura_motifs_v8.DEFAULT_SEED, motifs=("compute",)
+            )
+        }
+        v9_hashes = {
+            neura_motifs_v9.canonical_dfg_sha256(
+                neura_motifs_v9.generate_motif_mlir(
+                    base.motif, base.operation_count, base.base_seed,
+                    base.mechanism_profile,
+                )
+            )
+            for base in bases
+        }
+        self.assertTrue(v8_hashes.isdisjoint(v9_hashes))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v9.make_candidates((bases[0],), root)
+            manifest = neura_motifs_v9.make_manifest(
+                candidates, root, neura_motifs_v9.DEFAULT_SEED,
+                ("compute",), neura_motifs_v9.DEFAULT_SHAPES,
+            )
+        self.assertEqual(len(candidates), 8)
+        self.assertEqual(
+            manifest["schema_version"], "cgra-ii-motif-corpus-v9"
+        )
+        self.assertEqual(
+            manifest["generator"]["training_role"],
+            "training_only_augmentation",
+        )
+        self.assertEqual(
+            manifest["shape_protocol"]["physical_to_mapper"],
+            [
+                {
+                    "physical_cgra_rows": physical[0],
+                    "physical_cgra_cols": physical[1],
+                    "mapper_tile_rows": mapper[0],
+                    "mapper_tile_cols": mapper[1],
+                }
+                for physical, mapper in neura_motifs_v8.PHYSICAL_TO_MAPPER
+            ],
+        )
+        self.assertTrue(all(
+            row["generator_version"] == "motif-v9"
+            for row in manifest["candidates"]
+        ))
+
+    def test_v9_candidate_lineages_are_unique_across_families(self):
+        bases = neura_motifs_v9.make_base_specs(
+            2, motifs=("compute", "recurrence")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            candidates = neura_motifs_v9.make_candidates(
+                bases, Path(directory)
+            )
+        candidate_ids = [candidate.candidate_id for candidate in candidates]
+        self.assertEqual(len(candidate_ids), len(set(candidate_ids)))
+        for candidate in candidates:
+            self.assertIn(f"/{candidate.motif}/", candidate.lineage)
     def test_v8_declares_explicit_oriented_physical_and_mapper_shapes(self):
         base = neura_motifs_v8.make_base_specs(
             1, seed=neura_motifs_v8.DEFAULT_SEED, motifs=("compute",)

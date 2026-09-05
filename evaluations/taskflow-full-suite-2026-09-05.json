@@ -1,0 +1,139 @@
+{
+  "schema_version": "cgra-ii-amoeba-taskflow-suite-audit-v1",
+  "amoeba_checkout": {
+    "path": "/home/x/shiran/project/amoeba",
+    "revision": "f4357fdf48ac9ac1f51b1f41198c05422c927317",
+    "worktree_state": "dirty-user-checkout"
+  },
+  "suite": {
+    "path": "/home/x/shiran/project/amoeba/build/test/multi-cgra/taskflow",
+    "command": "/home/x/shiran/llvm-project/build/bin/llvm-lit -j 4 --timeout 120 --no-progress-bar -v /home/x/shiran/project/amoeba/build/test/multi-cgra/taskflow",
+    "llvm_lit_version": "20.1.0dev",
+    "testing_time_seconds": 120.16,
+    "discovered": 16,
+    "passed": 8,
+    "failed": 6,
+    "timed_out": 1,
+    "unsupported": 1,
+    "raw_log": {
+      "path": "/tmp/amoeba-multi-cgra-taskflow-lit-timeout120-20260905.log",
+      "sha256": "a1126c0cc5eb60d005c7217d0ee75c8edd6514ade9f541ceb4e7fb784b2c27db",
+      "bytes": 15934375
+    }
+  },
+  "complete_multi_cgra_followup": {
+    "path": "/home/x/shiran/project/amoeba/build/test/multi-cgra",
+    "total_lit_tests": 19,
+    "passed": 11,
+    "failed": 6,
+    "timed_out": 1,
+    "unsupported": 1,
+    "kernel_mapping": {
+      "command": "/home/x/shiran/llvm-project/build/bin/llvm-lit -j 3 --timeout 300 --no-progress-bar -v /home/x/shiran/project/amoeba/build/test/multi-cgra/kernel_mapping",
+      "testing_time_seconds": 6.24,
+      "discovered": 3,
+      "passed": 3
+    }
+  },
+  "passed_tests": [
+    "allocation-with-resource-binding/allocation-with-resource-binding.mlir",
+    "attention/attention.mlir",
+    "parallel-nested/parallel-nested.mlir",
+    "pipeline-interval/chain_reuse_cgra0.mlir",
+    "pipeline-interval/chain_reuse_cgra1.mlir",
+    "pipeline-interval/diamond_join.mlir",
+    "pipeline-interval/independent_temporal_pack.mlir",
+    "replica-set/replica-set.mlir"
+  ],
+  "failures": {
+    "environment_missing_torch_mlir": [
+      "symbol-dynamic/conv1d/conv1d.mlir",
+      "symbol-dynamic/cross_attention/cross_attention.mlir",
+      "symbol-dynamic/gcn/gcn.mlir",
+      "symbol-dynamic/mlp/mlp.mlir",
+      "symbol-dynamic/transformer_block/transformer_block.mlir"
+    ],
+    "expectation_drift": [
+      {
+        "test": "irregular-loop/irregular-loop.mlir",
+        "reason": "FileCheck expects fused shape 1x2/count 2; the current dirty checkout emits 1x1/count 1"
+      }
+    ],
+    "mapper_timeout": [
+      {
+        "test": "resnet/simple_resnet_tosa.mlir",
+        "suite_timeout_seconds": 120,
+        "standalone_timeout_seconds": 1800,
+        "standalone_result": "timed_out",
+        "standalone_exit_code": -9,
+        "interpretation": "the first six lit stages complete; the final compiled resource-aware pass repeatedly invokes the heuristic mapper because balance-skip-mapper=false, and mapper placement/routing backtracking exceeds 1800 seconds; this is not enumeration of the 8^N program-shape Cartesian product"
+      }
+    ]
+  },
+  "unsupported_tests": [
+    {
+      "test": "multi-nested/multi-nested.mlir",
+      "directive": "UNSUPPORTED: true",
+      "reason": "waiting for stable compiled_ii behavior in the Amoeba test"
+    }
+  ],
+  "no_fusion_fission_followup": {
+    "date": "2026-09-06",
+    "scope": "resnet resource-aware profiling and latency reporting",
+    "policy": "retain resource-aware-task-optimization, set disable-fusion=true, and import a fixed all-1x1 allocation so balance/fission cannot change cgra_count, replicas, or tiling; retain the earlier memory-access-streaming-fusion stage",
+    "amoeba_source_change": "/home/x/shiran/project/amoeba/test/multi-cgra/taskflow/resnet/simple_resnet_tosa.mlir",
+    "fixed_allocation": "/home/x/shiran/project/amoeba/test/multi-cgra/taskflow/resnet/no_fusion_allocation.json",
+    "profiled_lowering": {
+      "result": "passed",
+      "elapsed_seconds": 0.04,
+      "taskflow_tasks": 10,
+      "neura_kernels": 10,
+      "resource_aware_utilfused_tasks": 0,
+      "cgra_count_per_task": 1,
+      "replicas_per_task": 1,
+      "tiling_per_task": 1,
+      "estimator": "in-tree cost-model-analytical with use-predicted-ii=true",
+      "makespan_cycles": 2373902,
+      "interval_cycles": 2359301,
+      "accuracy_boundary": "analytical estimate only; not Job 1480204 point-ensemble output and not a mapper ground-truth label"
+    },
+    "latency_comparison": {
+      "legacy_compiled_fusion_fission": "timed out before publishing a complete makespan or interval",
+      "no_fusion_no_fission_analytical_makespan_cycles": 2373902,
+      "no_fusion_no_fission_analytical_interval_cycles": 2359301,
+      "relative_improvement": null,
+      "reason": "the legacy side has no complete latency result, so a percentage comparison would be fabricated"
+    },
+    "resnet_lit": {
+      "command": "/home/x/shiran/llvm-project/build/bin/llvm-lit -sv --timeout=300 /home/x/shiran/project/amoeba/build/test/multi-cgra/taskflow/resnet",
+      "testing_time_seconds": 0.31,
+      "wall_time_seconds": 0.39,
+      "discovered": 1,
+      "passed": 1
+    },
+    "taskflow_suite": {
+      "command": "/home/x/shiran/llvm-project/build/bin/llvm-lit -sv --timeout=300 /home/x/shiran/project/amoeba/build/test/multi-cgra/taskflow",
+      "testing_time_seconds": 3.17,
+      "wall_time_seconds": 3.27,
+      "discovered": 16,
+      "passed": 9,
+      "failed": 6,
+      "timed_out": 0,
+      "unsupported": 1
+    },
+    "current_complete_multi_cgra_aggregate": {
+      "total_lit_tests": 19,
+      "passed": 12,
+      "failed": 6,
+      "timed_out": 0,
+      "unsupported": 1,
+      "note": "combines the new 16-test taskflow run with the previously verified 3/3 kernel_mapping run"
+    },
+    "user_disposition": {
+      "ignore_missing_torch_mlir_failures": 5,
+      "ignore_irregular_loop_filecheck_drift": 1,
+      "current_in_scope_taskflow_tests": 9,
+      "current_in_scope_taskflow_passed": 9
+    }
+  }
+}

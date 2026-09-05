@@ -1,6 +1,6 @@
 # Fresh-agent handoff: multi-CGRA pointwise II predictor
 
-Last updated: 2026-09-05 17:35 (Asia/Hong_Kong)
+Last updated: 2026-09-06 10:18 (Asia/Hong_Kong)
 
 ## 0. 先读结论
 
@@ -14,16 +14,30 @@ II `1.883/1.946`，与真实 `3/2` 反序，导致合法 program top-1 实际 57
 而全局最优是 387。validation-only 选择的 pairwise ranking weight `0.1` 把两者预测
 改为 `1.605/1.418`，program top-1 变为 oracle-optimal `candidate-0`，regret 为 0。
 
-最终部署候选是 Job `1479107` 的六模型 uncertainty-gated ensemble；validation
-权重实际只保留 ranking 模型 `0.91774` 和原 residual 模型 `0.08226`。它的
-validation/test II MAE 为 `0.34095/0.38966`，`multi-nested` 预测/真实 top-1 为
-`359.952/387` cycles，误差 `-6.99%`、regret 0。不要换成 analytical：冻结 40 个
-小-DFG query 上它的 MAE 是 `1.675`，ranking 模型是 `1.063`；analytical 选中最优只
-是大量 tie 后的枚举顺序。
+当前点预测部署候选是 Job `1480204` 的 validation-only uncertainty-gated ensemble；
+它在原冻结 v8 validation/test 上的 II MAE 为 `0.33521/0.38050`，优于 Job
+`1479107` 的 `0.34095/0.38966`。为检测 `attention` 一类 OOD 低估，另保留
+validation-only q85 conservative policy：
+`max(point mean, structural expert mean + 0.5 * std)`。这不是替代点估计，而是用于
+触发 mapper replay 的风险上界。用户在 2026-09-06 明确选择普通 ensemble 保持
+shape 排序，默认 `predicted_ii` 不再被安全上界覆盖；上界单独存为
+`predicted_ii_upper`。不要把小 op 切到 analytical：冻结 40 个小-DFG query 上
+analytical MAE 是 `1.675`，ranking 模型是 `1.063`；analytical 选中最优只是大量 tie
+后的枚举顺序。
+
+用户在 2026-09-06 决定 ResNet 当前不做 resource-aware task fusion/fission。后续澄清
+不是跳过整个 `resource-aware-task-optimization`：该 pass 仍负责 profiling 和 latency
+汇总，但设置 `disable-fusion=true`，并导入固定的全 1x1 allocation，使 10 个 task 都为
+`cgra_count=replicas=tiling=1`，从而也不做 balance/fission。更早的
+`memory-access-streaming-fusion` 暂时保留。修改后 ResNet lit 从单独运行 1800 秒仍超时
+变为 `0.31s` 通过。
+用户随后明确表示当前不用处理 5 个缺 `torch_mlir` 的用例，也不用处理
+`irregular-loop` 的 FileCheck 结果；这 6 项不再作为当前任务 blocker。
 
 硬件侧仍使用整机 4x4 物理 CGRA 网格精确矩形装箱。不要重新收集正式 v8 数据；
-下一模型数据优先项是独立生成同协议 3--7 op 的 training-only DFG，而不是在冻结
-`multi-nested` 上拟合或继续堆模型参数。
+本轮已另建同协议 24--40 op 的 v9 training-only corpus，且没有使用 attention 标签。
+3--7 op 的独立 training-only corpus 仍是后续数据项，不能在冻结 `multi-nested` 上
+拟合。
 
 ## 1. 用户明确的语义
 
@@ -35,8 +49,8 @@ validation/test II MAE 为 `0.34095/0.38966`，`multi-nested` 预测/真实 top-
 - 所有 task 的有向矩形必须能够同时、无重叠地装入当前整机的 4x4 物理 CGRA
   网格。这是硬件合法性约束，不由神经网络学习。
 - Neura heuristic mapper 是真值来源；不替换 mapper。
-- 用户要求少 commit；本轮 v8/ranking/replay/taskflow 工作已凝聚为一个
-  `feat: add constrained multi-CGRA v8 replay` commit。
+- 用户要求少 commit；本轮 attention 加固工作已凝聚在
+  `feat: harden attention II estimation` commit。
 - 用户明确不喜欢高频轮询，只有用户询问或预计作业已经结束时才查一次。
 
 ## 2. 仓库与工作树
@@ -44,15 +58,18 @@ validation/test II MAE 为 `0.34095/0.38966`，`multi-nested` 预测/真实 top-
 ```text
 repository: /home/x/shiran/project/cgra-ii-predictor
 branch: main
-HEAD subject: feat: add constrained multi-CGRA v8 replay
-relation: main is ahead of origin/main by 10 commits
+HEAD subject: feat: harden attention II estimation
+relation: main is ahead of origin/main by 11 commits
 ```
 
 源码、精简 JSON 证据和文档已提交；工作树仍有意保留未跟踪的详细训练报告、mapper
 logs/scores 和用户原有文件。不要 `git clean`、`git reset`、checkout 覆盖或批量删除；先运行
-`git status --short`。不要修改 `/home/x/shiran/project/neura` 或
-`/home/x/shiran/project/amoeba`，除非用户明确扩大范围。若以后要移动 Neura PR
-内容，先读 `/home/x/shiran/project/neura-cgra-cost-model/PR_SPLIT.md`。
+`git status --short`。用户已明确允许在 Amoeba 中关闭 ResNet 的 resource-aware
+fusion/fission；当前修改了 `test/multi-cgra/taskflow/resnet/simple_resnet_tosa.mlir`
+并新增固定 allocation，形成 Amoeba commit `bd15f0d`；不要顺手覆盖 Amoeba 的其他
+dirty 修改。不要修改
+`/home/x/shiran/project/neura`，除非用户明确扩大范围。若以后要移动 Neura PR 内容，
+先读 `/home/x/shiran/project/neura-cgra-cost-model/PR_SPLIT.md`。
 
 未提交内容主要是：
 
@@ -66,7 +83,7 @@ evaluations/**/mapper/ and evaluations/**/scores.jsonl raw replay artifacts
 `adapters/analyze_pointwise_hybrid.py` 和
 `evaluations/model2-pointwise-hybrid-analysis-2026-09-05.json` 在当前工作前已是
 untracked；保留它们。不要为了本轮工作改写已有 test；最新完整回归是
-`python3 -m pytest -q`，234 tests passed；相关 py_compile、`bash -n` 和
+`python3 -m pytest -q`，243 tests passed；相关 py_compile、`bash -n` 和
 `git diff --check` 通过。
 
 ## 3. 正式 v8 数据协议
@@ -118,8 +135,8 @@ loss，不要因此立即重采集。
 
 ## 4. 当前冻结模型与指标
 
-最终部署候选是六模型 validation-only uncertainty-gated ensemble；实际非零权重只有
-ranking `0.917740` 和原 residual `0.082260`，analytical 及其余模型均为 0。报告：
+Job `1479107` 的六模型 ensemble 是本轮开始时的基线；实际非零权重只有 ranking
+`0.917740` 和原 residual `0.082260`，analytical 及其余模型均为 0。报告：
 
 ```text
 evaluations/pointwise-v8-1479107/ensemble.json
@@ -145,6 +162,20 @@ analytical hybrid 在新 ensemble 上由 validation 选择 `null`，即不切换
 per-family/per-shape 指标和审计见 `protocols/motif-v8.json`、
 `evaluations/pointwise-v8-ranking-loss-2026-09-05.json` 与
 `FACTCLUSTER_RUNBOOK.md`。
+
+最新点预测 ensemble 是 Job `1480204`，把独立 v9 large-op 训练模型作为候选后仍只用
+冻结 v8 validation 选权重和 uncertainty gate；attention 标签不参与训练或选择：
+
+```text
+validation/test continuous-II MAE:       0.335206 / 0.380498
+validation/test macro-query MAE:         0.446652 / 0.471926
+validation/test round exact:              74.66% / 70.88%
+validation/test round within-one:         95.27% / 94.30%
+weights: analytical 2.29e-8, v9 0.20509, residual 0.00570,
+         ranking 0.78921
+```
+
+精简证据在 `evaluations/attention-underprediction-2026-09-06.json`。
 
 ## 5. 当前训练到底是什么
 
@@ -308,8 +339,8 @@ irregular-loop:  generic zero-rank-store workaround; 464 grid-legal candidates;
                  23/24 mapper queries succeeded; all-1x1 actual/oracle 69;
                  one unrelated Task_0/16x4 query censored at 60 seconds
 attention:       op cap 16,777,216 -> 3,645; exact packing -> 3,643;
-                 constrained top-1 all-1x1; predicted/actual 17,402,649 /
-                 29,360,129 cycles; two Task_5 larger shapes censored
+                 constrained top-1 all-1x1; current point score 19,301,751;
+                 diagnostic upper/actual 29,543,107 / 29,360,129
 ```
 
 推理计时（L20）：
@@ -326,12 +357,29 @@ cached program scoring:                                  about 0.15 ms/program
 正确部署方式是先批量预测所有唯一 `(task, shape)` 并缓存，然后每个 program 只查表
 和取 max；不要为每个 program 重复跑 GNN。
 
-不要声称 `test/multi-cgra/taskflow` 全跑了：`parallel-nested`、`multi-nested` 已完整
-验收；`irregular-loop` 已用语义保持 workaround 完成全 shape 对照并证明剪枝候选为
-全局最优；`attention` 只完成约束空间 top-3，不是全空间 oracle。`resnet` 仍需约束驱动
-enumeration；`symbol-dynamic/*` 超出静态协议；`pipeline-interval/*`、
-`allocation-with-resource-binding`、`replica-set` 没有当前 pointwise pipeline 所需的
-独立 Neura kernel。
+整个 `test/multi-cgra/taskflow` 的 16 个 lit test 已全部实际发起。最初结果为 8 pass、
+6 fail、1 timeout、1 unsupported；`resnet` 120 秒超时，单独放宽到 1800 秒仍超时。
+用户决定暂时关闭 resource-aware fusion/fission 后，2026-09-06 重跑结果为
+9 pass、6 fail、0 timeout、1 unsupported，总测试时间 `3.17s`。5 个
+`symbol-dynamic/*` 仍只因环境缺 `torch_mlir` 失败；`irregular-loop` 的 pipeline 完成
+后因 dirty checkout 中 1x1/1x2 的 FileCheck 期望漂移失败；`multi-nested` 明确标为
+unsupported。ResNet 单独 lit 为 `0.31s`，通过。审计见
+`evaluations/taskflow-full-suite-2026-09-05.json`。
+用户明确要求忽略上述 5 个环境失败和 1 个 FileCheck 差异，因此当前关注的 9 个可运行
+用例为 9/9 通过。
+
+随后补跑整个父目录中此前未覆盖的 3 个 `kernel_mapping` test，fir/relu/loop-in-kernel
+均通过。因此当前完整 `test/multi-cgra` 共 19 项：12 pass、6 fail、0 timeout、
+1 unsupported。历史上 ResNet 不是卡在 `8^N` program candidate 枚举：前 6 个 lit
+stage 已完成，最后的 compiled `resource-aware-task-optimization` 因测试显式设置
+`balance-skip-mapper=false`，在 balance move 上反复进入 heuristic mapper；其内部
+placement/routing/register-hold 回溯在 1800 秒内仍未收敛。当前临时路径保留该 pass，
+但禁用 resource-aware fusion 并导入全 1x1 固定 allocation，保留 10 个 task 和 10 个
+Neura kernel，不生成 `_utilfused`，也不扩大任何 task 的资源。in-tree
+`cost-model-analytical + use-predicted-ii` 给出的 no-fusion/no-fission 估计为
+`makespan=2,373,902 cycles`、`interval=2,359,301 cycles`，直接阶段约 `0.04s`。这只是
+analytical estimate，不是 Job 1480204 普通 ensemble 或 mapper 真值；历史 compiled
+fusion/fission 流程没有跑完，因此没有完整旧 latency，不能计算 latency 改善百分比。
 
 ## 9. irregular-loop / attention follow-up
 
@@ -356,25 +404,46 @@ cap 的对照枚举出 464 个精确可装箱候选，24 个唯一 mapper query 
 7/8 在 30 秒 timeout；唯一成功的 Task_6/4x8 compiled II=2，与 4x4 相同。该证据
 支持把 cap 用作搜索预算，但不把它升级为硬件合法性定理。
 
+低估根因是 large-op application DFG 分布外加 point prediction 方差不足，不是 program
+的 startup/trip-count 聚合公式。为此新增独立 seed `20260913` 的 motif-v9：300 个
+24--40 op training-only DFG、2,400 个 shape query，真实 mapper 得到 130 success 和
+2,270 censored；没有把 timeout 填成 II，也没有使用 attention 标签。Job `1480202`
+训练出的单模型在冻结 v8 validation/test 上 MAE 为 `0.37105/0.38890`，对 attention
+的 program 低估从 `-40.73%` 缩到 `-27.43%`，仍不足以单独解决问题。
+
+Job `1480204` 的新点 ensemble 在冻结 v8 上改善为 `0.33521/0.38050`，但 attention
+仍低估 `-34.26%`。最终由冻结 validation 选择 q85、`alpha=0.5` 的 conservative
+policy；在 attention 上 8 个真实 II 的 MAE 为 `1.28392`，program score 为
+`29,543,107`，真实为 `29,360,129`，相对误差 `+0.623%`，top-1 仍是已有 mapper replay
+成功的 `candidate-0`。它的代价是冻结 validation/test 点 MAE 变为
+`0.56043/0.60833`，但 underprediction rate 从约 `28.4%/30.2%` 降到
+`15.7%/15.7%`。该上界实验说明它适合作为风险信号，但用户选择优先保证跨 shape
+排序：默认 program scoring 和报告精度均使用 Job `1480204` 的 conditional mean，
+q85 上界只触发 mapper replay；只有显式 `--use-upper-for-scoring` 才覆盖调度分数。
+
 `attention` 还暴露了前端问题：控制流 RPO flatten 可把 `neura.yield` 放到 loop-body
 操作之前，违反 terminator 约束；隔离 worktree 中测试的最小源修复是在 flatten 后把
 yield 移回 entry block 末尾，并补 `arith.cmpf -> neura.fcmp` lowering。补丁没有写入
 正式 Amoeba/Neura 工作树。完整证据和哈希在
 `evaluations/taskflow-static-followup-2026-09-05.json`。
 
-Amoeba 自带 lit 只补跑了这两个目录，不是整个 taskflow suite。隔离 commit
-`2b7d75b` 上两项均通过。用户当前 dirty Amoeba checkout 中 attention 通过，
-irregular-loop 的各 pipeline 实际执行完成，但最后 FileCheck 失败：当前
-resource-aware pass 给融合 Task_0_Task_1 选择 1x1，而测试仍期待 1x2。这是该 checkout
-的 allocation 期望漂移，不是零秩 store workaround 或模型失败；没有覆盖用户的
-Amoeba 修改来“修 test”。
+Amoeba 自带 lit 的整个 taskflow suite 后来已按上一节完整发起。隔离 commit
+`2b7d75b` 上 attention 与 irregular-loop 均通过。用户当前 dirty Amoeba checkout 中
+attention 通过，irregular-loop 的各 pipeline 实际执行完成，但最后 FileCheck 失败：
+当前 resource-aware pass 给融合 Task_0_Task_1 选择 1x1，而测试仍期待 1x2。这是该
+checkout 的 allocation 期望漂移，不是零秩 store workaround 或模型失败；没有覆盖
+用户的 Amoeba 修改来“修 test”。
 
 后续：
 
 1. 把 attention 的两处 Neura 修复连同 verifier regression test 送到 Neura，再用正式
    可复现 binary 替换临时 lowering 证据。
-2. 对 `resnet` 复用同一增量 op-cap + exact-packing enumerator；原始 `8^13` 不能先
-   物化，若剪后仍太大再加 validation-defined beam。
+2. `resnet` 当前已按用户决定保留 resource-aware profiling/latency 汇总，但临时关闭
+   fusion 并固定全 1x1 allocation，不再 timeout。
+   将来重新启用时，应把 balance 搜索改成普通模型排序、只对 shortlist 调 mapper；
+   卡点是 heuristic mapper 被重复调用，不是 analytical DSE 的 `8^13` 笛卡尔积。
+   若另跑独立 program candidate DSE，再复用增量 op-cap 与 exact packing，不能先
+   物化全空间。
 3. small-op 绝对校准仍是后续模型数据项：另建同协议 3--7 op training-only corpus，
    不要把冻结 40 query 放回训练，也不要直接切换 analytical lower bound。
 4. 最终 ensemble 的 0.5 success threshold recall 有约 4pp 回退；若进入部署，应用
@@ -392,12 +461,14 @@ Amoeba 修改来“修 test”。
   small-op predictor；40-query MAE 明显更差。
 - 不要声称 Amoeba 已 faithful replay frozen shape；当前独立 pipeline 才直接传递并
   验证 x/y，详细限制见 `docs/AMOEBA_REPLAY_INTERFACE.md`。
-- 不要声称整个 Amoeba `test/multi-cgra/taskflow` 已通过；静态全空间/最优性结果只有
-  `parallel-nested`、`multi-nested`、`irregular-loop`，`attention` 仍是约束搜索。
+- 可以声称整个 Amoeba `test/multi-cgra/taskflow` 已逐项发起，但不能声称全通过：在
+  临时关闭 ResNet resource-aware fusion/fission 后，最新结果是 9 pass、6 fail、
+  0 timeout、1 unsupported；失败归因见 full-suite 审计。
 - `irregular-loop` 的零秩 store workaround 仅匹配空 index list；不要把普通 indexed
   store 改写或丢弃 operand segment。
 - `attention` 的 op cap 是 search heuristic，精确 grid packing 才是硬约束；mapper
-  timeout 必须继续作为 censored。`resnet` 有 13 个 task、原始空间 8^13，不能先
-  完整物化。
+  timeout 必须继续作为 censored。不要把 ResNet 历史 lit timeout 归因给 `8^13`：
+  lit 没跑该笛卡尔积；只有未来独立 DSE 才会面对这个原始空间。当前 ResNet 保留
+  resource-aware profiling，但关闭 fusion 并固定 allocation。
 - shape 在 mapper 中仍是有向矩形；评估可以同时报告 transpose-equivalent 指标，但
   不要未经 mapper 证据把 4x12 与 12x4 的 compiled-II 标签强行改成相同数值。
