@@ -1,0 +1,361 @@
+{
+  "entries": [
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9916455459900618,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 1.4999632911745295,
+      "predicted_ii_std": 0.6298050894297662,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9939176184293482,
+      "mapper_tile_cols": 8,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.1768876827090446,
+      "predicted_ii_std": 0.862788324697845,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9961057185191639,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 8,
+      "predicted_ii": 2.193206977073727,
+      "predicted_ii_std": 0.6470265583236129,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9880196204871549,
+      "mapper_tile_cols": 12,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.7295342061518064,
+      "predicted_ii_std": 0.941356264646477,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9958651371026376,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 12,
+      "predicted_ii": 2.174847970922032,
+      "predicted_ii_std": 0.512323897020938,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9453208670644861,
+      "mapper_tile_cols": 16,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.165416898062176,
+      "predicted_ii_std": 0.9900938398929671,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9931354320673268,
+      "mapper_tile_cols": 8,
+      "mapper_tile_rows": 8,
+      "predicted_ii": 2.402868317522047,
+      "predicted_ii_std": 0.8772904718604956,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9890336176811252,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 16,
+      "predicted_ii": 2.148096927514376,
+      "predicted_ii_std": 0.705264638910984,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_0"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9904980422851141,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 1.6259100751283562,
+      "predicted_ii_std": 0.746214025058135,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9926252938674752,
+      "mapper_tile_cols": 8,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.2630274773270513,
+      "predicted_ii_std": 0.663466748732676,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9913533118951473,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 8,
+      "predicted_ii": 2.186791773267058,
+      "predicted_ii_std": 0.6029859770486948,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9934324998757187,
+      "mapper_tile_cols": 12,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.870651029212609,
+      "predicted_ii_std": 0.5300182706835249,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9913173471696419,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 12,
+      "predicted_ii": 2.2931362711114636,
+      "predicted_ii_std": 0.5290948139887034,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9889850638904704,
+      "mapper_tile_cols": 16,
+      "mapper_tile_rows": 4,
+      "predicted_ii": 2.683601311494695,
+      "predicted_ii_std": 0.7639210756871732,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.9921476690880585,
+      "mapper_tile_cols": 8,
+      "mapper_tile_rows": 8,
+      "predicted_ii": 2.6105176422481144,
+      "predicted_ii_std": 0.7060925714290416,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    },
+    {
+      "analytical_lower_bound": 1.0,
+      "ii_mean_source": "pointwise_ensemble",
+      "mapper_success_probability": 0.984525425999471,
+      "mapper_tile_cols": 4,
+      "mapper_tile_rows": 16,
+      "predicted_ii": 2.1675955563468476,
+      "predicted_ii_std": 0.5227654523071272,
+      "startup_cycles": 4.0,
+      "support_status": "supported",
+      "task": "Task_1"
+    }
+  ],
+  "function": "parallel_nested_example",
+  "namespace": "cgra-ii-v8-c5b41850a9266a450c089343",
+  "predictor_metadata": {
+    "analytical_hybrid": {
+      "selected_rule": {
+        "kind": "rec_gt_res"
+      },
+      "sha256": "e87c9f664f6a70d3c45ce6686ebb2afa1d9f6b711322df34145f0ac99936c5ba",
+      "validation_ensemble_mae": 0.3759594330146041,
+      "validation_selected_hybrid_mae": 0.37507974485908846
+    },
+    "analytical_input_sha256": "4e237ea3ec367538fc062f818751b35af22ada1c55e456c738ee8748bee7ba6b",
+    "analytical_provenance": {
+      "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+      "neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+      "rec_res_source": "neura-analysis-only-x-y-override-v1",
+      "startup_cycles_source": "frontend-semantic-dfg-unit-latency-critical-path-v1",
+      "task_dfg_sha256": {
+        "Task_0": "b975f1a2a01a1368c32e357d35a9f16542152c0d1aaf76a5f4cc76e771ea5ccc",
+        "Task_1": "c30c3eb09b4ed8802877ad048e6d5c34cf24291a718d842697f8e0f976a28778"
+      }
+    },
+    "candidate_manifest_sha256": "29103f5dd1003a4d60140598a84738fa7cb8e2bacbfb90af56d647a155c84d4a",
+    "checkpoints": {
+      "continuous128": {
+        "config_sha256": "2847552b75c259381a65ab5cd48535316f671a96562ecd246ad0e401ac70d71d",
+        "sha256": "8618741e8b60a6604f9c5abd56e5337d994a0efa1d20f651e162d7d9a8f0b944"
+      },
+      "continuous128_legacy4x4": {
+        "config_sha256": "a9f24cbbbf855ec940f429d5a8218ef9f85286f83c8f2aaa00c3aa3ed8c69d71",
+        "sha256": "e897d58b3c380075fefd2647cd5210364f10995a5ac15dc29785b94e32f73bc9"
+      },
+      "continuous160_struct": {
+        "config_sha256": "541e113d0062fe3c9597c3045a0d3f2def29da171fa35da260008f3d0fade206",
+        "sha256": "71bd5561318b11a74095e285242f002cc21fa15c2b90ed98fc862620ebc718e2"
+      },
+      "residual128": {
+        "config_sha256": "a762c484c11bbc8391f7320cea018fe0be6d58b8fa93bf3407ce6c1da40ac7f5",
+        "sha256": "621e2c9fbdad63f5bc44467fbf6483d6793a113b5482f590b47e406680f4883f"
+      },
+      "residual128_legacy4x4": {
+        "config_sha256": "498aa608e6b2c876b54b85431334fe4fd69bcd3ec98e16ef9c4efd29457a3ddf",
+        "sha256": "174ac08fa6c2493e8c6c6717c3d82b70f4cbb6fe04ebb7788daf626491b5c4a4"
+      }
+    },
+    "ensemble_mode": "uncertainty_gated",
+    "ensemble_report_sha256": "80dc4a04e49b19955cbe77b4b675ba7fd58fa9298ac79cef8cf85fb0249d676d",
+    "ensemble_weights": {
+      "analytical_lower_bound": 0.0,
+      "continuous128": 0.3107521894428279,
+      "continuous128_legacy4x4": 0.0023587624725368026,
+      "continuous160_struct": 0.0,
+      "residual128": 0.6698141861330701,
+      "residual128_legacy4x4": 0.017074861951565212
+    },
+    "feature_schema": "cgra-ii-amoeba-pointwise-features-v1",
+    "shape_protocol": {
+      "normalization": {
+        "bisection_links": 16,
+        "directed_links": 224,
+        "manhattan_distance": 18,
+        "mapper_cols": 16,
+        "mapper_rows": 16,
+        "mapper_tiles": 64,
+        "memory_tiles": 19
+      },
+      "orientation_equivalent": false,
+      "physical_to_mapper": [
+        {
+          "mapper_tile_cols": 4,
+          "mapper_tile_rows": 4,
+          "physical_cgra_cols": 1,
+          "physical_cgra_rows": 1
+        },
+        {
+          "mapper_tile_cols": 8,
+          "mapper_tile_rows": 4,
+          "physical_cgra_cols": 2,
+          "physical_cgra_rows": 1
+        },
+        {
+          "mapper_tile_cols": 4,
+          "mapper_tile_rows": 8,
+          "physical_cgra_cols": 1,
+          "physical_cgra_rows": 2
+        },
+        {
+          "mapper_tile_cols": 12,
+          "mapper_tile_rows": 4,
+          "physical_cgra_cols": 3,
+          "physical_cgra_rows": 1
+        },
+        {
+          "mapper_tile_cols": 4,
+          "mapper_tile_rows": 12,
+          "physical_cgra_cols": 1,
+          "physical_cgra_rows": 3
+        },
+        {
+          "mapper_tile_cols": 16,
+          "mapper_tile_rows": 4,
+          "physical_cgra_cols": 4,
+          "physical_cgra_rows": 1
+        },
+        {
+          "mapper_tile_cols": 8,
+          "mapper_tile_rows": 8,
+          "physical_cgra_cols": 2,
+          "physical_cgra_rows": 2
+        },
+        {
+          "mapper_tile_cols": 4,
+          "mapper_tile_rows": 16,
+          "physical_cgra_cols": 1,
+          "physical_cgra_rows": 4
+        }
+      ],
+      "protocol_id": "amoeba-static-rectangles-4x4-tiles-v1",
+      "shape_scope": "static_rectangular_only",
+      "supported_mapper_tile_shapes": [
+        {
+          "cols": 4,
+          "rows": 4
+        },
+        {
+          "cols": 8,
+          "rows": 4
+        },
+        {
+          "cols": 4,
+          "rows": 8
+        },
+        {
+          "cols": 12,
+          "rows": 4
+        },
+        {
+          "cols": 4,
+          "rows": 12
+        },
+        {
+          "cols": 16,
+          "rows": 4
+        },
+        {
+          "cols": 8,
+          "rows": 8
+        },
+        {
+          "cols": 4,
+          "rows": 16
+        }
+      ]
+    },
+    "uncertainty_exponent": 6.0,
+    "uncertainty_scales": {
+      "analytical_lower_bound": 1.0,
+      "continuous128": 0.5371257066726685,
+      "continuous128_legacy4x4": 0.8280578255653381,
+      "continuous160_struct": 0.8118342161178589,
+      "residual128": 0.5336180031299591,
+      "residual128_legacy4x4": 0.8255637288093567
+    }
+  },
+  "schema_version": "amoeba-task-shape-cost-v2"
+}

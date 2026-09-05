@@ -1,5 +1,6 @@
 import importlib.util
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -16,8 +17,10 @@ class GraphModelTest(unittest.TestCase):
     def setUp(self):
         global torch
         global CandidateRecord, QueryRecord, resolve_device, split_queries
+        global load_terminal_manifest
         global add_training_only_queries, attach_placement_supervision
         global subsample_training_queries
+        global shape_grouped_query_batches
         global batch_placement_targets, _validation_score
         global JointGraphShapeModel, Model2Config, candidate_context
         global censored_top1_metrics, make_cgra_graph, model2_loss
@@ -27,13 +30,16 @@ class GraphModelTest(unittest.TestCase):
         global ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES
         global parse_neura_mapped_placements
         global frozen_adapter, neura_motifs_v7
+        global AMOEBA_STATIC_PROTOCOL, AMOEBA_STATIC_SHAPE_PROTOCOL
         import torch
         from adapters import neura_graph_frozen as frozen_adapter
         from adapters import neura_motifs_v7
         from adapters.neura_graph_experiment import (
             CandidateRecord, QueryRecord, add_training_only_queries,
             attach_placement_supervision, batch_placement_targets,
-            resolve_device, split_queries, subsample_training_queries,
+            load_terminal_manifest, resolve_device, split_queries,
+            shape_grouped_query_batches,
+            subsample_training_queries,
             _validation_score,
         )
         from cgra_ii_predictor.graph_model import (
@@ -44,6 +50,9 @@ class GraphModelTest(unittest.TestCase):
             parse_neura_route_expanded_dfg,
             parse_neura_mapped_placements,
             ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES,
+        )
+        from cgra_ii_predictor.shape_protocol import (
+            AMOEBA_STATIC_PROTOCOL, AMOEBA_STATIC_SHAPE_PROTOCOL,
         )
 
     def test_device_selection_never_silently_ignores_explicit_cuda(self):
@@ -71,6 +80,40 @@ class GraphModelTest(unittest.TestCase):
         higher_exact = evaluation(0.6, 0.5, 0.5, 0.9)
         self.assertLess(
             _validation_score(lower_mae), _validation_score(higher_exact)
+        )
+
+    def test_partial_shape_training_queries_are_batched_separately(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        """)
+
+        def candidate(identity, rows, columns):
+            return CandidateRecord(
+                candidate_id=identity, ranking_query_id=identity,
+                rows=rows, columns=columns, rec_mii=1, res_mii=1,
+                lower_bound=1, status="success", compiled_ii=1,
+            )
+
+        queries = [
+            QueryRecord("full", "family", graph, (
+                candidate("full-4x4", 4, 4),
+                candidate("full-4x8", 4, 8),
+            )),
+            QueryRecord("partial-a", "family", graph, (
+                candidate("partial-a", 4, 4),
+            )),
+            QueryRecord("partial-b", "family", graph, (
+                candidate("partial-b", 4, 4),
+            )),
+        ]
+        batches = list(shape_grouped_query_batches(
+            queries, batch_size=8, seed=7,
+        ))
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(
+            sorted({len(query.candidates) for query in batch}.pop()
+                   for batch in batches),
+            [1, 2],
         )
 
     def test_frozen_evaluator_loads_weights_without_constructing_optimizer(self):
@@ -301,6 +344,21 @@ class GraphModelTest(unittest.TestCase):
             (0, 1, 1),
         )
 
+    def test_mapped_placements_accept_v8_wide_mapper_shape(self):
+        source = """
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        """
+        mapped = """
+        %0 = "neura.constant"() {mapping_locs = [{resource = "tile", x = 15 : i32, y = 3 : i32}]} : () -> !neura.data<i32, i1>
+        """
+        self.assertEqual(
+            parse_neura_mapped_placements(
+                mapped, parse_neura_dfg(source), 4, 16,
+                AMOEBA_STATIC_SHAPE_PROTOCOL,
+            ),
+            (63,),
+        )
+
     def test_oriented_shape_context_and_graph_are_not_transpose_aliases(self):
         two_by_three = candidate_context(2, 3, 1, 4, 4)
         three_by_two = candidate_context(3, 2, 1, 4, 4)
@@ -311,6 +369,155 @@ class GraphModelTest(unittest.TestCase):
             make_cgra_graph(2, 3).node_features,
             make_cgra_graph(3, 2).node_features,
         )
+
+    def test_amoeba_shape_protocol_builds_real_meshes_up_to_64_pes(self):
+        for rows, columns in AMOEBA_STATIC_PROTOCOL.mapper_shapes:
+            graph = make_cgra_graph(
+                rows, columns, AMOEBA_STATIC_SHAPE_PROTOCOL,
+            )
+            context = candidate_context(
+                rows, columns, 1, 2, 2, 20,
+                AMOEBA_STATIC_SHAPE_PROTOCOL,
+            )
+            self.assertEqual(len(graph.node_types), rows * columns)
+            self.assertLessEqual(context[3], 1.0)
+            self.assertLessEqual(context[4], 1.0)
+            self.assertLessEqual(context[5], 1.0)
+            self.assertLessEqual(context[7], 1.0)
+            self.assertLessEqual(context[8], 1.0)
+            self.assertLessEqual(context[9], 1.0)
+        self.assertEqual(
+            len(make_cgra_graph(
+                8, 8, AMOEBA_STATIC_SHAPE_PROTOCOL,
+            ).node_types),
+            64,
+        )
+        with self.assertRaisesRegex(ValueError, "outside finite protocol"):
+            make_cgra_graph(4, 5, AMOEBA_STATIC_SHAPE_PROTOCOL)
+
+    def test_peak_load_normalization_is_shape_protocol_versioned(self):
+        def normalized_peak(config):
+            model = JointGraphShapeModel(config)
+            hidden = config.hidden_dimension
+            _, context, _, _ = model._candidate_conditioned_interaction(
+                torch.zeros((1, 1, hidden)),
+                torch.ones((1, 1), dtype=torch.bool),
+                torch.zeros((1, 16, hidden)),
+                torch.ones((1, 16), dtype=torch.bool),
+            )
+            return float(context[0, 0, 1])
+
+        legacy = Model2Config(interaction_mode="residual_pointwise")
+        amoeba = Model2Config(
+            interaction_mode="residual_pointwise",
+            shape_protocol=AMOEBA_STATIC_SHAPE_PROTOCOL,
+            routing_peak_normalization="protocol_max_tiles_v1",
+        )
+        self.assertAlmostEqual(normalized_peak(legacy), 1.0 / 16.0)
+        self.assertAlmostEqual(normalized_peak(amoeba), 1.0 / 64.0)
+
+        legacy_amoeba_artifact = Model2Config(
+            interaction_mode="residual_pointwise",
+            shape_protocol=AMOEBA_STATIC_SHAPE_PROTOCOL,
+        )
+        self.assertAlmostEqual(
+            normalized_peak(legacy_amoeba_artifact), 1.0 / 16.0,
+        )
+        self.assertNotIn(
+            "routing_peak_normalization", legacy_amoeba_artifact.to_dict(),
+        )
+        self.assertEqual(
+            amoeba.to_dict()["routing_peak_normalization"],
+            "protocol_max_tiles_v1",
+        )
+
+    def test_v8_manifest_candidate_order_matches_shape_graph_protocol(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            source = root / "input.mlir"
+            source.write_text(
+                '%0 = "neura.constant"() : () -> !neura.data<i32, i1>\n'
+            )
+            source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+            mapper_to_physical = {
+                mapper: physical
+                for physical, mapper in AMOEBA_STATIC_PROTOCOL.physical_to_mapper
+            }
+            candidates = []
+            for rows, columns in reversed(AMOEBA_STATIC_PROTOCOL.mapper_shapes):
+                physical = mapper_to_physical[(rows, columns)]
+                candidates.append({
+                    "candidate_id": f"q/{rows}x{columns}",
+                    "ranking_query_id": "q",
+                    "generator_family": "test",
+                    "source_path": source.name,
+                    "source_sha256": source_sha,
+                    "status": "censored",
+                    "rows": rows,
+                    "columns": columns,
+                    "mapper_tile_rows": rows,
+                    "mapper_tile_cols": columns,
+                    "physical_cgra_rows": physical[0],
+                    "physical_cgra_cols": physical[1],
+                    "rec_mii": 1,
+                    "res_mii": 1,
+                    "lower_bound": 1,
+                })
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps({
+                "shape_protocol": AMOEBA_STATIC_PROTOCOL.to_dict(),
+                "candidates": candidates,
+            }))
+            _, queries = load_terminal_manifest(
+                manifest_path, "semantic_v1", AMOEBA_STATIC_SHAPE_PROTOCOL,
+            )
+            self.assertEqual(
+                tuple(
+                    (candidate.rows, candidate.columns)
+                    for candidate in queries[0].candidates
+                ),
+                AMOEBA_STATIC_PROTOCOL.mapper_shapes,
+            )
+
+    def test_amoeba_pointwise_prediction_is_batch_independent(self):
+        graph = parse_neura_dfg("""
+        %a = "neura.constant"() : () -> !neura.data<i32, i1>
+        %b = "neura.constant"() : () -> !neura.data<i32, i1>
+        %c = "neura.add"(%a, %b) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        """)
+        config = Model2Config(
+            hidden_dimension=16, message_passing_layers=1, dropout=0.0,
+            interaction_mode="residual_pointwise",
+            shape_protocol=AMOEBA_STATIC_SHAPE_PROTOCOL,
+        )
+        model = JointGraphShapeModel(config).eval()
+        shapes = [
+            make_cgra_graph(rows, cols, config.shape_protocol)
+            for rows, cols in AMOEBA_STATIC_PROTOCOL.mapper_shapes
+        ]
+        contexts = [
+            candidate_context(
+                rows, cols, 1, 2, 2, 20, config.shape_protocol,
+            )
+            for rows, cols in AMOEBA_STATIC_PROTOCOL.mapper_shapes
+        ]
+        with torch.no_grad():
+            batched = model([graph], shapes, torch.tensor([contexts]))
+            for index, (shape, context) in enumerate(zip(shapes, contexts)):
+                point = model([graph], [shape], torch.tensor([[context]]))
+                for key in (
+                    "predicted_ii", "predicted_ii_std",
+                    "success_probability",
+                ):
+                    self.assertTrue(torch.allclose(
+                        batched[key][0, index], point[key][0, 0],
+                        atol=1e-6, rtol=1e-6,
+                    ), key)
+        self.assertEqual(
+            config.to_dict()["shape_protocol"],
+            AMOEBA_STATIC_SHAPE_PROTOCOL,
+        )
+        self.assertNotIn("shape_protocol", Model2Config().to_dict())
 
     def test_censored_top1_never_imputes_a_numeric_ii(self):
         rows = [[

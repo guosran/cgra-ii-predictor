@@ -9,11 +9,53 @@ from unittest import mock
 
 from adapters import (
     neura_experiment, neura_motifs, neura_motifs_v4, neura_motifs_v5,
-    neura_motifs_v6, neura_motifs_v7,
+    neura_motifs_v6, neura_motifs_v7, neura_motifs_v8,
 )
 
 
 class MotifCorpusTest(unittest.TestCase):
+    def test_v8_declares_explicit_oriented_physical_and_mapper_shapes(self):
+        base = neura_motifs_v8.make_base_specs(
+            1, seed=neura_motifs_v8.DEFAULT_SEED, motifs=("compute",)
+        )[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = neura_motifs_v8.make_candidates((base,), root)
+            manifest = neura_motifs_v8.make_manifest(
+                candidates, root, neura_motifs_v8.DEFAULT_SEED,
+                ("compute",), neura_motifs_v8.DEFAULT_SHAPES,
+            )
+        self.assertEqual(len(candidates), 8)
+        self.assertEqual(
+            manifest["schema_version"], "cgra-ii-motif-corpus-v8"
+        )
+        self.assertEqual(
+            manifest["shape_protocol"]["protocol_id"],
+            neura_motifs_v8.SHAPE_PROTOCOL_ID,
+        )
+        observed = []
+        for row in manifest["candidates"]:
+            physical = (
+                row["physical_cgra_rows"], row["physical_cgra_cols"],
+            )
+            mapper = (row["mapper_tile_rows"], row["mapper_tile_cols"])
+            self.assertEqual(mapper, (row["rows"], row["columns"]))
+            self.assertEqual(
+                row["cache_identity"],
+                f"{row['canonical_dfg_sha256']}:{mapper[0]}x{mapper[1]}",
+            )
+            self.assertNotIn("compiled_ii", row)
+            observed.append((physical, mapper))
+        self.assertEqual(tuple(observed), neura_motifs_v8.PHYSICAL_TO_MAPPER)
+        self.assertIn(((1, 2), (4, 8)), observed)
+        self.assertIn(((2, 1), (8, 4)), observed)
+
+    def test_v8_rejects_partial_or_out_of_domain_shape_blocks(self):
+        with self.assertRaisesRegex(ValueError, "complete ordered eight"):
+            neura_motifs_v8.shape_blocks(((4, 4), (4, 8)))
+        with self.assertRaisesRegex(ValueError, "outside the finite"):
+            neura_motifs_v8.parse_shapes(("1x2",))
+
     def test_v7_predeclaration_attestation_matches_frozen_sources_and_model(self):
         project_root = Path(neura_motifs_v7.__file__).resolve().parents[1]
         attestation = json.loads((

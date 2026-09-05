@@ -1,0 +1,38 @@
+{
+  "schema_version": "cgra-ii-amoeba-dse-coverage-summary-v1",
+  "function": "multi_nested_example",
+  "artifacts": {
+    "candidate_manifest_sha256": "04f50ec7198191209fb2eb6d8c4472d88ed5fe5d821757a8d733db73e2d8e9d4",
+    "cost_catalog_sha256": "3738c2f94f706a4be9ab30109726aca350c5605b5adcaf8e2e6965a015b99a44",
+    "score_jsonl_sha256": "a854ce7169d927fc21c6059e42ff327c5136b7e9f55968a38ae07bf9947fbfe5",
+    "scored_mlir_sha256": "65a2c29a453dbe5265159e9c6f0605bbf64b7ef41167a968844f0cd45d45d6b7",
+    "predictor_timing_sha256": "dd15ad2fdf388bf1ce8245b6d2094eed9ffebecf979345398a8118f31bd16a74",
+    "amoeba_scorer_sha256": "b6dffbef35b5a5780b59c8a450b68a6d04c02a41f160008608947fbc64d78c81"
+  },
+  "coverage": {
+    "candidate_count": 32768,
+    "scored_count": 32768,
+    "valid_score_count": 32768,
+    "unique_task_shape_query_count": 40,
+    "cache": {
+      "entries": 40,
+      "misses": 40,
+      "hits": 163800
+    },
+    "top_k_emitted_after_scored_count": 32768
+  },
+  "shortlist": [
+    {"rank": 0, "candidate_id": "candidate-8448"},
+    {"rank": 1, "candidate_id": "candidate-8449"},
+    {"rank": 2, "candidate_id": "candidate-8450"}
+  ],
+  "timing": {
+    "amoeba_scorer_ms": 4890.0,
+    "predictor_report": "multi-nested-predictor-timing.json"
+  },
+  "oracle": null,
+  "mapper_replay": {
+    "status": "blocked_materialized_shape_not_preserved",
+    "actual_mapper_call_reduction_fraction": null
+  }
+}

@@ -1,0 +1,441 @@
+{
+  "artifacts": {
+    "architecture_path": "/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+    "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "candidate_manifest_path": "/tmp/amoeba-v8-multi-nested-candidates.jsonl",
+    "candidate_manifest_sha256": "04f50ec7198191209fb2eb6d8c4472d88ed5fe5d821757a8d733db73e2d8e9d4",
+    "cost_catalog_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/multi-nested-costs.json",
+    "cost_catalog_sha256": "3738c2f94f706a4be9ab30109726aca350c5605b5adcaf8e2e6965a015b99a44",
+    "neura_opt_path": "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+    "neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+    "scores_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/scores.jsonl",
+    "scores_sha256": "c6a71a3f60a2a746c10ba9bbd3a398281cf9f0ea8b50cd4471f79c29168c50b6",
+    "task_dfg_paths": {
+      "Task_0": "/tmp/amoeba-v8-multi-nested-dfgs/Task_0.mlir",
+      "Task_1": "/tmp/amoeba-v8-multi-nested-dfgs/Task_1.mlir",
+      "Task_2": "/tmp/amoeba-v8-multi-nested-dfgs/Task_2.mlir",
+      "Task_3": "/tmp/amoeba-v8-multi-nested-dfgs/Task_3.mlir",
+      "Task_4": "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir"
+    },
+    "task_dfg_sha256": {
+      "Task_0": "ad76a23e66cd32b9a2fa1c4bc8902424f5bc8c0ce5975e13dc4c0d2b90dd9498",
+      "Task_1": "2afb9a701108e6b0fd910b9ce71f53b2c0f304cfa30ec54b667060e6da96cfba",
+      "Task_2": "5aa2e2ffd4abad362c6ff91770e62bf46c80d34e425387c80b0441ccd3fdf584",
+      "Task_3": "9e79f2cabee37f245d95ee6c2b01a714abf077b9c1f7eb27a2e9495f6003b8cb",
+      "Task_4": "85620fef1f5356220325d06167c08560c8dd8814f0f23dc24b170b0f5740b0f3"
+    }
+  },
+  "configuration": {
+    "mapper_strategy": "heuristic",
+    "mapper_timeout_seconds": 300.0,
+    "neura_source_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "score_model": "static-shape-compute-bottleneck-v2",
+    "shape_replay": "direct_x_tiles_y_tiles_override",
+    "top_k": 3,
+    "top_k_requested": 3
+  },
+  "created_at": "2026-09-05T07:03:45.940104+00:00",
+  "function": "_Z21pureNestedLoopExamplePA8_A6_iPA8_A5_iS4_PA7_iPA9_iPiS9_S9_S9_S9_",
+  "mapper_replay": {
+    "actual_shortlist_program_candidates": 3,
+    "actual_unique_mapper_calls": 7,
+    "censored_count": 7,
+    "exhaustive_program_candidate_calls": 32768,
+    "exhaustive_unique_task_shape_calls": 40,
+    "program_candidate_reduction_fraction": 0.999908447265625,
+    "queries": [
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_0.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=8",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_0/8x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.384051894070581,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_0/8x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 8,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_0.mlir",
+        "source_dfg_sha256": "ad76a23e66cd32b9a2fa1c4bc8902424f5bc8c0ce5975e13dc4c0d2b90dd9498",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_0/8x4/stderr.log",
+        "stderr_sha256": "800ad7126c5afed8ebd56c71752aabb68de66c33940481e05428a862f72ca56a",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_0/8x4/stdout.log",
+        "stdout_sha256": "f0e810846a1eac05d25f82293e524380ed3d4b5b48beea4cba6ed970b4d16a43",
+        "task": "Task_0"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_1.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=4",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_1/4x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.383365185000002,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_1/4x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 4,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_1.mlir",
+        "source_dfg_sha256": "2afb9a701108e6b0fd910b9ce71f53b2c0f304cfa30ec54b667060e6da96cfba",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_1/4x4/stderr.log",
+        "stderr_sha256": "1c15286ef09365252eb0676077fcd48b734775441184f42d4e5bcb6056c6120a",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_1/4x4/stdout.log",
+        "stdout_sha256": "a958075751cc0f2b464cf1fa0e3dbab0b001c2114ea8fb5fd93d6dedb3f7bb01",
+        "task": "Task_1"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_2.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=12",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_2/12x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.398804996162653,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_2/12x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 12,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_2.mlir",
+        "source_dfg_sha256": "5aa2e2ffd4abad362c6ff91770e62bf46c80d34e425387c80b0441ccd3fdf584",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_2/12x4/stderr.log",
+        "stderr_sha256": "a5aaf7033c19a9fd5ba09c9ebf69a91370fc153304787a63873d75c4fe467db1",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_2/12x4/stdout.log",
+        "stdout_sha256": "3bfa8e39f3fce488dd30d399d325bc9da60c6149bb386dc0a3a3b33a0824af70",
+        "task": "Task_2"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_3.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=4",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_3/4x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.395463508088142,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_3/4x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 4,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_3.mlir",
+        "source_dfg_sha256": "9e79f2cabee37f245d95ee6c2b01a714abf077b9c1f7eb27a2e9495f6003b8cb",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_3/4x4/stderr.log",
+        "stderr_sha256": "03dbc6c7869c9da3dab0690fdf58e39da683b3a9b8619457b87ce0cd03aecc62",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_3/4x4/stdout.log",
+        "stdout_sha256": "8113e722bf0c32e793fff777433a10757aefd3400b543e8cd171b135805c7166",
+        "task": "Task_3"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=4",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.39550890494138,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 4,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+        "source_dfg_sha256": "85620fef1f5356220325d06167c08560c8dd8814f0f23dc24b170b0f5740b0f3",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x4/stderr.log",
+        "stderr_sha256": "e2880a90dba6f84926001ba4be2487a011450da8347380c6a108ce0b920b783c",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x4/stdout.log",
+        "stdout_sha256": "b5d535e4fecfaf45d4464fe04b1a0c9a13b817dcd494598a21d66f30e746049f",
+        "task": "Task_4"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=8 y-tiles=4",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x8/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.392725873971358,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x8/mapped.mlir",
+        "mapper_tile_cols": 8,
+        "mapper_tile_rows": 4,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+        "source_dfg_sha256": "85620fef1f5356220325d06167c08560c8dd8814f0f23dc24b170b0f5740b0f3",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x8/stderr.log",
+        "stderr_sha256": "a0bb803eb48792b2c654d74147ce1593af282aa13ec08eefd83ca32260890012",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/4x8/stdout.log",
+        "stdout_sha256": "b5d535e4fecfaf45d4464fe04b1a0c9a13b817dcd494598a21d66f30e746049f",
+        "task": "Task_4"
+      },
+      {
+        "censor_reason": "mapper_nonzero_exit",
+        "command": [
+          "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+          "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+          "--architecture-spec=/home/x/shiran/project/cgra-ii-predictor/corpora/motif-v8-pilot-seed-20260911/architecture/neura-main-4x4.yaml",
+          "--map-to-accelerator=mapping-strategy=heuristic x-tiles=4 y-tiles=8",
+          "-o",
+          "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/8x4/mapped.mlir"
+        ],
+        "compiled_ii": null,
+        "elapsed_seconds": 4.397804117994383,
+        "exit_code": -6,
+        "mapped_artifact_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/8x4/mapped.mlir",
+        "mapper_tile_cols": 4,
+        "mapper_tile_rows": 8,
+        "source_dfg_path": "/tmp/amoeba-v8-multi-nested-dfgs/Task_4.mlir",
+        "source_dfg_sha256": "85620fef1f5356220325d06167c08560c8dd8814f0f23dc24b170b0f5740b0f3",
+        "status": "censored",
+        "stderr_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/8x4/stderr.log",
+        "stderr_sha256": "191bf148c6de8d4cd70e3aa90308b68098f898c8f8c60194251c64aefd077a8d",
+        "stdout_path": "/home/x/shiran/project/cgra-ii-predictor/evaluations/pointwise-v8-1478205/independent-multi-top3-20260905/mapper/Task_4/8x4/stdout.log",
+        "stdout_sha256": "b5d535e4fecfaf45d4464fe04b1a0c9a13b817dcd494598a21d66f30e746049f",
+        "task": "Task_4"
+      }
+    ],
+    "shortlist_cache_hits": 8,
+    "shortlist_task_shape_references": 15,
+    "status": "faithful_direct_task_shape_replay",
+    "success_count": 0,
+    "task_shape_call_reduction_fraction": 0.825
+  },
+  "schema_version": "cgra-ii-independent-frozen-pipeline-v1",
+  "scoring": {
+    "cache": {
+      "entries": 40,
+      "hits": 163800,
+      "misses": 40
+    },
+    "candidate_count": 32768,
+    "cost_query_count": 40,
+    "scored_count": 32768,
+    "shortlist": [
+      {
+        "candidate_id": "candidate-8448",
+        "predicted_compute_bottleneck": 365.47142792209365,
+        "rank": 0
+      },
+      {
+        "candidate_id": "candidate-8449",
+        "predicted_compute_bottleneck": 365.47142792209365,
+        "rank": 1
+      },
+      {
+        "candidate_id": "candidate-8450",
+        "predicted_compute_bottleneck": 365.47142792209365,
+        "rank": 2
+      }
+    ],
+    "valid_count": 32768
+  },
+  "selection": {
+    "candidates": [
+      {
+        "actual_valid": false,
+        "candidate_id": "candidate-8448",
+        "rank": 0,
+        "task_results": [
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 8,
+            "startup_cycles": 3.0,
+            "task": "Task_0",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 4.0,
+            "task": "Task_1",
+            "trip_count": 160
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 12,
+            "startup_cycles": 5.0,
+            "task": "Task_2",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 3.0,
+            "task": "Task_3",
+            "trip_count": 28
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 4.0,
+            "task": "Task_4",
+            "trip_count": 36
+          }
+        ]
+      },
+      {
+        "actual_valid": false,
+        "candidate_id": "candidate-8449",
+        "rank": 1,
+        "task_results": [
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 8,
+            "startup_cycles": 3.0,
+            "task": "Task_0",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 4.0,
+            "task": "Task_1",
+            "trip_count": 160
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 12,
+            "startup_cycles": 5.0,
+            "task": "Task_2",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 3.0,
+            "task": "Task_3",
+            "trip_count": 28
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 8,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 4.0,
+            "task": "Task_4",
+            "trip_count": 36
+          }
+        ]
+      },
+      {
+        "actual_valid": false,
+        "candidate_id": "candidate-8450",
+        "rank": 2,
+        "task_results": [
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 8,
+            "startup_cycles": 3.0,
+            "task": "Task_0",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 4.0,
+            "task": "Task_1",
+            "trip_count": 160
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 12,
+            "startup_cycles": 5.0,
+            "task": "Task_2",
+            "trip_count": 192
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 4,
+            "startup_cycles": 3.0,
+            "task": "Task_3",
+            "trip_count": 28
+          },
+          {
+            "censor_reason": "mapper_nonzero_exit",
+            "compiled_ii": null,
+            "mapper_status": "censored",
+            "mapper_tile_cols": 4,
+            "mapper_tile_rows": 8,
+            "startup_cycles": 4.0,
+            "task": "Task_4",
+            "trip_count": 36
+          }
+        ]
+      }
+    ],
+    "evaluable_candidate_count": 0,
+    "selected_candidate_id": null,
+    "selected_objective_cycles": null
+  },
+  "status": "complete_with_no_evaluable_shortlist_candidate",
+  "timing": {
+    "mapper_replay_seconds": 30.74914740701206,
+    "pipeline_seconds": 33.40162043389864
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "dfg_parse_ms": 3.5432237200438976,
+  "ensemble_mode": "uncertainty_gated",
+  "manifest_candidate_count": 32768,
+  "model_forward_pass_count": 8,
+  "model_load_count": 1,
+  "model_load_ms": 251.80288311094046,
+  "steady_state_inference_ms": 322.75830302387476,
+  "steady_state_ms_per_supported_query": 8.068957575596869,
+  "supported_query_count": 40,
+  "task_dfg_parse_count": 5,
+  "total_ms": 1675.6939538754523,
+  "unique_cache_entry_count": 40,
+  "unique_cost_query_count": 40,
+  "unsupported_query_count": 0
+}

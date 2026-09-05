@@ -20,6 +20,7 @@ if str(SOURCE_ROOT) not in sys.path:
 from cgra_ii_predictor.graph_model import (  # noqa: E402
     GraphData, parse_neura_dfg, parse_neura_mapped_placements,
 )
+from cgra_ii_predictor.shape_protocol import get_shape_protocol  # noqa: E402
 
 
 SCHEMA_VERSION = "cgra-ii-placement-supervision-v1"
@@ -67,6 +68,12 @@ def extract_placement_supervision(
             "sha256": sha256_file(manifest_path),
             "candidate_count": len(records),
         })
+        raw_protocol = manifest.get("shape_protocol")
+        declared_protocol = (
+            raw_protocol.get("protocol_id")
+            if isinstance(raw_protocol, Mapping) else None
+        )
+        shape_protocol = get_shape_protocol(declared_protocol).protocol_id
         for record in records:
             if not isinstance(record, Mapping):
                 raise ValueError("manifest candidate must be an object")
@@ -103,6 +110,7 @@ def extract_placement_supervision(
             placement = parse_neura_mapped_placements(
                 mapped_path.read_text(), graph,
                 int(record["rows"]), int(record["columns"]),
+                shape_protocol,
             )
             placements[candidate_id] = list(placement)
     return {

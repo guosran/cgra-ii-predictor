@@ -13,6 +13,11 @@ from dataclasses import asdict, dataclass
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .shape_protocol import (
+    LEGACY_SHAPE_PROTOCOL,
+    get_shape_protocol,
+)
+
 try:
     import torch
     from torch import Tensor, nn
@@ -125,6 +130,8 @@ class Model2Config:
     candidate_set_layers: int = 2
     candidate_set_heads: int = 4
     discrete_ii_loss_weight: float = 1.0
+    pairwise_ranking_loss_weight: float = 0.0
+    pairwise_ranking_margin: float = 0.5
     discrete_success_threshold: float = 0.5
     discrete_ii_decision: str = "map"
     placement_loss_weight: float = 0.0
@@ -132,8 +139,18 @@ class Model2Config:
     dfg_message_mode: str = "sum"
     dfg_pool_mode: str = "all"
     dfg_summary_mode: str = "none"
+    shape_protocol: str = LEGACY_SHAPE_PROTOCOL
+    routing_peak_normalization: str = "legacy_fixed16"
 
     def validate(self) -> "Model2Config":
+        get_shape_protocol(self.shape_protocol)
+        if self.routing_peak_normalization not in {
+            "legacy_fixed16", "protocol_max_tiles_v1",
+        }:
+            raise ValueError(
+                "routing_peak_normalization must be legacy_fixed16 or "
+                "protocol_max_tiles_v1"
+            )
         if self.hidden_dimension < 8:
             raise ValueError("hidden_dimension must be at least eight")
         if self.message_passing_layers < 1:
@@ -241,6 +258,27 @@ class Model2Config:
             raise ValueError(
                 "placement supervision requires a cross-attention mode"
             )
+        if (
+            not math.isfinite(float(self.pairwise_ranking_loss_weight)) or
+            self.pairwise_ranking_loss_weight < 0.0
+        ):
+            raise ValueError(
+                "pairwise_ranking_loss_weight must be finite and nonnegative"
+            )
+        if (
+            not math.isfinite(float(self.pairwise_ranking_margin)) or
+            self.pairwise_ranking_margin <= 0.0
+        ):
+            raise ValueError("pairwise_ranking_margin must be finite and positive")
+        if self.pairwise_ranking_loss_weight > 0.0 and (
+            self.interaction_mode not in {
+                "discrete_pointwise", "residual_pointwise",
+                "continuous_residual_pointwise",
+            }
+        ):
+            raise ValueError(
+                "pairwise ranking supervision requires a pointwise mode"
+            )
         for name in (
             "mapper_ii_ceiling", "listwise_temperature",
             "success_loss_weight", "residual_loss_weight",
@@ -271,6 +309,9 @@ class Model2Config:
             values.pop("discrete_ii_loss_weight")
             values.pop("discrete_success_threshold")
             values.pop("discrete_ii_decision")
+        if self.pairwise_ranking_loss_weight == 0.0:
+            values.pop("pairwise_ranking_loss_weight")
+            values.pop("pairwise_ranking_margin")
         if self.placement_loss_weight == 0.0:
             values.pop("placement_loss_weight")
         if self.dfg_representation == "semantic_v1":
@@ -281,6 +322,15 @@ class Model2Config:
             values.pop("dfg_pool_mode")
         if self.dfg_summary_mode == "none":
             values.pop("dfg_summary_mode")
+        # Checkpoints predating the physical/mapping shape distinction omitted
+        # this field.  Preserve their byte-level configuration semantics while
+        # requiring every new-domain checkpoint to identify its protocol.
+        if self.shape_protocol == LEGACY_SHAPE_PROTOCOL:
+            values.pop("shape_protocol")
+        # This field was absent from every historical checkpoint.  Missing
+        # metadata must continue to mean the original fixed-16 feature scale.
+        if self.routing_peak_normalization == "legacy_fixed16":
+            values.pop("routing_peak_normalization")
         return values
 
 
@@ -550,10 +600,10 @@ def parse_neura_dfg_representation(
 
 def parse_neura_mapped_placements(
     text: str, source_graph: GraphData, rows: int, columns: int,
+    shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
 ) -> Tuple[int, ...]:
     """Extract one mapper-assigned PE index for every materialized DFG node."""
-    if not 1 <= rows <= 4 or not 1 <= columns <= 4:
-        raise ValueError("mapped placement shape is outside the pinned mesh")
+    get_shape_protocol(shape_protocol).validate_mapper_shape(rows, columns)
     mapped_types: List[int] = []
     placements: List[int] = []
     for line in text.splitlines():
@@ -592,14 +642,12 @@ def parse_neura_mapped_placements(
     return tuple(placements)
 
 
-def make_cgra_graph(rows: int, columns: int) -> GraphData:
-    """Create an oriented rectangular prefix of the pinned 4x4 mesh."""
-    if isinstance(rows, bool) or isinstance(columns, bool):
-        raise ValueError("CGRA dimensions must be integers")
-    if not isinstance(rows, int) or not isinstance(columns, int):
-        raise ValueError("CGRA dimensions must be integers")
-    if not 1 <= rows <= 4 or not 1 <= columns <= 4:
-        raise ValueError("CGRA dimensions must be within the pinned 4x4 mesh")
+def make_cgra_graph(
+    rows: int, columns: int, shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
+) -> GraphData:
+    """Create an oriented mapper-tile mesh in a finite shape protocol."""
+    protocol = get_shape_protocol(shape_protocol)
+    protocol.validate_mapper_shape(rows, columns)
     coordinates = [
         (x, y) for y in range(rows) for x in range(columns)
     ]
@@ -617,8 +665,8 @@ def make_cgra_graph(rows: int, columns: int) -> GraphData:
         features.append((
             x / float(max(1, columns - 1)),
             y / float(max(1, rows - 1)),
-            rows / 4.0,
-            columns / 4.0,
+            rows / float(protocol.max_mapper_rows),
+            columns / float(protocol.max_mapper_cols),
             degrees[position] / 4.0,
             float(x == 0 or y == 0),
             float(x == 0),
@@ -638,8 +686,11 @@ def make_cgra_graph(rows: int, columns: int) -> GraphData:
 def candidate_context(
     rows: int, columns: int, rec_mii: float, res_mii: float,
     lower_bound: float, mapper_ii_ceiling: float = 20.0,
+    shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
 ) -> Tuple[float, ...]:
     """Return explicit oriented geometry and analytical context."""
+    protocol = get_shape_protocol(shape_protocol)
+    protocol.validate_mapper_shape(rows, columns)
     if max(rec_mii, res_mii) != lower_bound:
         raise ValueError("lower_bound must equal max(rec_mii, res_mii)")
     tiles = rows * columns
@@ -652,13 +703,13 @@ def candidate_context(
         rec_mii / mapper_ii_ceiling,
         res_mii / mapper_ii_ceiling,
         lower_bound / mapper_ii_ceiling,
-        rows / 4.0,
-        columns / 4.0,
-        tiles / 16.0,
+        rows / float(protocol.max_mapper_rows),
+        columns / float(protocol.max_mapper_cols),
+        tiles / float(protocol.max_mapper_tiles),
         math.log(float(columns) / float(rows)),
-        links / 48.0,
-        memory_tiles / 7.0,
-        bisection / 8.0,
+        links / float(protocol.max_directed_links),
+        memory_tiles / float(protocol.max_memory_tiles),
+        bisection / float(protocol.max_bisection_links),
     )
 
 
@@ -1158,8 +1209,17 @@ if nn is not None:
                 torch.log1p(mean_load) / math.log(129.0)
             ).clamp(max=1.0)
             peak_load = pe_load.masked_fill(~pe_mask, 0.0).max(dim=-1).values
+            peak_concentration_scale = (
+                float(get_shape_protocol(
+                    self.config.shape_protocol
+                ).max_mapper_tiles)
+                if self.config.routing_peak_normalization == (
+                    "protocol_max_tiles_v1"
+                ) else 16.0
+            )
             normalized_peak = (
-                peak_load / mean_load.clamp_min(1e-6) / 16.0
+                peak_load / mean_load.clamp_min(1e-6) /
+                peak_concentration_scale
             ).clamp(max=1.0)
             load_probability = (
                 pe_load / operation_counts[:, None, None].clamp_min(1.0)
@@ -1208,9 +1268,12 @@ if nn is not None:
             normalized_demand = (
                 torch.log1p(demand_per_link) / math.log(129.0)
             ).clamp(max=1.0)
+            maximum_distance = float(get_shape_protocol(
+                self.config.shape_protocol
+            ).max_manhattan_distance)
             return torch.stack((
-                (mean_distance / 6.0).clamp(max=1.0),
-                (max_distance / 6.0).clamp(max=1.0),
+                (mean_distance / maximum_distance).clamp(max=1.0),
+                (max_distance / maximum_distance).clamp(max=1.0),
                 normalized_demand,
             ), dim=-1)
 
@@ -1434,15 +1497,18 @@ if nn is not None:
                 ranking_logits = -expected_cost
                 selection_cost = expected_cost
                 if self.config.interaction_mode == "discrete_routing_set":
+                    shape_domain = get_shape_protocol(
+                        self.config.shape_protocol
+                    )
                     rows = torch.round(
                         context[..., CANDIDATE_CONTEXT_NAMES.index(
                             "normalized_rows"
-                        )] * 4.0
+                        )] * float(shape_domain.max_mapper_rows)
                     )
                     columns = torch.round(
                         context[..., CANDIDATE_CONTEXT_NAMES.index(
                             "normalized_columns"
-                        )] * 4.0
+                        )] * float(shape_domain.max_mapper_cols)
                     )
                     identity_tiebreak = (
                         rows * columns * 100.0 + rows * 10.0 + columns
@@ -1540,6 +1606,7 @@ def model2_loss(
     else:
         residual_loss = logits.sum() * 0.0
     discrete_ii_loss = logits.sum() * 0.0
+    pairwise_ranking_loss = logits.sum() * 0.0
     placement_loss = logits.sum() * 0.0
     if config.placement_loss_weight > 0.0:
         if placement_target is None:
@@ -1582,6 +1649,25 @@ def model2_loss(
             output["ii_class_logits"][successful],
             rounded_target_class.to(dtype=torch.long),
         )
+    if config.pairwise_ranking_loss_weight > 0.0:
+        predicted_ii = output["predicted_ii"]
+        if predicted_ii.shape != logits.shape:
+            raise ValueError("predicted-II tensor has an inconsistent shape")
+        target_ii = output["lower_bound"] + residual_target
+        better_than = target_ii[:, :, None] < target_ii[:, None, :]
+        comparable = (
+            successful[:, :, None] & successful[:, None, :] & better_than
+        )
+        if comparable.any():
+            # For every strict true-II pair i < j, require the predicted
+            # worse candidate j to remain at least half an II above i. Ties
+            # and censored candidates deliberately contribute no order label.
+            predicted_gap = (
+                predicted_ii[:, None, :] - predicted_ii[:, :, None]
+            )
+            pairwise_ranking_loss = functional.relu(
+                config.pairwise_ranking_margin - predicted_gap[comparable]
+            ).mean()
     eligible = optimal_ii_target.any(dim=1)
     if config.interaction_mode in {
         "discrete_pointwise", "residual_pointwise",
@@ -1628,7 +1714,8 @@ def model2_loss(
         total = (
             config.success_loss_weight * success_loss +
             config.residual_loss_weight * residual_loss +
-            config.discrete_ii_loss_weight * discrete_ii_loss
+            config.discrete_ii_loss_weight * discrete_ii_loss +
+            config.pairwise_ranking_loss_weight * pairwise_ranking_loss
         )
     else:
         total = (
@@ -1644,6 +1731,7 @@ def model2_loss(
         "success": success_loss,
         "residual": residual_loss,
         "discrete_ii": discrete_ii_loss,
+        "pairwise_ranking": pairwise_ranking_loss,
         "placement": placement_loss,
         "listwise": listwise_loss,
         "listwise_optimal_ii": optimal_ii_loss,

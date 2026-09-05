@@ -13,10 +13,10 @@ TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 class ConvexEnsembleTest(unittest.TestCase):
     def setUp(self):
         global apply_uncertainty_gating, fit_convex_mae
-        global fit_uncertainty_gating
+        global fit_uncertainty_gating, evaluate_ensemble
         from adapters.ensemble_pointwise_checkpoints import (
             apply_uncertainty_gating, fit_convex_mae,
-            fit_uncertainty_gating,
+            fit_uncertainty_gating, evaluate_ensemble,
         )
 
     def test_finds_exact_interior_blend(self):
@@ -96,6 +96,38 @@ class ConvexEnsembleTest(unittest.TestCase):
         self.assertLess(
             np.mean(np.abs(gated - targets)),
             np.mean(np.abs(static - targets)),
+        )
+
+    def test_ensemble_reports_success_calibration_on_all_candidates(self):
+        rows = {
+            "ok": {
+                "candidate_id": "ok", "ranking_query_id": "q",
+                "family": "f", "rows": 4, "columns": 4,
+                "status": "success", "compiled_ii": 2,
+                "lower_bound": 1, "predicted_ii": 2,
+                "predicted_std": 0.5, "success_probability": 0.9,
+            },
+            "timeout": {
+                "candidate_id": "timeout", "ranking_query_id": "q",
+                "family": "f", "rows": 4, "columns": 8,
+                "status": "censored", "compiled_ii": None,
+                "lower_bound": 1, "predicted_ii": 3,
+                "predicted_std": 1.0, "success_probability": 0.1,
+            },
+        }
+        evaluation = evaluate_ensemble(
+            {"model": rows}, np.asarray([0.0, 1.0]), 0.0,
+            np.asarray([1.0, 1.0]),
+        )
+        self.assertEqual(evaluation["success_classifier"]["candidate_count"], 2)
+        self.assertEqual(evaluation["success_classifier"]["accuracy_at_0_5"], 1.0)
+        self.assertEqual(
+            set(evaluation["success_classifier_by_mapper_tile_shape"]),
+            {"4x4", "4x8"},
+        )
+        self.assertEqual(
+            set(evaluation["static_success_classifier_by_mapper_tile_shape"]),
+            {"4x4", "4x8"},
         )
 
 

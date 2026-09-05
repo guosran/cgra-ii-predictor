@@ -1,0 +1,106 @@
+{
+  "checkpoints": [
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "continuous128",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous128-p64-s11-1478198/model.pt",
+      "sha256": "8618741e8b60a6604f9c5abd56e5337d994a0efa1d20f651e162d7d9a8f0b944"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "residual128",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-p64-s12-1478199/model.pt",
+      "sha256": "621e2c9fbdad63f5bc44467fbf6483d6793a113b5482f590b47e406680f4883f"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 7,
+      "name": "continuous160_struct",
+      "parameter_count": 4473783,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous160-struct-p64-s13-1478200/model.pt",
+      "sha256": "71bd5561318b11a74095e285242f002cc21fa15c2b90ed98fc862620ebc718e2"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "continuous128_legacy4x4",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous128-legacy4x4-s14-1478183/model.pt",
+      "sha256": "e897d58b3c380075fefd2647cd5210364f10995a5ac15dc29785b94e32f73bc9"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "residual128_legacy4x4",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-legacy4x4-s15-1478184/model.pt",
+      "sha256": "174ac08fa6c2493e8c6c6717c3d82b70f4cbb6fe04ebb7788daf626491b5c4a4"
+    }
+  ],
+  "contract": "one_independent_dfg_cgra_candidate_per_timed_call",
+  "device": "cuda",
+  "individual": {
+    "continuous128": {
+      "call_count": 160,
+      "max_ms": 22.033782035578042,
+      "mean_ms": 12.891392582969274,
+      "median_ms": 12.160250480519608,
+      "p90_ms": 19.021451112348586,
+      "p95_ms": 19.46495345619041
+    },
+    "continuous128_legacy4x4": {
+      "call_count": 160,
+      "max_ms": 19.732585991732776,
+      "mean_ms": 12.581414967644378,
+      "median_ms": 11.864422500366345,
+      "p90_ms": 18.608082953142002,
+      "p95_ms": 18.859935030923225
+    },
+    "continuous160_struct": {
+      "call_count": 160,
+      "max_ms": 19.751471001654863,
+      "mean_ms": 12.255842040394782,
+      "median_ms": 11.644679529126734,
+      "p90_ms": 18.25650036334991,
+      "p95_ms": 18.803489935817197
+    },
+    "residual128": {
+      "call_count": 160,
+      "max_ms": 19.97426594607532,
+      "mean_ms": 12.839913817879278,
+      "median_ms": 12.090743490261957,
+      "p90_ms": 18.827045988291502,
+      "p95_ms": 19.1861345723737
+    },
+    "residual128_legacy4x4": {
+      "call_count": 160,
+      "max_ms": 19.701504963450134,
+      "mean_ms": 12.466825794399483,
+      "median_ms": 11.780129978433251,
+      "p90_ms": 18.540141818812117,
+      "p95_ms": 18.84792151395231
+    }
+  },
+  "manifest": {
+    "path": "/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/motif-v8-formal-seed-20260911/corpus-manifest.json",
+    "sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f"
+  },
+  "repetitions": 5,
+  "sample_count": 32,
+  "schema_version": "cgra-ii-pointwise-latency-v1",
+  "sequential_ensemble": {
+    "call_count": 160,
+    "max_ms": 118.81699500372633,
+    "mean_ms": 62.99562843123567,
+    "median_ms": 58.70882052113302,
+    "p90_ms": 93.8641874701716,
+    "p95_ms": 96.07876175432465
+  },
+  "threads": 1,
+  "timing_scope": "model_forward_including_graph_tensorization_and_routing_context;excluding_model_load_manifest_parse_and_input_compilation",
+  "torch_version": "2.3.1+cu121"
+}

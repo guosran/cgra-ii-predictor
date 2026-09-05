@@ -1,0 +1,122 @@
+{
+  "checkpoints": [
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "continuous128",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous128-p64-s11-1478198/model.pt",
+      "sha256": "8618741e8b60a6604f9c5abd56e5337d994a0efa1d20f651e162d7d9a8f0b944"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "residual128",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-p64-s12-1478199/model.pt",
+      "sha256": "621e2c9fbdad63f5bc44467fbf6483d6793a113b5482f590b47e406680f4883f"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 7,
+      "name": "continuous160_struct",
+      "parameter_count": 4473783,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous160-struct-p64-s13-1478200/model.pt",
+      "sha256": "71bd5561318b11a74095e285242f002cc21fa15c2b90ed98fc862620ebc718e2"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "continuous128_legacy4x4",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-continuous128-legacy4x4-s14-1478183/model.pt",
+      "sha256": "e897d58b3c380075fefd2647cd5210364f10995a5ac15dc29785b94e32f73bc9"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "residual128_legacy4x4",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-legacy4x4-s15-1478184/model.pt",
+      "sha256": "174ac08fa6c2493e8c6c6717c3d82b70f4cbb6fe04ebb7788daf626491b5c4a4"
+    },
+    {
+      "dfg_representation": "route_expanded_v2",
+      "message_passing_layers": 9,
+      "name": "residual128_rank01",
+      "parameter_count": 3525527,
+      "path": "/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-rank01-s12-1478681/model.pt",
+      "sha256": "ae9273e2bec0c864b4dce26369cefc8a20ecac4314f76bc0e2277b8b6238cd75"
+    }
+  ],
+  "contract": "one_independent_dfg_cgra_candidate_per_timed_call",
+  "device": "cuda",
+  "individual": {
+    "continuous128": {
+      "call_count": 160,
+      "max_ms": 22.303793113678694,
+      "mean_ms": 12.646307164686732,
+      "median_ms": 11.987663805484772,
+      "p90_ms": 18.628324614837766,
+      "p95_ms": 19.141148729249835
+    },
+    "continuous128_legacy4x4": {
+      "call_count": 160,
+      "max_ms": 19.554196391254663,
+      "mean_ms": 12.669555959291756,
+      "median_ms": 12.073728023096919,
+      "p90_ms": 18.72593117877841,
+      "p95_ms": 19.10853434819728
+    },
+    "continuous160_struct": {
+      "call_count": 160,
+      "max_ms": 20.88250732049346,
+      "mean_ms": 12.243327384931035,
+      "median_ms": 11.602276936173439,
+      "p90_ms": 18.207132909446955,
+      "p95_ms": 18.537464831024405
+    },
+    "residual128": {
+      "call_count": 160,
+      "max_ms": 20.736379083245993,
+      "mean_ms": 12.674313958268613,
+      "median_ms": 11.913456488400698,
+      "p90_ms": 18.696879083290696,
+      "p95_ms": 19.248282304033633
+    },
+    "residual128_legacy4x4": {
+      "call_count": 160,
+      "max_ms": 19.822831265628338,
+      "mean_ms": 12.609831828740425,
+      "median_ms": 11.974851600825787,
+      "p90_ms": 18.685708520933986,
+      "p95_ms": 18.99086150806397
+    },
+    "residual128_rank01": {
+      "call_count": 160,
+      "max_ms": 20.970247220247984,
+      "mean_ms": 12.631028285250068,
+      "median_ms": 11.990398867055774,
+      "p90_ms": 18.621088890358806,
+      "p95_ms": 19.08113989047706
+    }
+  },
+  "manifest": {
+    "path": "/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/motif-v8-formal-seed-20260911/corpus-manifest.json",
+    "sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f"
+  },
+  "repetitions": 5,
+  "sample_count": 32,
+  "schema_version": "cgra-ii-pointwise-latency-v1",
+  "sequential_ensemble": {
+    "call_count": 160,
+    "max_ms": 117.62436386197805,
+    "mean_ms": 75.97176204435527,
+    "median_ms": 72.46847241185606,
+    "p90_ms": 112.51410455442965,
+    "p95_ms": 114.44294501561671
+  },
+  "threads": 1,
+  "timing_scope": "model_forward_including_graph_tensorization_and_routing_context;excluding_model_load_manifest_parse_and_input_compilation",
+  "torch_version": "2.3.1+cu121"
+}

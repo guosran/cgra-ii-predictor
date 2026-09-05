@@ -34,6 +34,7 @@ from cgra_ii_predictor.graph_model import (  # noqa: E402
     Model2Config,
     make_cgra_graph,
 )
+from cgra_ii_predictor.shape_protocol import get_shape_protocol  # noqa: E402
 from neura_graph_experiment import (  # noqa: E402
     QueryRecord,
     batch_targets,
@@ -93,7 +94,7 @@ def synchronize(device: torch.device) -> None:
 def selected_calls(
     queries: Sequence[QueryRecord], sample_count: int,
 ) -> List[Tuple[str, int, int]]:
-    """Choose deterministic DFG-size quantiles and rotate through 16 shapes."""
+    """Choose deterministic DFG-size quantiles and rotate through shapes."""
     if sample_count < 1:
         raise ValueError("sample count must be positive")
     ordered = sorted(queries, key=lambda query: (
@@ -123,7 +124,7 @@ def prepare_calls(
     device: torch.device,
 ) -> List[PreparedCall]:
     _, queries = load_terminal_manifest(
-        manifest_path, config.dfg_representation,
+        manifest_path, config.dfg_representation, config.shape_protocol,
     )
     test_by_id = {
         query.ranking_query_id: query
@@ -141,7 +142,9 @@ def prepare_calls(
             [point_query], config, device,
         )
         prepared.append((
-            point_query, [make_cgra_graph(rows, columns)], context,
+            point_query, [make_cgra_graph(
+                rows, columns, config.shape_protocol,
+            )], context,
         ))
     return prepared
 
@@ -216,6 +219,7 @@ def main() -> None:
     first_config = Model2Config(**first_checkpoint["config"]).validate()
     _, first_queries = load_terminal_manifest(
         args.manifest, first_config.dfg_representation,
+        first_config.shape_protocol,
     )
     identities = selected_calls(
         split_queries(first_queries, args.seed)["test"], args.samples,

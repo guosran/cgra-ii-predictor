@@ -29,6 +29,7 @@ from cgra_ii_predictor.graph_model import (  # noqa: E402
     Model2Config,
     make_cgra_graph,
 )
+from cgra_ii_predictor.shape_protocol import get_shape_protocol  # noqa: E402
 from neura_graph_experiment import (  # noqa: E402
     batch_targets,
     load_terminal_manifest,
@@ -69,15 +70,15 @@ def predict_checkpoint(
     }:
         raise ValueError(f"{checkpoint_path} is not a pointwise checkpoint")
     _, queries = load_terminal_manifest(
-        manifest_path, config.dfg_representation,
+        manifest_path, config.dfg_representation, config.shape_protocol,
     )
     splits = split_queries(queries, seed)
     model = JointGraphShapeModel(config).to(device)
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
     shape_graphs = [
-        make_cgra_graph(rows, columns)
-        for rows in range(1, 5) for columns in range(1, 5)
+        make_cgra_graph(rows, columns, config.shape_protocol)
+        for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes
     ]
     result: Dict[str, Dict[str, Prediction]] = {}
     with torch.no_grad():
@@ -335,6 +336,15 @@ def _metrics(
         "floor_decision_mae": float(np.mean(
             np.abs(np.floor(predictions) - targets)
         )),
+        "round_exact_ii": float(np.mean(
+            np.floor(predictions + 0.5) == targets
+        )),
+        "round_within_one_ii": float(np.mean(
+            np.abs(np.floor(predictions + 0.5) - targets) <= 1.0
+        )),
+        "round_decision_mae": float(np.mean(
+            np.abs(np.floor(predictions + 0.5) - targets)
+        )),
     }
 
 
@@ -342,6 +352,91 @@ def _correlation(left: np.ndarray, right: np.ndarray) -> float | None:
     if np.std(left) == 0.0 or np.std(right) == 0.0:
         return None
     return float(np.corrcoef(left, right)[0, 1])
+
+
+def _success_metrics(
+    probabilities: np.ndarray, targets: np.ndarray,
+) -> Dict[str, Any]:
+    decisions = probabilities >= 0.5
+    positives = targets > 0.5
+    true_positive = int(np.sum(decisions & positives))
+    predicted_positive = int(np.sum(decisions))
+    actual_positive = int(np.sum(positives))
+    calibration_bins = []
+    ece = 0.0
+    for bin_index in range(10):
+        lower = bin_index / 10.0
+        upper = (bin_index + 1) / 10.0
+        selected = ((probabilities >= lower) & (
+            probabilities <= upper if bin_index == 9 else probabilities < upper
+        ))
+        count = int(np.sum(selected))
+        if not count:
+            continue
+        confidence = float(np.mean(probabilities[selected]))
+        observed = float(np.mean(targets[selected]))
+        ece += count / len(targets) * abs(confidence - observed)
+        calibration_bins.append({
+            "lower": lower, "upper": upper, "count": count,
+            "mean_probability": confidence,
+            "observed_success_rate": observed,
+        })
+    return {
+        "candidate_count": int(len(targets)),
+        "accuracy_at_0_5": float(np.mean(decisions == positives)),
+        "precision_at_0_5": (
+            true_positive / predicted_positive if predicted_positive else None
+        ),
+        "recall_at_0_5": (
+            true_positive / actual_positive if actual_positive else None
+        ),
+        "brier_score": float(np.mean(np.square(probabilities - targets))),
+        "expected_calibration_error_10_bins": ece,
+        "calibration_bins": calibration_bins,
+    }
+
+
+def _ensemble_success_probabilities(
+    predictions: Mapping[str, Mapping[str, Prediction]],
+    weights: np.ndarray, uncertainty_exponent: float,
+    uncertainty_scales: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, list[Prediction]]:
+    names = list(predictions)
+    identities = sorted(predictions[names[0]])
+    if any(set(predictions[name]) != set(identities) for name in names[1:]):
+        raise ValueError("checkpoint candidate populations differ")
+    rows = [predictions[names[0]][identity] for identity in identities]
+    targets = np.asarray([
+        float(row["status"] == "success") for row in rows
+    ], dtype=np.float64)
+    probabilities = np.stack([
+        np.asarray([
+            float(predictions[name][identity]["success_probability"])
+            for identity in identities
+        ], dtype=np.float64)
+        for name in names
+    ], axis=1)
+    deviations = np.stack([
+        np.asarray([
+            float(predictions[name][identity]["predicted_std"])
+            for identity in identities
+        ], dtype=np.float64)
+        for name in names
+    ], axis=1)
+    model_weights = weights[1:].copy()
+    relative = np.maximum(
+        deviations / uncertainty_scales[None, 1:], 1e-4,
+    )
+    sample_weights = model_weights[None, :] * np.power(
+        relative, -uncertainty_exponent,
+    )
+    totals = sample_weights.sum(axis=1, keepdims=True)
+    zero_rows = totals[:, 0] <= 0.0
+    if np.any(zero_rows):
+        sample_weights[zero_rows, :] = 1.0
+        totals = sample_weights.sum(axis=1, keepdims=True)
+    blended = np.sum(probabilities * sample_weights / totals, axis=1)
+    return blended, targets, rows
 
 
 def evaluate_ensemble(
@@ -366,9 +461,24 @@ def evaluate_ensemble(
         name: _metrics(matrix[:, index], targets, rows)
         for index, name in enumerate(names)
     }
+    gated_success, success_targets, success_rows = (
+        _ensemble_success_probabilities(
+            predictions, weights, uncertainty_exponent, uncertainty_scales,
+        )
+    )
+    static_success, _, _ = _ensemble_success_probabilities(
+        predictions, weights, 0.0, uncertainty_scales,
+    )
     by_family: Dict[str, list[int]] = defaultdict(list)
+    by_shape: Dict[str, list[int]] = defaultdict(list)
     for index, row in enumerate(rows):
         by_family[str(row["family"])].append(index)
+        by_shape[f"{row['rows']}x{row['columns']}"].append(index)
+    all_by_family: Dict[str, list[int]] = defaultdict(list)
+    all_by_shape: Dict[str, list[int]] = defaultdict(list)
+    for index, row in enumerate(success_rows):
+        all_by_family[str(row["family"])].append(index)
+        all_by_shape[f"{row['rows']}x{row['columns']}"].append(index)
     signed_errors = matrix - targets[:, None]
     correlations = {
         left: {
@@ -382,6 +492,12 @@ def evaluate_ensemble(
     return {
         "ensemble": _metrics(ensemble, targets, rows),
         "static_ensemble": _metrics(static_ensemble, targets, rows),
+        "success_classifier": _success_metrics(
+            gated_success, success_targets,
+        ),
+        "static_success_classifier": _success_metrics(
+            static_success, success_targets,
+        ),
         "individual": individual,
         "by_family": {
             family: _metrics(
@@ -389,6 +505,51 @@ def evaluate_ensemble(
                 [rows[index] for index in indices],
             )
             for family, indices in sorted(by_family.items())
+        },
+        "by_mapper_tile_shape": {
+            shape: _metrics(
+                ensemble[indices], targets[indices],
+                [rows[index] for index in indices],
+            )
+            for shape, indices in sorted(by_shape.items())
+        },
+        "static_by_family": {
+            family: _metrics(
+                static_ensemble[indices], targets[indices],
+                [rows[index] for index in indices],
+            )
+            for family, indices in sorted(by_family.items())
+        },
+        "static_by_mapper_tile_shape": {
+            shape: _metrics(
+                static_ensemble[indices], targets[indices],
+                [rows[index] for index in indices],
+            )
+            for shape, indices in sorted(by_shape.items())
+        },
+        "success_classifier_by_family": {
+            family: _success_metrics(
+                gated_success[indices], success_targets[indices],
+            )
+            for family, indices in sorted(all_by_family.items())
+        },
+        "success_classifier_by_mapper_tile_shape": {
+            shape: _success_metrics(
+                gated_success[indices], success_targets[indices],
+            )
+            for shape, indices in sorted(all_by_shape.items())
+        },
+        "static_success_classifier_by_family": {
+            family: _success_metrics(
+                static_success[indices], success_targets[indices],
+            )
+            for family, indices in sorted(all_by_family.items())
+        },
+        "static_success_classifier_by_mapper_tile_shape": {
+            shape: _success_metrics(
+                static_success[indices], success_targets[indices],
+            )
+            for shape, indices in sorted(all_by_shape.items())
         },
         "signed_error_correlations": correlations,
         "oracle_best_component_mae": float(np.mean(
@@ -429,6 +590,14 @@ def main() -> None:
             "config": config.to_dict(),
         }
         all_predictions[name] = split_predictions
+    protocol_ids = {
+        config.shape_protocol for config in (
+            Model2Config(**record["config"]).validate()
+            for record in configs.values()
+        )
+    }
+    if len(protocol_ids) != 1:
+        raise ValueError("ensemble checkpoints use different shape protocols")
     validation = {
         name: split_predictions["validation"]
         for name, split_predictions in all_predictions.items()
@@ -441,6 +610,52 @@ def main() -> None:
     uncertainty_exponent, uncertainty_scales = fit_uncertainty_gating(
         matrix, targets, uncertainties, weights,
     )
+    validation_evaluation = evaluate_ensemble(
+        validation, weights, uncertainty_exponent, uncertainty_scales,
+    )
+    selected_ensemble_mode = (
+        "uncertainty_gated"
+        if validation_evaluation["ensemble"]["mae"] <
+        validation_evaluation["static_ensemble"]["mae"] else "static"
+    )
+    best_single_model = min(
+        all_predictions,
+        key=lambda name: (
+            float(validation_evaluation["individual"][name]["mae"]), name,
+        ),
+    )
+    test_evaluation = evaluate_ensemble({
+        name: split_predictions["test"]
+        for name, split_predictions in all_predictions.items()
+    }, weights, uncertainty_exponent, uncertainty_scales)
+    selected_metric_key = (
+        "ensemble" if selected_ensemble_mode == "uncertainty_gated" else
+        "static_ensemble"
+    )
+    selected_success_key = (
+        "success_classifier"
+        if selected_ensemble_mode == "uncertainty_gated" else
+        "static_success_classifier"
+    )
+    selected_family_key = (
+        "by_family" if selected_ensemble_mode == "uncertainty_gated" else
+        "static_by_family"
+    )
+    selected_shape_key = (
+        "by_mapper_tile_shape"
+        if selected_ensemble_mode == "uncertainty_gated" else
+        "static_by_mapper_tile_shape"
+    )
+    selected_success_family_key = (
+        "success_classifier_by_family"
+        if selected_ensemble_mode == "uncertainty_gated" else
+        "static_success_classifier_by_family"
+    )
+    selected_success_shape_key = (
+        "success_classifier_by_mapper_tile_shape"
+        if selected_ensemble_mode == "uncertainty_gated" else
+        "static_success_classifier_by_mapper_tile_shape"
+    )
     report = {
         "schema_version": "cgra-ii-pointwise-convex-ensemble-v1",
         "selection_split": "validation_only",
@@ -449,6 +664,7 @@ def main() -> None:
         "manifest_sha256": sha256_file(args.manifest.resolve()),
         "seed": args.seed,
         "checkpoints": configs,
+        "shape_protocol": get_shape_protocol(next(iter(protocol_ids))).to_dict(),
         "weights": {
             name: float(weight) for name, weight in zip(names, weights)
         },
@@ -460,21 +676,43 @@ def main() -> None:
                 for name, scale in zip(names, uncertainty_scales)
             },
         },
-        "validation": evaluate_ensemble(
-            validation, weights, uncertainty_exponent, uncertainty_scales,
-        ),
-        "test": evaluate_ensemble({
-            name: split_predictions["test"]
-            for name, split_predictions in all_predictions.items()
-        }, weights, uncertainty_exponent, uncertainty_scales),
+        "selected_ensemble_mode": selected_ensemble_mode,
+        "selected_ensemble_metric": "validation_continuous_ii_mae",
+        "selected_ensemble": {
+            "mode": selected_ensemble_mode,
+            "validation": validation_evaluation[selected_metric_key],
+            "test": test_evaluation[selected_metric_key],
+            "validation_success_classifier": (
+                validation_evaluation[selected_success_key]
+            ),
+            "test_success_classifier": test_evaluation[selected_success_key],
+            "test_by_family": test_evaluation[selected_family_key],
+            "test_by_mapper_tile_shape": test_evaluation[selected_shape_key],
+            "test_success_classifier_by_family": (
+                test_evaluation[selected_success_family_key]
+            ),
+            "test_success_classifier_by_mapper_tile_shape": (
+                test_evaluation[selected_success_shape_key]
+            ),
+        },
+        "best_single_model": {
+            "name": best_single_model,
+            "selection_split": "validation_only",
+            "selection_metric": "successful_candidate_continuous_ii_mae",
+            "validation": validation_evaluation["individual"][best_single_model],
+            "test": test_evaluation["individual"][best_single_model],
+        },
+        "validation": validation_evaluation,
+        "test": test_evaluation,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "weights": report["weights"],
         "uncertainty_gating": report["uncertainty_gating"],
-        "validation": report["validation"]["ensemble"],
-        "test": report["test"]["ensemble"],
+        "selected_ensemble_mode": report["selected_ensemble_mode"],
+        "validation": report["selected_ensemble"]["validation"],
+        "test": report["selected_ensemble"]["test"],
     }, indent=2, sort_keys=True))
 
 

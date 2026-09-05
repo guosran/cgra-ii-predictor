@@ -43,6 +43,11 @@ from cgra_ii_predictor.graph_model import (
     model2_loss,
     parse_neura_dfg_representation,
 )
+from cgra_ii_predictor.shape_protocol import (
+    AMOEBA_STATIC_SHAPE_PROTOCOL,
+    LEGACY_SHAPE_PROTOCOL,
+    get_shape_protocol,
+)
 
 
 SCHEMA_VERSION = "cgra-ii-model2-experiment-v1"
@@ -63,6 +68,8 @@ class CandidateRecord:
     status: str
     compiled_ii: Optional[float]
     placement: Optional[Tuple[int, ...]] = None
+    physical_cgra_rows: Optional[int] = None
+    physical_cgra_cols: Optional[int] = None
 
     def identity(self) -> Tuple[int, int, int, str]:
         return (
@@ -101,12 +108,25 @@ def _safe_relative(root: Path, raw_path: object) -> Path:
 
 def load_terminal_manifest(
     path: Path, dfg_representation: str = "semantic_v1",
+    shape_protocol: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], List[QueryRecord]]:
     """Load all declared candidates without converting censorship into II."""
     path = path.resolve()
     manifest = json.loads(path.read_text())
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be an object")
+    protocol_record = manifest.get("shape_protocol")
+    declared_protocol = (
+        protocol_record.get("protocol_id")
+        if isinstance(protocol_record, Mapping) else None
+    )
+    manifest_protocol = get_shape_protocol(declared_protocol)
+    if shape_protocol is not None and (
+        manifest_protocol.protocol_id != shape_protocol
+    ):
+        raise ValueError(
+            "manifest shape protocol does not match model configuration"
+        )
     records = manifest.get("candidates")
     if not isinstance(records, list) or not records:
         raise ValueError("manifest contains no candidates")
@@ -163,6 +183,30 @@ def load_terminal_manifest(
                 rec_mii, res_mii, lower_bound,
             )) or max(rec_mii, res_mii) != lower_bound:
                 raise ValueError("candidate analytical facts are inconsistent")
+            manifest_protocol.validate_mapper_shape(rows, columns)
+            physical_rows: Optional[int] = None
+            physical_cols: Optional[int] = None
+            if manifest_protocol.protocol_id == AMOEBA_STATIC_SHAPE_PROTOCOL:
+                try:
+                    mapper_rows = int(row["mapper_tile_rows"])
+                    mapper_cols = int(row["mapper_tile_cols"])
+                    physical_rows = int(row["physical_cgra_rows"])
+                    physical_cols = int(row["physical_cgra_cols"])
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError(
+                        "multi-CGRA candidate lacks explicit physical/mapper "
+                        "dimensions"
+                    ) from error
+                if (mapper_rows, mapper_cols) != (rows, columns):
+                    raise ValueError(
+                        "rows/columns aliases must equal mapper tile dimensions"
+                    )
+                if manifest_protocol.mapper_for_physical(
+                    physical_rows, physical_cols,
+                ) != (rows, columns):
+                    raise ValueError(
+                        "physical CGRA and mapper tile dimensions disagree"
+                    )
             compiled = row.get("compiled_ii") if status == "success" else None
             if status == "success" and (
                 isinstance(compiled, bool) or
@@ -183,12 +227,23 @@ def load_terminal_manifest(
                 lower_bound=lower_bound,
                 status=status,
                 compiled_ii=float(compiled) if compiled is not None else None,
+                physical_cgra_rows=physical_rows,
+                physical_cgra_cols=physical_cols,
             ))
-        candidates.sort(key=lambda candidate: (candidate.rows, candidate.columns))
+        protocol_order = {
+            shape: index
+            for index, shape in enumerate(manifest_protocol.mapper_shapes)
+        }
+        candidates.sort(key=lambda candidate: protocol_order[
+            (candidate.rows, candidate.columns)
+        ])
         shapes = [(candidate.rows, candidate.columns) for candidate in candidates]
-        expected = [(rows, columns) for rows in range(1, 5) for columns in range(1, 5)]
+        expected = list(manifest_protocol.mapper_shapes)
         if shapes != expected:
-            raise ValueError("Model 2 requires all 16 declared rectangular shapes")
+            raise ValueError(
+                "Model 2 requires the complete ordered finite shape domain "
+                f"for {manifest_protocol.protocol_id}"
+            )
         queries.append(QueryRecord(
             ranking_query_id=query_id,
             generator_family=next(iter(families)),
@@ -414,6 +469,7 @@ def batch_targets(
                 candidate.rows, candidate.columns, candidate.rec_mii,
                 candidate.res_mii, candidate.lower_bound,
                 config.mapper_ii_ceiling,
+                config.shape_protocol,
             )
             for candidate in query.candidates
         ])
@@ -484,6 +540,24 @@ def query_batches(
         yield [queries[index] for index in indices[start:start + batch_size]]
 
 
+def shape_grouped_query_batches(
+    queries: Sequence[QueryRecord], batch_size: int, *, seed: int,
+) -> Iterable[List[QueryRecord]]:
+    """Batch partial training queries only with the same oriented shape set."""
+    grouped: Dict[Tuple[Tuple[int, int], ...], List[QueryRecord]] = defaultdict(list)
+    for query in queries:
+        signature = tuple(
+            (candidate.rows, candidate.columns) for candidate in query.candidates
+        )
+        grouped[signature].append(query)
+    for group_index, signature in enumerate(sorted(grouped)):
+        if not signature:
+            raise ValueError("training query has no mapper shape")
+        yield from query_batches(
+            grouped[signature], batch_size, seed=seed + group_index,
+        )
+
+
 def _without_query_details(metrics: Mapping[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in metrics.items() if key != "queries"}
 
@@ -500,6 +574,8 @@ def evaluate_model(
     point_signed_errors: List[float] = []
     query_point_maes: List[float] = []
     decision_point_errors: List[float] = []
+    floor_point_errors: List[float] = []
+    round_point_errors: List[float] = []
     baseline_errors: List[float] = []
     probabilities: List[float] = []
     targets: List[float] = []
@@ -568,6 +644,15 @@ def evaluate_model(
                             decision_ii[query_index][candidate_index] -
                             candidate.compiled_ii
                         ))
+                        floor_point_errors.append(abs(
+                            math.floor(predicted_ii[query_index][candidate_index]) -
+                            candidate.compiled_ii
+                        ))
+                        round_point_errors.append(abs(
+                            math.floor(
+                                predicted_ii[query_index][candidate_index] + 0.5
+                            ) - candidate.compiled_ii
+                        ))
                         baseline_errors.append(abs(
                             candidate.lower_bound - candidate.compiled_ii
                         ))
@@ -591,6 +676,44 @@ def evaluate_model(
     )
     predicted_positive = sum(binary)
     actual_positive = sum(targets)
+    calibration_bins = []
+    expected_calibration_error = 0.0
+    for bin_index in range(10):
+        lower = bin_index / 10.0
+        upper = (bin_index + 1) / 10.0
+        indices = [
+            index for index, probability in enumerate(probabilities)
+            if lower <= probability <= upper and (
+                bin_index == 9 or probability < upper
+            )
+        ]
+        if not indices:
+            continue
+        confidence = sum(probabilities[index] for index in indices) / len(indices)
+        observed = sum(targets[index] for index in indices) / len(indices)
+        weight = len(indices) / len(targets)
+        expected_calibration_error += weight * abs(confidence - observed)
+        calibration_bins.append({
+            "lower": lower,
+            "upper": upper,
+            "count": len(indices),
+            "mean_probability": confidence,
+            "observed_success_rate": observed,
+        })
+
+    def integer_metrics(errors: Sequence[float]) -> Dict[str, Any]:
+        return {
+            "candidate_count": len(errors),
+            "exact_accuracy": (
+                sum(error < 1e-6 for error in errors) / len(errors)
+                if errors else None
+            ),
+            "within_one_accuracy": (
+                sum(error <= 1.0 + 1e-6 for error in errors) / len(errors)
+                if errors else None
+            ),
+            "mae": sum(errors) / len(errors) if errors else None,
+        }
     return {
         "query_count": len(queries),
         "candidate_count": sum(len(query.candidates) for query in queries),
@@ -653,6 +776,10 @@ def evaluate_model(
                 if decision_point_errors else None
             ),
         },
+        "successful_candidate_integer_diagnostics": {
+            "floor": integer_metrics(floor_point_errors),
+            "round": integer_metrics(round_point_errors),
+        },
         "analytical_successful_candidate_mae": (
             sum(baseline_errors) / len(baseline_errors)
             if baseline_errors else None
@@ -689,6 +816,8 @@ def evaluate_model(
                 (probability - target) ** 2
                 for probability, target in zip(probabilities, targets)
             ) / len(targets),
+            "expected_calibration_error_10_bins": expected_calibration_error,
+            "calibration_bins": calibration_bins,
         },
     }
 
@@ -707,6 +836,35 @@ def evaluate_by_family(
         )
         for family, family_queries in sorted(by_family.items())
     }
+
+
+def evaluate_by_shape(
+    model: JointGraphShapeModel, queries: Sequence[QueryRecord],
+    config: Model2Config, batch_size: int, device: torch.device,
+) -> Dict[str, Dict[str, Any]]:
+    """Report each oriented mapper shape independently for pointwise models."""
+    if config.interaction_mode not in {
+        "discrete_pointwise", "residual_pointwise",
+        "continuous_residual_pointwise",
+    }:
+        raise ValueError("per-shape evaluation requires a pointwise model")
+    result: Dict[str, Dict[str, Any]] = {}
+    for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes:
+        selected = []
+        for query in queries:
+            matches = tuple(
+                candidate for candidate in query.candidates
+                if (candidate.rows, candidate.columns) == (rows, columns)
+            )
+            if len(matches) != 1:
+                raise ValueError("query does not contain exactly one protocol shape")
+            selected.append(replace(query, candidates=matches))
+        result[f"{rows}x{columns}"] = evaluate_model(
+            model, selected,
+            [make_cgra_graph(rows, columns, config.shape_protocol)],
+            config, batch_size, device,
+        )
+    return result
 
 
 def _validation_score(evaluation: Mapping[str, Any]) -> Tuple[float, ...]:
@@ -768,8 +926,10 @@ def train_model(
         )
         if learning_rate_schedule == "cosine" else None
     )
-    shapes = [(rows, columns) for rows in range(1, 5) for columns in range(1, 5)]
-    shape_graphs = [make_cgra_graph(rows, columns) for rows, columns in shapes]
+    shape_graphs = [
+        make_cgra_graph(rows, columns, config.shape_protocol)
+        for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes
+    ]
     best_state: Optional[Dict[str, torch.Tensor]] = None
     best_score: Optional[Tuple[float, ...]] = None
     best_epoch = 0
@@ -780,14 +940,24 @@ def train_model(
         model.train()
         training_loss: Dict[str, float] = defaultdict(float)
         training_queries = 0
-        for batch in query_batches(
+        for batch in shape_grouped_query_batches(
             splits["train"], batch_size, seed=seed + epoch,
         ):
+            batch_shapes = tuple(
+                (candidate.rows, candidate.columns)
+                for candidate in batch[0].candidates
+            )
+            batch_shape_graphs = [
+                make_cgra_graph(rows, columns, config.shape_protocol)
+                for rows, columns in batch_shapes
+            ]
             context, success, residual, optimal, oracle = batch_targets(
                 batch, config, device,
             )
             optimizer.zero_grad(set_to_none=True)
-            output = model([query.graph for query in batch], shape_graphs, context)
+            output = model(
+                [query.graph for query in batch], batch_shape_graphs, context,
+            )
             placement = (
                 batch_placement_targets(
                     batch, output["placement_logits"].shape[-2], device,
@@ -891,8 +1061,8 @@ def train_fixed_epochs(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay,
     )
     shape_graphs = [
-        make_cgra_graph(rows, columns)
-        for rows in range(1, 5) for columns in range(1, 5)
+        make_cgra_graph(rows, columns, config.shape_protocol)
+        for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes
     ]
     history: List[Dict[str, Any]] = []
     for epoch in range(1, epochs + 1):
@@ -972,6 +1142,17 @@ def parse_args() -> argparse.Namespace:
               "must be identical."),
     )
     parser.add_argument(
+        "--legacy-mapper4x4-training-manifest", action="append", type=Path,
+        default=[],
+        help=("Legacy 1..4 mapper-prefix manifest. Only its genuine mapper "
+              "4x4 records enter training; all other old shapes are ignored."),
+    )
+    parser.add_argument(
+        "--legacy-mapper4x4-training-fraction", type=float, default=1.0,
+        help=("Family-stratified fraction of disjoint legacy mapper-4x4 "
+              "queries to add to training only."),
+    )
+    parser.add_argument(
         "--placement-supervision", type=Path,
         help=("Mapper operation-to-PE labels. They are attached to the "
               "training partition only."),
@@ -1033,6 +1214,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-set-layers", type=int, default=2)
     parser.add_argument("--candidate-set-heads", type=int, default=4)
     parser.add_argument("--discrete-ii-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--pairwise-ranking-loss-weight", type=float, default=0.0,
+        help=("Weight for within-DFG strict-II ordering supervision in "
+              "pointwise modes; zero preserves the original objective."),
+    )
+    parser.add_argument(
+        "--pairwise-ranking-margin", type=float, default=0.5,
+        help=("Minimum predicted-II separation for successful shape pairs "
+              "whose mapper IIs differ."),
+    )
     parser.add_argument("--placement-loss-weight", type=float, default=0.0)
     parser.add_argument(
         "--dfg-representation",
@@ -1059,6 +1250,20 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help=("Optional exact long-range DFG depth, width, cutwidth, and "
               "raw/semantic size context for the candidate interaction."),
+    )
+    parser.add_argument(
+        "--shape-protocol",
+        choices=(LEGACY_SHAPE_PROTOCOL, AMOEBA_STATIC_SHAPE_PROTOCOL),
+        default=LEGACY_SHAPE_PROTOCOL,
+        help=("Finite mapper-tile shape domain and normalization contract. "
+              "Old checkpoints use the legacy prefix domain."),
+    )
+    parser.add_argument(
+        "--routing-peak-normalization",
+        choices=("legacy_fixed16", "protocol_max_tiles_v1"),
+        default="legacy_fixed16",
+        help=("Versioned soft-placement peak-load scale. Historical "
+              "checkpoints omit this field and retain fixed-16 semantics."),
     )
     parser.add_argument(
         "--discrete-success-threshold", type=float, default=0.5,
@@ -1088,6 +1293,8 @@ def main() -> int:
         candidate_set_layers=args.candidate_set_layers,
         candidate_set_heads=args.candidate_set_heads,
         discrete_ii_loss_weight=args.discrete_ii_loss_weight,
+        pairwise_ranking_loss_weight=args.pairwise_ranking_loss_weight,
+        pairwise_ranking_margin=args.pairwise_ranking_margin,
         discrete_success_threshold=args.discrete_success_threshold,
         discrete_ii_decision=args.discrete_ii_decision,
         placement_loss_weight=args.placement_loss_weight,
@@ -1095,9 +1302,11 @@ def main() -> int:
         dfg_message_mode=args.dfg_message_mode,
         dfg_pool_mode=args.dfg_pool_mode,
         dfg_summary_mode=args.dfg_summary_mode,
+        shape_protocol=args.shape_protocol,
+        routing_peak_normalization=args.routing_peak_normalization,
     ).validate()
     manifest, queries = load_terminal_manifest(
-        args.manifest, config.dfg_representation,
+        args.manifest, config.dfg_representation, config.shape_protocol,
     )
     manifests = [(args.manifest, manifest)]
     splits = split_queries(queries, args.seed)
@@ -1105,7 +1314,7 @@ def main() -> int:
     known_queries = list(queries)
     for additional_path in args.additional_training_manifest:
         additional_manifest, additional_queries = load_terminal_manifest(
-            additional_path, config.dfg_representation,
+            additional_path, config.dfg_representation, config.shape_protocol,
         )
         splits, added_ids = add_training_only_queries(
             splits, known_queries, additional_queries,
@@ -1155,6 +1364,71 @@ def main() -> int:
             "positive --placement-loss-weight requires "
             "--placement-supervision"
         )
+    formal_training_queries = list(splits["train"])
+    legacy_mapper4x4_training = []
+    if args.legacy_mapper4x4_training_manifest and (
+        config.shape_protocol != AMOEBA_STATIC_SHAPE_PROTOCOL
+    ):
+        raise SystemExit(
+            "legacy mapper-4x4 augmentation requires the Amoeba shape protocol"
+        )
+    if not 0.0 < args.legacy_mapper4x4_training_fraction <= 1.0:
+        raise SystemExit(
+            "--legacy-mapper4x4-training-fraction must be in (0, 1]"
+        )
+    known_query_ids = {
+        query.ranking_query_id for query in known_queries
+    }
+    for legacy_path in args.legacy_mapper4x4_training_manifest:
+        legacy_manifest, legacy_queries = load_terminal_manifest(
+            legacy_path, config.dfg_representation, LEGACY_SHAPE_PROTOCOL,
+        )
+        eligible = []
+        overlap_count = 0
+        for query in legacy_queries:
+            if query.ranking_query_id in known_query_ids:
+                overlap_count += 1
+                continue
+            matches = tuple(
+                candidate for candidate in query.candidates
+                if (candidate.rows, candidate.columns) == (4, 4)
+            )
+            if len(matches) != 1:
+                raise ValueError(
+                    "legacy query does not have exactly one mapper 4x4 label"
+                )
+            eligible.append(replace(query, candidates=matches))
+        selected = subsample_training_queries(
+            eligible, args.legacy_mapper4x4_training_fraction, args.seed,
+        )
+        selected_ids = {query.ranking_query_id for query in selected}
+        if selected_ids.intersection(known_query_ids):
+            raise ValueError("legacy mapper-4x4 augmentation overlaps formal data")
+        known_query_ids.update(selected_ids)
+        splits["train"].extend(selected)
+        legacy_mapper4x4_training.append({
+            "path": str(legacy_path.resolve()),
+            "sha256": sha256_file(legacy_path.resolve()),
+            "manifest_query_count": len(legacy_queries),
+            "formal_overlap_excluded_query_count": overlap_count,
+            "eligible_query_count": len(eligible),
+            "selected_query_count": len(selected),
+            "selected_query_ids_sha256": hashlib.sha256(
+                "\n".join(sorted(selected_ids)).encode("utf-8")
+            ).hexdigest(),
+            "source_shape_protocol": LEGACY_SHAPE_PROTOCOL,
+            "selected_mapper_tile_shape": "4x4",
+        })
+        manifests.append((legacy_path, legacy_manifest))
+        print(
+            f"legacy_mapper4x4_manifest={legacy_path.resolve()} "
+            f"eligible={len(eligible)} selected={len(selected)} "
+            f"formal_overlap_excluded={overlap_count}",
+            flush=True,
+        )
+    selected_training_query_ids = sorted(
+        query.ranking_query_id for query in splits["train"]
+    )
     generator_versions = sorted({
         str(candidate.get("generator_version", "unknown"))
         for _, source_manifest in manifests
@@ -1170,25 +1444,37 @@ def main() -> int:
     )
     training["training_seed"] = training_seed
     shape_graphs = [
-        make_cgra_graph(rows, columns)
-        for rows in range(1, 5) for columns in range(1, 5)
+        make_cgra_graph(rows, columns, config.shape_protocol)
+        for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes
     ]
+    evaluation_splits = {
+        **splits,
+        "train": formal_training_queries,
+    }
     evaluations = {
         name: evaluate_model(
             model, split, shape_graphs, config, args.batch_size, device,
         )
-        for name, split in splits.items()
+        for name, split in evaluation_splits.items()
     }
     family_evaluations = {
         name: evaluate_by_family(
             model, split, shape_graphs, config, args.batch_size, device,
         )
-        for name, split in splits.items()
+        for name, split in evaluation_splits.items()
+    }
+    shape_evaluations = {
+        name: evaluate_by_shape(
+            model, split, config, args.batch_size, device,
+        )
+        for name, split in evaluation_splits.items()
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     model_path = args.output_dir / "model.pt"
     torch.save({
         "schema_version": (
+            "cgra-ii-joint-graph-model-v14"
+            if config.shape_protocol == AMOEBA_STATIC_SHAPE_PROTOCOL else
             "cgra-ii-joint-graph-model-v13"
             if config.dfg_summary_mode == "structural_v1" else
             "cgra-ii-joint-graph-model-v12"
@@ -1216,6 +1502,7 @@ def main() -> int:
             "cgra-ii-joint-graph-model-v1"
         ),
         "config": config.to_dict(),
+        "shape_protocol": get_shape_protocol(config.shape_protocol).to_dict(),
         "dfg_node_feature_names": list(
             ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES
             if config.dfg_representation == "route_expanded_v2" else
@@ -1251,6 +1538,9 @@ def main() -> int:
         "additional_training_manifest_sha256": [
             sha256_file(path.resolve())
             for path in args.additional_training_manifest
+        ],
+        "legacy_mapper4x4_training_manifest_sha256": [
+            record["sha256"] for record in legacy_mapper4x4_training
         ],
         "placement_supervision_sha256": (
             placement_supervision["sha256"]
@@ -1290,6 +1580,8 @@ def main() -> int:
             "exploratory_combined_labels_already_disclosed"
         ),
         "model_class": (
+            "amoeba_static_rectangular_pointwise_predictor_v14"
+            if config.shape_protocol == AMOEBA_STATIC_SHAPE_PROTOCOL else
             "structural_context_residual_ii_pointwise_predictor_v13"
             if config.dfg_summary_mode == "structural_v1" else
             "materialized_pool_residual_ii_pointwise_predictor_v12"
@@ -1341,6 +1633,7 @@ def main() -> int:
                 }
                 for path, source_manifest in manifests[1:]
             ],
+            "legacy_mapper4x4_training_only": legacy_mapper4x4_training,
             "placement_supervision": placement_supervision,
         },
         "model": {
@@ -1350,6 +1643,9 @@ def main() -> int:
             "parameter_count": sum(
                 parameter.numel() for parameter in model.parameters()
             ),
+            "shape_protocol": get_shape_protocol(
+                config.shape_protocol
+            ).to_dict(),
         },
         "split_protocol": {
             "unit": "ranking_query_id",
@@ -1365,13 +1661,18 @@ def main() -> int:
                 "fraction": args.training_fraction,
                 "seed": args.seed,
                 "full_query_count": full_training_query_count,
-                "selected_query_count": len(splits["train"]),
+                "formal_selected_query_count": len(formal_training_queries),
+                "final_augmented_query_count": len(splits["train"]),
                 "selected_query_ids_sha256": hashlib.sha256(
                     "\n".join(selected_training_query_ids).encode("utf-8")
                 ).hexdigest(),
             },
             "additional_training_only_query_count": len(
                 added_training_query_ids
+            ),
+            "legacy_mapper4x4_training_only_query_count": sum(
+                record["selected_query_count"]
+                for record in legacy_mapper4x4_training
             ),
             "additional_training_only_query_ids_sha256": hashlib.sha256(
                 "\n".join(added_training_query_ids).encode("utf-8")
@@ -1400,6 +1701,10 @@ def main() -> int:
                     "discrete_routing_set", "discrete_pointwise",
                     "residual_pointwise", "continuous_residual_pointwise",
                 } else None
+            ),
+            "pairwise_ranking": (
+                "within_dfg_successful_strict_ii_margin_hinge"
+                if config.pairwise_ranking_loss_weight > 0.0 else None
             ),
             "placement": (
                 "operation_to_mapper_selected_pe_cross_entropy_training_only"
@@ -1464,8 +1769,13 @@ def main() -> int:
             "shape_ranking_metrics": "downstream_diagnostic_only",
         },
         "training": training,
+        "training_evaluation_population": (
+            "formal_training_partition_only; legacy_mapper4x4_augmentation_"
+            "is_train_only_and_excluded_from_reported_train_metrics"
+        ),
         "evaluation": evaluations,
         "evaluation_by_generator_family": family_evaluations,
+        "evaluation_by_mapper_tile_shape": shape_evaluations,
         "development_gates": gates,
         "development_gates_passed": all(gates.values()),
         "frozen_blind_claim": False,

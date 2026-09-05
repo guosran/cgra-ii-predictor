@@ -1,0 +1,179 @@
+{
+  "schema_version": "cgra-ii-motif-protocol-v3",
+  "protocol_status": "formal_training_evaluation_and_static_dse_scoring_complete",
+  "generator_version": "motif-v8",
+  "manifest_schema_version": "cgra-ii-motif-corpus-v8",
+  "shape_protocol_id": "amoeba-static-rectangles-4x4-tiles-v1",
+  "root_seed": 20260911,
+  "families": [
+    "compute",
+    "recurrence",
+    "predicated",
+    "memory",
+    "pointer",
+    "mixed"
+  ],
+  "operation_bands": {
+    "low": [8, 11],
+    "medium": [12, 15],
+    "high": [16, 20]
+  },
+  "physical_to_mapper": [
+    {"physical_cgra_rows": 1, "physical_cgra_cols": 1, "mapper_tile_rows": 4, "mapper_tile_cols": 4},
+    {"physical_cgra_rows": 1, "physical_cgra_cols": 2, "mapper_tile_rows": 4, "mapper_tile_cols": 8},
+    {"physical_cgra_rows": 2, "physical_cgra_cols": 1, "mapper_tile_rows": 8, "mapper_tile_cols": 4},
+    {"physical_cgra_rows": 1, "physical_cgra_cols": 3, "mapper_tile_rows": 4, "mapper_tile_cols": 12},
+    {"physical_cgra_rows": 3, "physical_cgra_cols": 1, "mapper_tile_rows": 12, "mapper_tile_cols": 4},
+    {"physical_cgra_rows": 1, "physical_cgra_cols": 4, "mapper_tile_rows": 4, "mapper_tile_cols": 16},
+    {"physical_cgra_rows": 2, "physical_cgra_cols": 2, "mapper_tile_rows": 8, "mapper_tile_cols": 8},
+    {"physical_cgra_rows": 4, "physical_cgra_cols": 1, "mapper_tile_rows": 16, "mapper_tile_cols": 4}
+  ],
+  "shape_identity": "oriented_mapper_tile_rows_by_columns",
+  "population": {
+    "requested_bases_per_family": 250,
+    "requested_base_count": 1500,
+    "candidates_per_base": 8,
+    "predeclared_candidate_count": 12000,
+    "censored_candidates": "categorical_without_numeric_ii"
+  },
+  "producer": {
+    "neura_revision": "47b7e3a68c321075293e6fcb45fb3b1cabb93b88",
+    "mlir_neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+    "architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "analysis_argument": "--analyze-rec-res-mii",
+    "mapping_strategy": "heuristic",
+    "mapper_ii_ceiling": 20,
+    "timeout_seconds_per_stage": 60
+  },
+  "split": {
+    "unit": "canonical_dfg_sha256/ranking_query_id",
+    "stratification": "generator_family",
+    "fractions": [0.7, 0.15, 0.15],
+    "seed": 20260911
+  },
+  "model": {
+    "contract": "pointwise_task_dfg_and_one_mapper_shape",
+    "primary_metric": "validation_successful_candidate_continuous_ii_mae",
+    "outputs": ["predicted_ii_mean", "predicted_ii_std", "mapper_success_probability"],
+    "residual_floor": "prediction_not_below_max_rec_res_mii",
+    "routing_peak_normalization": "protocol_max_tiles_v1",
+    "selection_boundary": "single_static_and_uncertainty_gated_models_selected_on_validation_only"
+  },
+  "pilot": {
+    "bases_per_family": 2,
+    "candidate_count": 96,
+    "success_count": 33,
+    "censored_timeout_count": 63,
+    "predeclaration_sha256": "9af74dd2579e650dcd7b510f3fa8e30e766b097b1e08599430e2545ac9ca0917",
+    "terminal_manifest_sha256": "d146cbdf5b0003ec5f594840c94678a6239459d5fd087042ae386c12d4a1f198",
+    "audit_report_sha256": "5819f3baee3ab1dc9412e2ffa9df295b8ab96990de944f4f25be38c694e0fc1b",
+    "successful_override_verification": "33_of_33_x_y_and_placement_bounds"
+  },
+  "formal_collection": {
+    "slurm_job_ids": [1477591, 1477592],
+    "job_1477591_status": "failed_before_predeclaration_missing_explicit_architecture_path",
+    "successful_job": 1477592,
+    "afterok_audit_training_launcher_job": 1477604,
+    "remote_path": "/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/motif-v8-formal-seed-20260911",
+    "predeclaration_sha256": "99caf8ee5ea12994f2b3a7a4841f80a08cd6abc0644ed16de9bfaf9eda2d9279",
+    "terminal_manifest_sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f",
+    "placement_supervision_sha256": "71f00fe2d29895704ea6edbc352c9f3adf2caad04fc39749e07519b4b16bebc3",
+    "audit_report_sha256": "d2b33bd2e83d32676dfe30feb56475f0a48427280c6aa176adbae2c3b7f48aa1",
+    "success_count": 4442,
+    "censored_count": 7558,
+    "explicit_xy_and_placement_verified": "4442_of_4442"
+  },
+  "formal_training": {
+    "routing_peak_normalization": "protocol_max_tiles_v1",
+    "training_job_ids": [1478198, 1478199, 1478200],
+    "pairwise_ranking_training_job_ids": [1478681, 1478683, 1478682],
+    "three_model_evaluation_job_id": 1478201,
+    "prior_five_model_hybrid_evaluation_job_id": 1478205,
+    "final_six_model_evaluation_job_id": 1479107,
+    "legacy_mapper4x4_augmentation_jobs": [1478183, 1478184],
+    "status": "complete",
+    "checkpoints": {
+      "continuous128": "8618741e8b60a6604f9c5abd56e5337d994a0efa1d20f651e162d7d9a8f0b944",
+      "residual128": "621e2c9fbdad63f5bc44467fbf6483d6793a113b5482f590b47e406680f4883f",
+      "continuous160_struct": "71bd5561318b11a74095e285242f002cc21fa15c2b90ed98fc862620ebc718e2",
+      "continuous128_legacy4x4": "e897d58b3c380075fefd2647cd5210364f10995a5ac15dc29785b94e32f73bc9",
+      "residual128_legacy4x4": "174ac08fa6c2493e8c6c6717c3d82b70f4cbb6fe04ebb7788daf626491b5c4a4",
+      "residual128_rank01": "ae9273e2bec0c864b4dce26369cefc8a20ecac4314f76bc0e2277b8b6238cd75"
+    },
+    "pairwise_ranking_loss_weight": 0.1,
+    "pairwise_ranking_margin": 0.5,
+    "selected_ensemble_report_sha256": "354cd9bf4f10fef84248b2307ba35ed289363a75b993a988fcfe44e4299e1521",
+    "selected_analytical_hybrid_report_sha256": "1294cf36fcaa2e01441c2e8e4655a2940503dc1447391274bf4e21d9f90b6b15",
+    "selected_analytical_hybrid_rule": null,
+    "validation_ensemble_mae": 0.34095332678449364,
+    "test_ensemble_mae": 0.38966490319520514,
+    "validation_ensemble_macro_query_mae": 0.4644129760456634,
+    "test_ensemble_macro_query_mae": 0.4840331203034485,
+    "analytical_test_mae": 1.913713405238829
+  },
+  "static_dse_evaluation": {
+    "parallel_nested": {
+      "candidate_count": 64,
+      "unique_task_shape_queries": 16,
+      "predicted_top1": "candidate-0",
+      "top1_oracle_recall": 1.0,
+      "absolute_objective_regret_cycles": 0.0,
+      "projected_mapper_call_reduction_fraction": 0.953125,
+      "actual_mapper_call_reduction_fraction": null,
+      "replay_status": "blocked_materialized_shape_not_preserved"
+    },
+    "multi_nested": {
+      "candidate_count": 32768,
+      "hardware_grid_legal_count": 18288,
+      "hardware_grid_unpackable_count": 14480,
+      "unique_task_shape_queries": 40,
+      "predicted_top1": "candidate-0",
+      "actual_top1_cycles": 387.0,
+      "oracle_best_cycles": 387.0,
+      "absolute_objective_regret_cycles": 0.0,
+      "all_shortlist_replays_match_oracle": true,
+      "frozen_pipeline_report_sha256": "32ec1bdca46229c7457ea870c2d6a4d2812856a88055bafb463f5179896b1c25"
+    },
+    "irregular_loop": {
+      "frontend_status": "zero_rank_store_generic_syntax_workaround",
+      "candidate_count": 464,
+      "unique_task_shape_queries": 24,
+      "mapper_success_count": 23,
+      "mapper_censored_count": 1,
+      "predicted_top1": "candidate-0",
+      "actual_top1_cycles": 69.0,
+      "oracle_best_cycles": 69.0,
+      "absolute_objective_regret_cycles": 0.0,
+      "global_optimum_certified_despite_censored_query": true
+    },
+    "attention": {
+      "evaluation_scope": "op_capped_exact_grid_constrained",
+      "unpruned_candidate_count": 16777216,
+      "op_capped_candidate_count": 3645,
+      "hardware_grid_legal_count": 3643,
+      "unique_task_shape_queries": 24,
+      "predicted_top1": "candidate-0",
+      "actual_top1_cycles": 29360129.0,
+      "full_space_oracle_available": false
+    }
+  },
+  "taskflow_coverage": {
+    "fully_evaluated": ["parallel-nested", "multi-nested", "irregular-loop"],
+    "constrained_evaluated": ["attention"],
+    "requires_constrained_incremental_enumeration": ["resnet"],
+    "requires_upstream_lowering_fix": ["attention"],
+    "outside_static_trip_count_protocol": ["symbol-dynamic/*"],
+    "orchestration_without_standalone_pointwise_kernels": [
+      "pipeline-interval/*",
+      "allocation-with-resource-binding",
+      "replica-set"
+    ],
+    "static_followup_evaluation": "evaluations/taskflow-static-followup-2026-09-05.json"
+  },
+  "unsupported_todo": [
+    "dynamic_shapes",
+    "nonrectangular_L_shapes",
+    "nonrectangular_T_shapes",
+    "arbitrary_untrained_mapper_dimensions"
+  ]
+}

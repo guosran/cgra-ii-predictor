@@ -476,3 +476,245 @@ soft placement 和 routing context，不包括模型加载、manifest 解析与�
 `evaluations/model2-pointwise-ensemble-2026-09-05.json` 和
 `evaluations/model2-pointwise-latency-2026-09-05.json`。二者记录了冻结 manifest 与
 三个 checkpoint 的 SHA-256；模型本体继续保留在报告列出的 FactCluster 路径。
+
+### 2026-09-05：Amoeba static multi-CGRA v8 协议与自动训练链
+
+旧协议的 `rows/columns=1..4` 是单个 Neura 4x4 array 的 PE 子网，不能表示
+Amoeba physical CGRA 数量。新协议
+`amoeba-static-rectangles-4x4-tiles-v1` 将 physical shape 明确转换为 mapper tiles：
+`1x1->4x4`、`1x2->4x8`、`2x1->8x4`、`1x3->4x12`、`3x1->12x4`、
+`1x4->4x16`、`2x2->8x8`、`4x1->16x4`。方向不合并；新 checkpoint 在 config
+内持久化协议 ID，旧 checkpoint 缺省时仍解释为旧协议。
+
+正式数据使用 1,500 个不同 DFG，每个 DFG 交叉上述 8 个 shape，共预声明 12,000
+个候选。标签只来自 pinned Neura heuristic mapper；mapper timeout/failure 保持
+censored，不生成 II。采集 Job `1477592` 使用 64 CPU、每阶段 60 秒 timeout，producer
+身份为：
+
+- Neura commit `47b7e3a68c321075293e6fcb45fb3b1cabb93b88`
+- `mlir-neura-opt` SHA-256
+  `7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49`
+- architecture SHA-256
+  `f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6`
+
+先前的 Job `1477591` 因未显式提供 architecture 路径而在 predeclaration 之前失败，
+没有产生可用标签。小规模 pilot 的 96 个候选中 33 个 success、63 个 mapper timeout；
+33/33 成功 artifact 的显式 `x_tiles/y_tiles` 与 placement bounds 均通过审计。
+
+不需要频繁轮询。Job `1477604` 以 `afterok:1477592` 依赖等待正式采集；采集成功后
+它会自动生成 corpus audit 和 SHA，再由
+`cluster/submit_factcluster_pointwise_v8_suite.sh` 提交三组单 L20 训练。三组训练最多
+同时占用 3 张 GPU；全部成功后再自动提交单 GPU evaluation，依次产出 validation-only
+ensemble、单候选 latency 和旧/新 ensemble 在同一正式 test/mapper-4x4 子集上的公平
+对比。任一前置作业失败，后续 `afterok` 作业不会运行。
+
+低频查看整个依赖链：
+
+```sh
+ssh factcluster \
+  'squeue -j 1477592,1477604 -o "%.18i %.24j %.2t %.10M %.10l %R"'
+```
+
+正式 corpus、placement supervision 和 audit 位于：
+
+```text
+/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/motif-v8-formal-seed-20260911/
+/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/placement-supervision.json
+/fact_data/yibozhang/cgra-ii-model2/multi-cgra-v8/motif-v8-formal-audit.json
+```
+
+训练输出位于
+`/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-<LABEL>-<JOB_ID>/`，自动评估
+输出位于 `/fact_data/yibozhang/cgra-ii-model2/evaluations/pointwise-v8-<JOB_ID>/`。
+训练/评估的实际 job ID、artifact SHA 和最终指标应以 launcher/evaluation 日志及该目录
+内 JSON 报告为准。
+
+### 2026-09-05：multi-CGRA v8 最终结果
+
+正式采集 Job `1477592` 已完成：1,500 个 DFG、12,000 个候选中 4,442 个
+mapper success，7,558 个 censored（7,518 timeout，40 个 lower bound 超过 II
+上限）。manifest SHA-256 为
+`33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f`，
+placement supervision 为
+`71f00fe2d29895704ea6edbc352c9f3adf2caad04fc39749e07519b4b16bebc3`；
+4,442/4,442 个成功 artifact 的显式 x/y override 和 placement bounds 均通过。
+
+代码终审发现 soft-placement peak-load 特征仍隐含使用旧 16-PE 上限。最终 checkpoint
+显式记录 `routing_peak_normalization=protocol_max_tiles_v1`，对 v8 除以 64；缺少该
+字段的历史 checkpoint 继续按 fixed-16 解释，防止静默改变旧 artifact 语义。最终重训
+Jobs 为 `1478198/1478199/1478200`，对应 checkpoint SHA-256：
+
+- continuous128: `8618741e8b60a6604f9c5abd56e5337d994a0efa1d20f651e162d7d9a8f0b944`
+- residual128: `621e2c9fbdad63f5bc44467fbf6483d6793a113b5482f590b47e406680f4883f`
+- continuous160 structural: `71bd5561318b11a74095e285242f002cc21fa15c2b90ed98fc862620ebc718e2`
+
+最佳单模型由 validation 选择为 residual128（validation/test MAE
+`0.40025/0.43631`）。只用三个新模型的 validation-gated ensemble 是
+`0.37940/0.42025`。另外两个只使用真实旧 mapper-4x4 train-only 标签的模型由 Jobs
+`1478183/1478184` 产生；把它们作为候选加入后，validation 给出的权重是
+`continuous128=0.31075`、`residual128=0.66981`、旧 4x4 continuous=`0.00236`、
+旧 4x4 residual=`0.01707`、structural/analytical=`0`，uncertainty exponent=`6.0`。
+最终五模型 validation/test MAE 为 `0.37596/0.41874`，优于同一候选的静态 ensemble
+validation `0.39276`，因此按 validation-only 规则采用 uncertainty gating。最终报告
+是 `evaluations/pointwise-v8-1478205/ensemble.json`，SHA-256
+`80dc4a04e49b19955cbe77b4b675ba7fd58fa9298ac79cef8cf85fb0249d676d`。
+
+测试集同时得到 macro-query MAE `0.51903`、RMSE `0.76388`、mean signed error
+`-0.06582`、underprediction `34.36%`；floor exact/±1 为 `60.40%/90.60%`，round
+exact/±1 为 `71.80%/92.45%`。success 分类在全部 1,824 个 test 候选上 accuracy
+`85.86%`、recall `87.67%`、precision `76.17%`、Brier `0.09748`、10-bin ECE
+`0.05311`。
+
+| mapper shape | test successful-candidate MAE |
+| --- | ---: |
+| 4x4 | 0.57688 |
+| 4x8 | 0.36670 |
+| 8x4 | 0.35956 |
+| 4x12 | 0.42181 |
+| 12x4 | 0.30951 |
+| 4x16 | 0.30067 |
+| 8x8 | 0.35299 |
+| 16x4 | 0.58606 |
+
+逐 family test MAE 为 compute `0.73131`、memory `0.51830`、mixed `0.63517`、
+pointer `0.57245`、predicated `0.77774`、recurrence `0.08765`。解析 lower bound
+整体 test MAE 是 `1.91371`。可部署门控只在 validation 搜索预映射可见条件：低
+lower-bound/低预测-II 阈值均选择 0（不切换）；`RecMII > ResMII` 时改用 analytical
+mean 将 validation/test MAE 进一步变为 `0.37508/0.41495`。该规则不替换 ML 的
+uncertainty 或 mapper-success probability。hybrid 报告 SHA-256 为
+`e87c9f664f6a70d3c45ce6686ebb2afa1d9f6b711322df34145f0ac99936c5ba`。
+
+同一正式 4x4 子集上的旧三模型公平比较仍由 validation 选择旧模型：旧/新 validation
+MAE `0.29728/0.50858`，test `0.42947/0.57688`。这是 4x4 专用 fallback 的依据，
+但当前统一 v8 adapter 不额外加载三份旧 checkpoint；最终五模型已通过两个旧 4x4
+train-only 模型吸收少量该信息。
+
+L20 上最终五模型顺序单候选推理平均 `63.00 ms`、P95 `96.08 ms`；每个模型平均约
+`12.3--12.9 ms`。`parallel-nested` 的 16 个唯一 task/shape query：模型加载
+`539.01 ms`，steady-state `641.72 ms`（`40.11 ms/query`）；Amoeba scorer 对全部
+64 个候选耗时约 `10 ms`，cache 为 16 misses/112 hits，top-1 `candidate-0` 命中
+oracle、objective regret 为 0，top-3 的 projected mapper-call reduction 为
+`95.3125%`。`multi-nested` 的 32,768 个候选全部有效打分，40 个唯一 query、cache
+40 misses/163,800 hits，predictor steady-state `657.54 ms`，scorer `4.89 s`。
+
+真实完整程序 shortlist replay 仍不能验收：当前 Amoeba 会重新 fusion/allocation，
+不能保证 materialized shape 转成相同的 Neura x/y override。因此 actual mapper-call
+reduction 保持 `null`，只报告 projected 数值；详细复现见
+`docs/AMOEBA_REPLAY_INTERFACE.md`。dynamic 和 L/T shape 仍是显式 TODO；
+`irregular-loop` 的原 blocker 已由后文的窄范围 round-trip workaround 解除。
+
+### 2026-09-05：4x4 全局装箱约束与 pointwise 排序对照
+
+独立 frozen pipeline 现按 architecture header 的物理 `grid_rows/grid_cols` 做精确的
+有向矩形装箱；同一 program 的所有 task rectangle 必须能同时、无重叠地放入 4x4
+物理 CGRA 网格。`multi-nested` 的 32,768 个笛卡尔积候选中只有 18,288 个合法，
+14,480 个（44.2%）以 `HARDWARE_GRID_UNPACKABLE` 排除。全部 40 个 task/shape 已由
+真实 heuristic mapper 补齐，合法空间的最优 compute bottleneck 是 387 cycles；原
+ML top-1 本身可装箱，但真实为 578 cycles，regret 191 cycles（49.354%）。报告位于：
+
+```text
+evaluations/pointwise-v8-1478205/multi-nested-full-oracle-20260905/oracle.json
+evaluations/pointwise-v8-1478205/independent-multi-grid-packable-top3-20260905/report.json
+```
+
+pointwise loss 新增可选 `--pairwise-ranking-loss-weight`（默认 0，保持旧 checkpoint
+训练语义）和 `--pairwise-ranking-margin`（默认 0.5 II）。它只监督同一 DFG 内两个
+mapper-success 且真实 II 严格不同的 shape；tie 和 censored pair 不产生次序标签。
+在相同正式 manifest、residual128 架构、数据 split、seed 和 placement supervision
+下提交三组单变量对照：
+
+- Job `1478681`: ranking weight `0.1`
+- Job `1478683`: ranking weight `0.3`
+- Job `1478682`: ranking weight `1.0`
+
+输出目录分别为
+`/fact_data/yibozhang/cgra-ii-model2/runs/pointwise-v8-residual128-rank01-s12-1478681/`、
+`...rank03-s12-1478683/`、`...rank10-s12-1478682/`。不需要轮询；需要时一次查看：
+
+三个作业均 `COMPLETED (0:0)`。严格按 validation continuous-II MAE 选择 λ，test
+只在选择完成后查看：
+
+| ranking weight | validation MAE | validation macro MAE | test MAE | test macro MAE |
+| ---: | ---: | ---: | ---: | ---: |
+| 0（同架构基线） | 0.40025 | 0.53753 | 0.43631 | 0.56211 |
+| 0.1 | **0.34900** | **0.47155** | **0.39666** | **0.49355** |
+| 0.3 | 0.39145 | 0.48288 | 0.42418 | 0.53757 |
+| 1.0 | 0.42967 | 0.55523 | 0.45276 | 0.57706 |
+
+所以选择 Job `1478681` 的 λ=0.1 checkpoint，SHA-256
+`ae9273e2bec0c864b4dce26369cefc8a20ecac4314f76bc0e2277b8b6238cd75`。它没有
+全面改善正式跨-shape top-k：validation optimal-II top-1 与基线同为 `66.07%`，test
+由 `66.06%` 变为 `65.14%`；其价值必须由真实 program 验收，而不能从 training loss
+或单一 top-k 指标推断。三份训练报告及完整汇总位于：
+
+```text
+evaluations/pointwise-v8-residual128-rank01-s12-1478681.json
+evaluations/pointwise-v8-residual128-rank03-s12-1478683.json
+evaluations/pointwise-v8-residual128-rank10-s12-1478682.json
+evaluations/pointwise-v8-ranking-loss-2026-09-05.json
+```
+
+λ=0.1 修复了目标错误：Task_2 的 4x4/12x4 预测从旧模型的 `1.946/1.883`
+变为 `1.418/1.605`，真实值为 `2/3`。受 4x4 整机装箱约束的 `multi-nested`
+top-3 变为 `candidate-0/1/2`；真实 mapper top-1 为 387 cycles，等于完整 oracle，
+regret 为 0。单模型仍明显低估绝对 latency：预测 275.836 cycles，误差
+`-28.72%`。报告 SHA-256 为
+`bfb30c127a80de4387f86e07e675249ecba503b5542f2a3f2b5da373378490c7`。
+
+把 λ=0.1 加入原五模型候选后，Job `1479107` 用 validation 选出
+uncertainty-gated ensemble：λ=0.1 权重 `0.91774`、原 residual128 权重
+`0.08226`，其余模型和 analytical lower bound 均为 0。最终 validation/test MAE
+为 `0.34095/0.38966`，macro-query MAE 为 `0.46441/0.48403`；报告 SHA-256
+`354cd9bf4f10fef84248b2307ba35ed289363a75b993a988fcfe44e4299e1521`。它同样选择
+`candidate-0`，真实 387 cycles、regret 0，同时把预测提高到 359.952 cycles，误差
+降为 `-6.99%`。完整 pipeline 报告 SHA-256 为
+`32ec1bdca46229c7457ea870c2d6a4d2812856a88055bafb463f5179896b1c25`。
+
+success classifier 的 test Brier/ECE/precision 改善为
+`0.09330/0.02717/79.74%`，但固定 0.5 阈值 recall 从旧 ensemble 的 `87.67%`
+降到 `83.67%`；部署时必须把这个权衡写入验收，不能只报告 II MAE。六模型顺序
+单候选平均/P95 为 `75.97/114.44 ms`，40 个唯一 query 的批量 steady-state 为
+`815.11 ms`；仍应批量预测并缓存，不能对 32,768 个 program 重复跑模型。
+
+冻结 `multi-nested` 的 40 个小 DFG task-shape 上，λ=0.1 单模型 MAE 为 `1.063`，
+analytical lower bound 为 `1.675`，前者在 38/40 点更准。analytical 虽也因全部
+shape 大量并列及枚举顺序而选到 `candidate-0`，但其预测只有 196 cycles，较真实
+387 低估 `49.35%`，并不适合作为“小 op 直接替换 ML”的规则。后续应补充同协议
+3--7 op 的 training-only 数据并只用 validation 校准。
+
+### 2026-09-05：irregular-loop workaround 与 attention 增量剪枝
+
+`adapters/extract_amoeba_task_dfgs.py` 已补齐只带 `iter_args_init` 的 Neura kernel。
+Neura 对零秩 `store_indexed` 打印出的 `to [ : ]` custom form 无法由自身 parser
+回读；extractor 只对这一精确形式输出等价 generic operation，并保留
+`operandSegmentSizes = [1,0,0]`。这让 `irregular-loop` 的三个 task 全部进入正式
+analysis/model/mapper pipeline。op 数分别是 9/7/13，严格 cap 只保留全 1x1；放开
+cap 的全 shape 审计有 464 个可装箱候选、24 个唯一 query，23 成功、1 timeout。
+全 1x1 的预测/实际 objective 为 `61.465/69` cycles，实际并列全局最优。timeout
+只发生在 Task_0/16x4；Task_2 的八个 shape 已全部成功且最短 duration 为 69，因此
+不会隐藏更小的 program objective。
+
+新 `adapters/enumerate_amoeba_pruned_candidates.py` 不物化未约束笛卡尔积。它先按
+`ceil(materialized_ops / 16) + slack` 限制每 task 的物理 CGRA 面积，再在 DFS 每个
+前缀用精确 4x4 有向矩形装箱过滤。第一项必须一直标为 heuristic，第二项才是硬件
+约束。`attention` 的 op 数为 `28/28/28/30/24/35/10/28`，shape cap 为
+`2/2/2/2/2/3/1/2`；候选从 `16,777,216` 降至 op-capped 3,645，再降至 exact-grid
+3,643，总缩减 `99.9783%`。24 个唯一模型查询全部 supported。
+
+`attention` constrained top-3 的十个唯一真实 mapper query 中八个成功；Task_5 的
+4x8 和 8x4 均在 300 秒 timeout，保持 censored。最终选择全 1x1 candidate-0，预测
+`17,402,648.6`、实际 `29,360,129` cycles。额外各抽一个刚超出 cap 的 shape：
+Task_6/4x8 成功且 II=2，与其 4x4 相同；其余 7/8 在 30 秒内没有完成。这支持把 op
+cap 当作实际搜索预算，但不是“被剪 shape 一定无收益”的证明。
+
+attention lower 还需要两处临时 Neura 源修复：RPO flatten 后把 `neura.yield` 移回
+entry block 末尾，以及补 `arith.cmpf -> neura.fcmp`。它们只在隔离 worktree 中
+构建验证，没有修改正式 Amoeba/Neura checkout。正式部署前应把补丁和 verifier
+regression test 上游化。冻结摘要、所有输入/报告哈希见
+`evaluations/taskflow-static-followup-2026-09-05.json`。
+
+只运行了 Amoeba lit 的 `irregular-loop` 和 `attention` 两项；隔离 commit
+`2b7d75b` 为 2/2 passed，不能写成整个 `test/multi-cgra/taskflow` 已通过。用户当前
+dirty Amoeba checkout 为 1/2：irregular-loop 的 pass 已完成，但 FileCheck 期待融合
+task 为 1x2，当前 resource-aware 输出为 1x1。不要为消除这个期望差异覆盖该 checkout
+中的 allocation 修改。

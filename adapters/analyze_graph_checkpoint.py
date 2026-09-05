@@ -29,6 +29,7 @@ from cgra_ii_predictor.graph_model import (  # noqa: E402
     Model2Config,
     make_cgra_graph,
 )
+from cgra_ii_predictor.shape_protocol import get_shape_protocol  # noqa: E402
 from neura_graph_experiment import (  # noqa: E402
     QueryRecord,
     batch_targets,
@@ -157,7 +158,7 @@ def analyze(
     }:
         raise ValueError("checkpoint is not an independent pointwise II model")
     _, queries = load_terminal_manifest(
-        manifest_path, config.dfg_representation,
+        manifest_path, config.dfg_representation, config.shape_protocol,
     )
     splits = split_queries(queries, seed)
     selected = splits[split_name]
@@ -165,8 +166,8 @@ def analyze(
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
     shape_graphs = [
-        make_cgra_graph(rows, columns)
-        for rows in range(1, 5) for columns in range(1, 5)
+        make_cgra_graph(rows, columns, config.shape_protocol)
+        for rows, columns in get_shape_protocol(config.shape_protocol).mapper_shapes
     ]
     rows: list[Dict[str, Any]] = []
     with torch.no_grad():
