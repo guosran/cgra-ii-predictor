@@ -32,13 +32,13 @@ from amoeba_cost_catalog import (  # noqa: E402
     load_candidate_manifest,
     sha256_file,
 )
+from amoeba_protocol import CANDIDATE_SCHEMA, SCORE_SCHEMA  # noqa: E402
 from build_amoeba_query_oracle import parse_single_mapping  # noqa: E402
 from evaluate_amoeba_scores import load_oracle  # noqa: E402
 
 
-SCORE_SCHEMA = "amoeba-analytical-task-scores-v2"
-PIPELINE_SCHEMA = "cgra-ii-independent-frozen-pipeline-v1"
-SCORE_MODEL = "static-shape-grid-packable-compute-bottleneck-v3"
+PIPELINE_SCHEMA = "cgra-ii-independent-frozen-pipeline"
+SCORE_MODEL = "static-shape-grid-packable-compute-bottleneck"
 QueryKey = Tuple[str, int, int]
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -134,7 +134,7 @@ def _positive_number(value: object, label: str) -> float:
 def load_cost_catalog(
     path: Path, manifest: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    """Load a complete, provenance-bound Amoeba v2 cost catalogue."""
+    """Load a complete, provenance-bound Amoeba cost catalogue."""
     root = _object(json.loads(path.read_text()), "cost catalogue")
     header = _object(manifest["header"], "candidate header")
     if root.get("schema_version") != COST_SCHEMA:
@@ -293,7 +293,7 @@ def score_candidates(
     header = {
         "record_type": "header",
         "schema_version": SCORE_SCHEMA,
-        "candidate_schema_version": "amoeba-analytical-task-candidates-v2",
+        "candidate_schema_version": CANDIDATE_SCHEMA,
         "function": function,
         "cost_namespace": catalog["namespace"],
         "score_model": SCORE_MODEL,

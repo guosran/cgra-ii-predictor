@@ -1,19 +1,9 @@
-"""Compiler-agnostic CGRA compiled-II prediction utilities."""
+"""CGRA initiation-interval prediction and static-shape ranking."""
 
-from .dataset import Dataset, Sample, load_dataset
-from .model import (
-    fit_ridge,
-    nested_group_holdout,
-    predict_compiled_ii,
-    predict_ridge,
-)
+from .graph_model import JointGraphShapeModel, PointwiseConfig
+from .shape_protocol import SHAPE_PROTOCOL, SHAPE_PROTOCOL_ID
 
 __all__ = [
-    "Dataset",
-    "Sample",
-    "fit_ridge",
-    "load_dataset",
-    "nested_group_holdout",
-    "predict_compiled_ii",
-    "predict_ridge",
+    "JointGraphShapeModel", "PointwiseConfig", "SHAPE_PROTOCOL",
+    "SHAPE_PROTOCOL_ID",
 ]

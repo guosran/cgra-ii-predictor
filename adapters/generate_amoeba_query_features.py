@@ -34,7 +34,7 @@ from amoeba_cost_catalog import (  # noqa: E402
     sha256_file,
 )
 from cgra_ii_predictor.graph_model import parse_neura_dfg  # noqa: E402
-from neura_experiment import parse_cost_features  # noqa: E402
+from neura_cost_features import parse_cost_features  # noqa: E402
 
 
 QueryKey = Tuple[str, int, int]
@@ -179,9 +179,9 @@ def generate_query_features(
         "architecture_path": str(architecture.resolve()),
         "architecture_sha256": sha256_file(architecture),
         "task_dfg_sha256": task_hashes,
-        "rec_res_source": "neura-analysis-only-x-y-override-v1",
+        "rec_res_source": "neura-analysis-only-x-y-override",
         "startup_cycles_source": (
-            "frontend-semantic-dfg-unit-latency-critical-path-v1"
+            "frontend-semantic-dfg-unit-latency-critical-path"
         ),
     }
     result = {

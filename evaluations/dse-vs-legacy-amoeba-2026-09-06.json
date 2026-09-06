@@ -1,0 +1,126 @@
+{
+  "schema_version": "cgra-dse-vs-amoeba-true-mapper",
+  "date": "2026-09-06",
+  "comparison_contract": {
+    "target": "compiled_ii_from_neura_heuristic_mapper",
+    "program_objective": "max(startup_cycles + compiled_ii * (trip_count - 1))",
+    "architecture": "/home/x/shiran/project/amoeba/test/archspec/architecture_with_counter.yaml",
+    "architecture_sha256": "5c228166de4ceacf49b0ea6286a4a8c1ce45a718ef3da8899a21cea07aa7a174",
+    "neura_opt_sha256": "7c8b0753609c9045fd4dabd3041f5a5311ce3922f431526c9a61ea4d794e6d49",
+    "rules": [
+      "Compare mapper labels on the same architecture.",
+      "Do not use point-model or analytical II as a mapper label.",
+      "Keep mapper failure and timeout censored."
+    ]
+  },
+  "attention": {
+    "dse_selected": {
+      "candidate_id": "candidate-0",
+      "resource_aware_fusion_fission": false,
+      "shapes": ["1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1"],
+      "tasks": [
+        {"name": "Task_0", "compiled_ii": 7, "startup_cycles": 8, "trip_count": 1048576, "latency_cycles": 7340033},
+        {"name": "Task_1", "compiled_ii": 7, "startup_cycles": 8, "trip_count": 1048576, "latency_cycles": 7340033},
+        {"name": "Task_2", "compiled_ii": 7, "startup_cycles": 8, "trip_count": 1048576, "latency_cycles": 7340033},
+        {"name": "Task_3", "compiled_ii": 6, "startup_cycles": 9, "trip_count": 4194304, "latency_cycles": 25165827},
+        {"name": "Task_4", "compiled_ii": 6, "startup_cycles": 11, "trip_count": 256, "latency_cycles": 1541},
+        {"name": "Task_5", "compiled_ii": 9, "startup_cycles": 14, "trip_count": 65536, "latency_cycles": 589829},
+        {"name": "Task_6", "compiled_ii": 2, "startup_cycles": 6, "trip_count": 65536, "latency_cycles": 131076},
+        {"name": "Task_7", "compiled_ii": 7, "startup_cycles": 8, "trip_count": 4194304, "latency_cycles": 29360129}
+      ],
+      "objective_interval_cycles": 29360129,
+      "dependency_dag_makespan_cycles": 62588435
+    },
+    "legacy_amoeba": {
+      "resource_aware_fusion_fission": true,
+      "final_allocation": [
+        {"name": "Task_0_Task_1_utilfused_Task_2_utilfused", "shape": "1x2", "compiled_ii": 11, "startup_cycles": 14, "trip_count": 1048576, "latency_cycles": 11534339, "label_source": "independent_true_mapper_replay"},
+        {"name": "Task_3", "shape": "1x1", "compiled_ii": 6, "startup_cycles": 9, "trip_count": 4194304, "latency_cycles": 25165827, "label_source": "true_mapper"},
+        {"name": "Task_4", "shape": "1x1", "compiled_ii": 6, "startup_cycles": 11, "trip_count": 256, "latency_cycles": 1541, "label_source": "true_mapper"},
+        {"name": "Task_5", "shape": "1x1", "compiled_ii": 9, "startup_cycles": 14, "trip_count": 65536, "latency_cycles": 589829, "label_source": "true_mapper"},
+        {"name": "Task_6", "shape": "1x1", "compiled_ii": 2, "startup_cycles": 6, "trip_count": 65536, "latency_cycles": 131076, "label_source": "true_mapper"},
+        {"name": "Task_7", "shape": "1x1", "compiled_ii": 7, "startup_cycles": 8, "trip_count": 4194304, "latency_cycles": 29360129, "label_source": "true_mapper"}
+      ],
+      "objective_interval_cycles": 29360129,
+      "true_mapper_corrected_dependency_dag_makespan_cycles": 66782741,
+      "amoeba_reported_makespan_cycles": 59442710,
+      "amoeba_reported_makespan_is_not_true_mapper_complete": true,
+      "fallback_correction": {
+        "task": "Task_0_Task_1_utilfused_Task_2_utilfused",
+        "amoeba_guard_reason": "199 operations exceeds the internal 150-operation mapper guard",
+        "amoeba_analytical_fallback_ii": 4,
+        "independent_true_mapper_compiled_ii": 11,
+        "startup_cycles_derivation": "maximum mapped time_step in the successful mapper output",
+        "true_mapper_output_sha256": "f351e03f8c8a20f60d05c87015de41615cd56bac11012cc04124d1fe49932c30",
+        "true_mapper_log_sha256": "ff722206fc3a19f34c08e8e921208a61372b5e7edd58e6df06a19a9e7152617e"
+      }
+    },
+    "comparison": {
+      "objective_interval_reduction_cycles": 0,
+      "objective_interval_reduction_fraction": 0.0,
+      "dependency_dag_makespan_reduction_cycles": 4194306,
+      "dependency_dag_makespan_reduction_fraction": 0.06280523885654828,
+      "interpretation": "The no-fusion DSE leaves the steady-state Task_7 bottleneck unchanged, but avoids the legacy fused task whose true mapper II is 11."
+    },
+    "legacy_run_artifacts": {
+      "output_sha256": "7812b471352bffd8a9df7da9415d8104aa5404e8502011fe8f1ccabd8b49d2cb",
+      "log_sha256": "73a416a5754eaeeed99ca063043b4181736ddb37ac656aa05d2056b9e1a5e118"
+    }
+  },
+  "resnet": {
+    "dse_selected": {
+      "candidate_count_after_operation_cap_and_exact_packing": 1,
+      "selection_note": "All ten task caps are one physical CGRA, so this is a unique legal all-1x1 candidate rather than a learned ranking win.",
+      "resource_aware_fusion_fission": false,
+      "memory_access_streaming_fusion": true,
+      "shapes": ["1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1", "1x1"],
+      "tasks": [
+        {"name": "Task_0", "compiled_ii": 2, "startup_cycles": 3, "trip_count": 4096, "latency_cycles": 8193},
+        {"name": "Task_1", "compiled_ii": 2, "startup_cycles": 2, "trip_count": 6400, "latency_cycles": 12800},
+        {"name": "Task_2", "compiled_ii": 2, "startup_cycles": 2, "trip_count": 4096, "latency_cycles": 8192},
+        {"name": "Task_3", "compiled_ii": 3, "startup_cycles": 6, "trip_count": 2359296, "latency_cycles": 7077891},
+        {"name": "Task_4_Task_5_fused", "compiled_ii": 5, "startup_cycles": 7, "trip_count": 4096, "latency_cycles": 20482},
+        {"name": "Task_6", "compiled_ii": 2, "startup_cycles": 3, "trip_count": 4096, "latency_cycles": 8193},
+        {"name": "Task_7", "compiled_ii": 2, "startup_cycles": 2, "trip_count": 6400, "latency_cycles": 12800},
+        {"name": "Task_8", "compiled_ii": 2, "startup_cycles": 2, "trip_count": 4096, "latency_cycles": 8192},
+        {"name": "Task_9", "compiled_ii": 3, "startup_cycles": 6, "trip_count": 2359296, "latency_cycles": 7077891},
+        {"name": "Task_10_Task_11_Task_12_fused_fused", "compiled_ii": 6, "startup_cycles": 8, "trip_count": 4096, "latency_cycles": 24578}
+      ],
+      "objective_interval_cycles": 7077891,
+      "dependency_dag_makespan_cycles": 7119366
+    },
+    "legacy_amoeba": {
+      "source": "Amoeba test expectation at commit f805a9e8a2fd95136288278f4a1f97ccfe334640",
+      "resource_aware_fusion_fission": true,
+      "final_allocation": [
+        {"name": "Task_1_Task_0_Task_2_utilfused_utilfused", "shape": "1x2", "compiled_ii": 4, "startup_cycles": 21, "trip_count": 6400, "latency_cycles": 25617},
+        {"name": "Task_3", "shape": "1x1", "compiled_ii": 4, "startup_cycles": 10, "trip_count": 2359296, "latency_cycles": 9437190},
+        {"name": "Task_4_Task_5_fused_Task_7_utilfused", "shape": "1x2", "compiled_ii": 4, "startup_cycles": 16, "trip_count": 6400, "latency_cycles": 25612},
+        {"name": "Task_6_Task_8_utilfused", "shape": "1x2", "compiled_ii": 4, "startup_cycles": 14, "trip_count": 4096, "latency_cycles": 16394},
+        {"name": "Task_9", "shape": "1x1", "compiled_ii": 4, "startup_cycles": 10, "trip_count": 2359296, "latency_cycles": 9437190},
+        {"name": "Task_10_Task_11_Task_12_fused_fused", "shape": "1x1", "compiled_ii": 4, "startup_cycles": 10, "trip_count": 4096, "latency_cycles": 16390}
+      ],
+      "objective_interval_cycles": 9437190,
+      "dependency_dag_makespan_cycles": 18958393
+    },
+    "comparison": {
+      "objective_interval_reduction_cycles": 2359299,
+      "objective_interval_reduction_fraction": 0.25000015894561833,
+      "dependency_dag_makespan_reduction_cycles": 11839027,
+      "dependency_dag_makespan_reduction_fraction": 0.624474184072458,
+      "interpretation": "The two trip-count-2359296 convolution tasks map at II 3 in the no-fusion DSE result versus II 4 in the legacy allocation."
+    },
+    "dse_true_mapper_output_sha256": {
+      "Task_0": "8a8f4823847c625ef21a65475c31af62f56d3fa8f5973170327af316e3ae805b",
+      "Task_1": "e74d01edea7334b18006ff14cf25b6ad982fbccfef10c3fcb55bcb76e2a5e4ad",
+      "Task_2": "64219479b0ea97203e289c45c1eda12baec12a7dfd3d3479762e403c1fdb5636",
+      "Task_3": "f93df88f2ce349fc5dae2e024b3a491d7f2a96aaa4448bec0f3286448757a6b3",
+      "Task_4_Task_5_fused": "f3c53eb118e72c0d83169337a085d5601a7ea43c299d1f63ce3e29e2f29584e2",
+      "Task_6": "dd406ae5f2d430591a4628531c2f8b1aa997e5caa5c70beeba2ebd0fba3a2911",
+      "Task_7": "5dad9bb1e3ef29c01979de4d53f7f6b78148d2dafaa4eab5718ef66e89b844cc",
+      "Task_8": "e8a5338a8df82858221b63bdfee1c61ef13316aa05bc3b698840fe8e38383f21",
+      "Task_9": "4e838391110f9b625e09e855b1b0ba73f647ed8fdbc98b6cc53e9239f44d40af",
+      "Task_10_Task_11_Task_12_fused_fused": "6360f3d715b04d285f8a2963c077c4b8f64da2d60ffe3e0ef1846bf4a0a3865d"
+    }
+  }
+}

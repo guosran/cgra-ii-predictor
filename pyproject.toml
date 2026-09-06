@@ -5,16 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cgra-ii-predictor"
 version = "0.1.0"
-description = "Compiler-agnostic compiled-II prediction experiments for CGRA mappers"
+description = "CGRA compiled-II prediction and static-shape ranking"
 requires-python = ">=3.8"
-dependencies = ["numpy>=1.20"]
-
-[project.optional-dependencies]
-model2 = ["torch>=2.0"]
-
-[project.scripts]
-cgra-ii-predictor = "cgra_ii_predictor.cli:main"
-cgra-ii-predict = "cgra_ii_predictor.predict:main"
+dependencies = ["torch>=2.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

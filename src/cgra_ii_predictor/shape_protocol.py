@@ -1,23 +1,14 @@
-"""Versioned mapper-shape domains and feature normalization contracts.
-
-The legacy domain describes rectangular prefixes of one 4x4 Neura array.
-The Amoeba domain describes the eight static physical-CGRA rectangles used by
-analytical DSE after converting each physical block to its 4x4 mapper tiles.
-Keeping these identifiers in model artifacts prevents old ``rows=1`` labels
-from being reinterpreted as a physical 1x1 (mapper 4x4) label.
-"""
+"""Static physical-CGRA shapes and mapper feature normalizers."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 
 MapperShape = Tuple[int, int]
 PhysicalShape = Tuple[int, int]
-
-LEGACY_SHAPE_PROTOCOL = "neura-mapper-prefix-rectangles-v1"
-AMOEBA_STATIC_SHAPE_PROTOCOL = "amoeba-static-rectangles-4x4-tiles-v1"
+SHAPE_PROTOCOL_ID = "amoeba-static-rectangles-4x4-tiles"
 
 
 @dataclass(frozen=True)
@@ -33,7 +24,7 @@ class ShapeProtocol:
     max_memory_tiles: int
     max_bisection_links: int
     max_manhattan_distance: int
-    physical_to_mapper: Tuple[Tuple[PhysicalShape, MapperShape], ...] = ()
+    physical_to_mapper: Tuple[Tuple[PhysicalShape, MapperShape], ...]
 
     def validate_mapper_shape(self, rows: int, cols: int) -> MapperShape:
         if isinstance(rows, bool) or isinstance(cols, bool):
@@ -43,30 +34,24 @@ class ShapeProtocol:
         shape = (rows, cols)
         if shape not in self.mapper_shapes:
             raise ValueError(
-                f"mapper tile shape {rows}x{cols} is outside finite protocol "
+                f"mapper tile shape {rows}x{cols} is outside protocol "
                 f"{self.protocol_id}"
             )
         return shape
 
     def mapper_for_physical(self, rows: int, cols: int) -> MapperShape:
-        mapping = dict(self.physical_to_mapper)
         try:
-            return mapping[(rows, cols)]
+            return dict(self.physical_to_mapper)[(rows, cols)]
         except KeyError as error:
             raise ValueError(
-                f"physical CGRA shape {rows}x{cols} is outside finite protocol "
+                f"physical CGRA shape {rows}x{cols} is outside protocol "
                 f"{self.protocol_id}"
             ) from error
 
     def physical_for_mapper(self, rows: int, cols: int) -> PhysicalShape:
         self.validate_mapper_shape(rows, cols)
         reverse = {mapper: physical for physical, mapper in self.physical_to_mapper}
-        try:
-            return reverse[(rows, cols)]
-        except KeyError as error:
-            raise ValueError(
-                f"protocol {self.protocol_id} does not define physical shapes"
-            ) from error
+        return reverse[(rows, cols)]
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -98,22 +83,8 @@ class ShapeProtocol:
         }
 
 
-LEGACY_PROTOCOL = ShapeProtocol(
-    protocol_id=LEGACY_SHAPE_PROTOCOL,
-    mapper_shapes=tuple(
-        (rows, cols) for rows in range(1, 5) for cols in range(1, 5)
-    ),
-    max_mapper_rows=4,
-    max_mapper_cols=4,
-    max_mapper_tiles=16,
-    max_directed_links=48,
-    max_memory_tiles=7,
-    max_bisection_links=8,
-    max_manhattan_distance=6,
-)
-
-AMOEBA_STATIC_PROTOCOL = ShapeProtocol(
-    protocol_id=AMOEBA_STATIC_SHAPE_PROTOCOL,
+SHAPE_PROTOCOL = ShapeProtocol(
+    protocol_id=SHAPE_PROTOCOL_ID,
     mapper_shapes=(
         (4, 4), (4, 8), (8, 4), (4, 12),
         (12, 4), (4, 16), (8, 8), (16, 4),
@@ -137,23 +108,15 @@ AMOEBA_STATIC_PROTOCOL = ShapeProtocol(
     ),
 )
 
-_PROTOCOLS = {
-    LEGACY_PROTOCOL.protocol_id: LEGACY_PROTOCOL,
-    AMOEBA_STATIC_PROTOCOL.protocol_id: AMOEBA_STATIC_PROTOCOL,
-}
 
-
-def get_shape_protocol(protocol_id: Optional[str] = None) -> ShapeProtocol:
-    """Resolve a protocol, treating omitted old checkpoint metadata as legacy."""
-    selected = LEGACY_SHAPE_PROTOCOL if protocol_id is None else protocol_id
-    try:
-        return _PROTOCOLS[selected]
-    except KeyError as error:
-        raise ValueError(f"unsupported shape protocol: {selected!r}") from error
+def get_shape_protocol(protocol_id: str = SHAPE_PROTOCOL_ID) -> ShapeProtocol:
+    """Resolve the single supported deployment shape protocol."""
+    if protocol_id != SHAPE_PROTOCOL_ID:
+        raise ValueError(f"unsupported shape protocol: {protocol_id!r}")
+    return SHAPE_PROTOCOL
 
 
 __all__ = [
-    "AMOEBA_STATIC_PROTOCOL", "AMOEBA_STATIC_SHAPE_PROTOCOL",
-    "LEGACY_PROTOCOL", "LEGACY_SHAPE_PROTOCOL", "MapperShape",
-    "PhysicalShape", "ShapeProtocol", "get_shape_protocol",
+    "MapperShape", "PhysicalShape", "SHAPE_PROTOCOL", "SHAPE_PROTOCOL_ID",
+    "ShapeProtocol", "get_shape_protocol",
 ]

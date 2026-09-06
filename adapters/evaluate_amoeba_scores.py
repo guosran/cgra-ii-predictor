@@ -16,10 +16,10 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from amoeba_cost_catalog import load_candidate_manifest, sha256_file  # noqa: E402
+from amoeba_protocol import SCORE_SCHEMA  # noqa: E402
 
 
-SCORE_SCHEMA = "amoeba-analytical-task-scores-v2"
-ORACLE_SCHEMA = "cgra-ii-amoeba-query-oracle-v1"
+ORACLE_SCHEMA = "cgra-ii-amoeba-query-oracle"
 QueryKey = Tuple[str, int, int]
 
 
@@ -198,7 +198,7 @@ def evaluate_scores(
     if predictor_timing_path is not None:
         timing = json.loads(predictor_timing_path.read_text())
     result = {
-        "schema_version": "cgra-ii-amoeba-dse-evaluation-v1",
+        "schema_version": "cgra-ii-amoeba-dse-evaluation",
         "function": function,
         "artifacts": {
             "candidate_manifest_sha256": candidates["manifest_sha256"],

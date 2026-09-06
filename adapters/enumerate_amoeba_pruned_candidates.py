@@ -5,7 +5,7 @@ The op-count cap is an explicit search heuristic: a task may use at most
 ``ceil(materialized_ops / tiles_per_physical_cgra) + slack`` physical CGRAs.
 Exact incremental rectangle packing is a hard architecture constraint.  The
 tool consumes a valid base manifest for immutable function/task/trip-count and
-architecture facts, then publishes a self-contained v2 candidate manifest.
+architecture facts, then publishes a self-contained candidate manifest.
 """
 
 from __future__ import annotations
@@ -182,8 +182,8 @@ def enumerate_pruned_records(
     ]
     fixed_axes = dict(header.get("fixed_axes", {}))
     fixed_axes["candidate_pruning"] = {
-        "hardware_grid_packing": "exact-incremental-oriented-rectangles-v1",
-        "op_count_cap": "heuristic-ceil-ops-over-physical-cgra-tiles-v1",
+        "hardware_grid_packing": "exact-incremental-oriented-rectangles",
+        "op_count_cap": "heuristic-ceil-ops-over-physical-cgra-tiles",
         "op_cap_slack_cgras": op_cap_slack_cgras,
         "materialized_op_excludes": sorted(_NON_MATERIALIZED),
         "task_caps": [
@@ -219,7 +219,7 @@ def enumerate_pruned_records(
         "candidate_count": len(assignments),
     })
     report = {
-        "schema_version": "amoeba-pruned-candidate-enumeration-v1",
+        "schema_version": "amoeba-pruned-candidate-enumeration",
         "function": header["function"],
         "unpruned_cartesian_count": unpruned_count,
         "unpruned_shape_count_per_task": unpruned_shape_count,

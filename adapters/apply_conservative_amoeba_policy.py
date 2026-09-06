@@ -21,10 +21,13 @@ import math
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple
 
+try:
+    from .amoeba_protocol import COST_SCHEMA
+except ImportError:  # Direct script execution.
+    from amoeba_protocol import COST_SCHEMA
 
-COST_SCHEMA = "amoeba-task-shape-cost-v2"
-POLICY_SCHEMA = "cgra-ii-conservative-pointwise-v1"
-OUTPUT_POLICY = "validation-selected-conservative-upper-v1"
+POLICY_SCHEMA = "cgra-ii-conservative-pointwise"
+OUTPUT_POLICY = "validation-selected-conservative-upper"
 Key = Tuple[str, int, int]
 
 
@@ -181,7 +184,7 @@ def apply_policy(
     output = dict(point)
     output["predictor_metadata"] = dict(point["predictor_metadata"])
     output["predictor_metadata"]["conservative_policy"] = policy_metadata
-    output["namespace"] = "cgra-ii-v8-upper-" + canonical_sha256(
+    output["namespace"] = "cgra-ii-upper-" + canonical_sha256(
         policy_metadata
     )[:24]
     output["entries"] = output_entries

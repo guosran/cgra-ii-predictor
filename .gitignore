@@ -9,8 +9,12 @@ reports/
 corpora/
 
 # Local reading material and superseded exploratory outputs are not source
-# artifacts. A future frozen model should use a distinct non-exploratory name.
+# artifacts.
 references/*.pdf
 models/*-exploratory.json
-models/model2-*-factcluster-*/
+models/*-factcluster-*/
 evaluations/*-summary.json
+evaluations/pointwise-*/
+evaluations/pointwise-*.json
+evaluations/model*-*.json
+adapters/analyze_pointwise_hybrid.py

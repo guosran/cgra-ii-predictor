@@ -1,0 +1,25 @@
+{
+  "schema_version": "cgra-ii-structural-expert",
+  "selection_split": "validation_only",
+  "selected_ensemble_mode": "static",
+  "manifest_sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f",
+  "checkpoints": {
+    "structural": {
+      "path": "models/final/structural-expert.pt",
+      "sha256": "fefd0b09cfc944ec0b4d251ae42c386b7d9b708c6205f79fe234a2d43cd7a167",
+      "source_sha256": "b3c8e65f127c38c73564a28f982fb05a9131721b17e8206c7cf81e26e4ca51ba"
+    }
+  },
+  "weights": {
+    "analytical_lower_bound": 0.0,
+    "structural": 1.0
+  },
+  "uncertainty_gating": {
+    "exponent": 0.0,
+    "normalization": "none",
+    "scales": {
+      "analytical_lower_bound": 1.0,
+      "structural": 1.0
+    }
+  }
+}

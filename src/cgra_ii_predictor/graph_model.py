@@ -13,16 +13,13 @@ from dataclasses import asdict, dataclass
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from .shape_protocol import (
-    LEGACY_SHAPE_PROTOCOL,
-    get_shape_protocol,
-)
+from .shape_protocol import SHAPE_PROTOCOL_ID, get_shape_protocol
 
 try:
     import torch
     from torch import Tensor, nn
     import torch.nn.functional as functional
-except ImportError:  # Keep the base NumPy package importable without Model 2.
+except ImportError:  # Keep the base NumPy package importable without pointwise model.
     torch = None  # type: ignore
     Tensor = Any  # type: ignore
     nn = None  # type: ignore
@@ -116,9 +113,11 @@ class GraphData:
 
 
 @dataclass(frozen=True)
-class Model2Config:
-    hidden_dimension: int = 64
-    message_passing_layers: int = 3
+class PointwiseConfig:
+    """Configuration shared by every checkpoint in the deployed ensemble."""
+
+    hidden_dimension: int = 128
+    message_passing_layers: int = 9
     dropout: float = 0.10
     mapper_ii_ceiling: float = 20.0
     listwise_temperature: float = 1.0
@@ -126,30 +125,32 @@ class Model2Config:
     residual_loss_weight: float = 1.0
     listwise_loss_weight: float = 1.0
     strict_tiebreak_loss_weight: float = 1.0
-    interaction_mode: str = "pooled"
+    interaction_mode: str = "residual_pointwise"
     candidate_set_layers: int = 2
     candidate_set_heads: int = 4
     discrete_ii_loss_weight: float = 1.0
     pairwise_ranking_loss_weight: float = 0.0
     pairwise_ranking_margin: float = 0.5
     discrete_success_threshold: float = 0.5
-    discrete_ii_decision: str = "map"
-    placement_loss_weight: float = 0.0
-    dfg_representation: str = "semantic_v1"
-    dfg_message_mode: str = "sum"
+    discrete_ii_decision: str = "floor"
+    placement_loss_weight: float = 0.1
+    dfg_representation: str = "route_expanded"
+    dfg_message_mode: str = "dual_mean"
     dfg_pool_mode: str = "all"
     dfg_summary_mode: str = "none"
-    shape_protocol: str = LEGACY_SHAPE_PROTOCOL
-    routing_peak_normalization: str = "legacy_fixed16"
+    shape_protocol: str = SHAPE_PROTOCOL_ID
+    # The structural safety expert uses the fixed tile concentration scale;
+    # primary checkpoints carry ``protocol_max_tiles`` explicitly.
+    routing_peak_normalization: str = "fixed_tile_limit"
 
-    def validate(self) -> "Model2Config":
+    def validate(self) -> "PointwiseConfig":
         get_shape_protocol(self.shape_protocol)
         if self.routing_peak_normalization not in {
-            "legacy_fixed16", "protocol_max_tiles_v1",
+            "fixed_tile_limit", "protocol_max_tiles",
         }:
             raise ValueError(
-                "routing_peak_normalization must be legacy_fixed16 or "
-                "protocol_max_tiles_v1"
+                "routing_peak_normalization must be fixed_tile_limit or "
+                "protocol_max_tiles"
             )
         if self.hidden_dimension < 8:
             raise ValueError("hidden_dimension must be at least eight")
@@ -170,19 +171,19 @@ class Model2Config:
                 "strict_set_classifier"
             )
         if self.dfg_representation not in {
-            "semantic_v1", "route_expanded_v2",
+            "semantic", "route_expanded",
         }:
             raise ValueError(
-                "dfg_representation must be semantic_v1 or route_expanded_v2"
+                "dfg_representation must be semantic or route_expanded"
             )
         if (
-            self.dfg_representation == "route_expanded_v2" and
+            self.dfg_representation == "route_expanded" and
             self.interaction_mode not in {
                 "residual_pointwise", "continuous_residual_pointwise",
             }
         ):
             raise ValueError(
-                "route_expanded_v2 currently requires a residual pointwise mode"
+                "route_expanded currently requires a residual pointwise mode"
             )
         if self.dfg_message_mode not in {"sum", "mean", "dual_mean"}:
             raise ValueError(
@@ -190,10 +191,10 @@ class Model2Config:
             )
         if (
             self.dfg_message_mode == "dual_mean" and
-            self.dfg_representation != "route_expanded_v2"
+            self.dfg_representation != "route_expanded"
         ):
             raise ValueError(
-                "dual_mean message passing requires route_expanded_v2"
+                "dual_mean message passing requires route_expanded"
             )
         if self.dfg_pool_mode not in {"all", "materialized_only"}:
             raise ValueError(
@@ -201,14 +202,14 @@ class Model2Config:
             )
         if (
             self.dfg_pool_mode == "materialized_only" and
-            self.dfg_representation != "route_expanded_v2"
+            self.dfg_representation != "route_expanded"
         ):
             raise ValueError(
-                "materialized-only pooling requires route_expanded_v2"
+                "materialized-only pooling requires route_expanded"
             )
-        if self.dfg_summary_mode not in {"none", "structural_v1"}:
+        if self.dfg_summary_mode not in {"none", "structural"}:
             raise ValueError(
-                "dfg_summary_mode must be none or structural_v1"
+                "dfg_summary_mode must be none or structural"
             )
         if self.interaction_mode in {
             "routing_set_attention", "discrete_routing_set",
@@ -291,47 +292,7 @@ class Model2Config:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        values = asdict(self.validate())
-        # Preserve the exact configuration contract of existing pooled-model
-        # checkpoints.  New architectures identify themselves explicitly.
-        if self.interaction_mode == "pooled":
-            values.pop("interaction_mode")
-        if self.interaction_mode not in {
-            "routing_set_attention", "discrete_routing_set",
-            "strict_set_classifier",
-        }:
-            values.pop("candidate_set_layers")
-            values.pop("candidate_set_heads")
-        if self.interaction_mode not in {
-            "discrete_routing_set", "discrete_pointwise", "residual_pointwise",
-            "continuous_residual_pointwise",
-        }:
-            values.pop("discrete_ii_loss_weight")
-            values.pop("discrete_success_threshold")
-            values.pop("discrete_ii_decision")
-        if self.pairwise_ranking_loss_weight == 0.0:
-            values.pop("pairwise_ranking_loss_weight")
-            values.pop("pairwise_ranking_margin")
-        if self.placement_loss_weight == 0.0:
-            values.pop("placement_loss_weight")
-        if self.dfg_representation == "semantic_v1":
-            values.pop("dfg_representation")
-        if self.dfg_message_mode == "sum":
-            values.pop("dfg_message_mode")
-        if self.dfg_pool_mode == "all":
-            values.pop("dfg_pool_mode")
-        if self.dfg_summary_mode == "none":
-            values.pop("dfg_summary_mode")
-        # Checkpoints predating the physical/mapping shape distinction omitted
-        # this field.  Preserve their byte-level configuration semantics while
-        # requiring every new-domain checkpoint to identify its protocol.
-        if self.shape_protocol == LEGACY_SHAPE_PROTOCOL:
-            values.pop("shape_protocol")
-        # This field was absent from every historical checkpoint.  Missing
-        # metadata must continue to mean the original fixed-16 feature scale.
-        if self.routing_peak_normalization == "legacy_fixed16":
-            values.pop("routing_peak_normalization")
-        return values
+        return asdict(self.validate())
 
 
 def _meaningful_roots(
@@ -432,8 +393,8 @@ def parse_neura_route_expanded_dfg(text: str) -> GraphData:
     """Preserve value-movement structure and loop-carried control feedback.
 
     The mapper places materialized operations on PEs but also routes every
-    ``data_mov`` through links/registers.  The historical semantic graph
-    collapses those operations and cannot represent the ``ctrl_mov`` edge back
+    ``data_mov`` through links/registers. The semantic projection collapses
+    those operations and cannot represent the ``ctrl_mov`` edge back
     into a reserve/phi.  This representation retains both while providing a
     materialized-only shortcut graph for the placement/routing interaction.
     """
@@ -589,18 +550,18 @@ def parse_neura_route_expanded_dfg(text: str) -> GraphData:
 
 
 def parse_neura_dfg_representation(
-    text: str, representation: str = "semantic_v1",
+    text: str, representation: str = "route_expanded",
 ) -> GraphData:
-    if representation == "semantic_v1":
+    if representation == "semantic":
         return parse_neura_dfg(text)
-    if representation == "route_expanded_v2":
+    if representation == "route_expanded":
         return parse_neura_route_expanded_dfg(text)
     raise ValueError("unknown DFG representation: " + representation)
 
 
 def parse_neura_mapped_placements(
     text: str, source_graph: GraphData, rows: int, columns: int,
-    shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
+    shape_protocol: str = SHAPE_PROTOCOL_ID,
 ) -> Tuple[int, ...]:
     """Extract one mapper-assigned PE index for every materialized DFG node."""
     get_shape_protocol(shape_protocol).validate_mapper_shape(rows, columns)
@@ -643,7 +604,7 @@ def parse_neura_mapped_placements(
 
 
 def make_cgra_graph(
-    rows: int, columns: int, shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
+    rows: int, columns: int, shape_protocol: str = SHAPE_PROTOCOL_ID,
 ) -> GraphData:
     """Create an oriented mapper-tile mesh in a finite shape protocol."""
     protocol = get_shape_protocol(shape_protocol)
@@ -686,7 +647,7 @@ def make_cgra_graph(
 def candidate_context(
     rows: int, columns: int, rec_mii: float, res_mii: float,
     lower_bound: float, mapper_ii_ceiling: float = 20.0,
-    shape_protocol: str = LEGACY_SHAPE_PROTOCOL,
+    shape_protocol: str = SHAPE_PROTOCOL_ID,
 ) -> Tuple[float, ...]:
     """Return explicit oriented geometry and analytical context."""
     protocol = get_shape_protocol(shape_protocol)
@@ -716,7 +677,7 @@ def candidate_context(
 def _require_torch() -> None:
     if torch is None or nn is None or functional is None:
         raise RuntimeError(
-            "Model 2 requires PyTorch; install the optional graph dependency"
+            "pointwise model requires PyTorch"
         )
 
 
@@ -1052,12 +1013,12 @@ if nn is not None:
     class JointGraphShapeModel(nn.Module):
         """Encode DFG and oriented CGRA graphs, then predict risk and II."""
 
-        def __init__(self, config: Model2Config = Model2Config()) -> None:
+        def __init__(self, config: PointwiseConfig = PointwiseConfig()) -> None:
             super().__init__()
             self.config = config.validate()
             hidden = self.config.hidden_dimension
             route_expanded = (
-                self.config.dfg_representation == "route_expanded_v2"
+                self.config.dfg_representation == "route_expanded"
             )
             self.dfg_encoder = DirectedGraphEncoder(
                 len(
@@ -1076,7 +1037,7 @@ if nn is not None:
                 self.config.message_passing_layers, self.config.dropout,
             )
             interaction_width = hidden * 4 + len(CANDIDATE_CONTEXT_NAMES)
-            if self.config.dfg_summary_mode == "structural_v1":
+            if self.config.dfg_summary_mode == "structural":
                 interaction_width += len(DFG_STRUCTURAL_CONTEXT_NAMES)
             if self.config.interaction_mode in {
                 "cross_attention", "routing_set_attention",
@@ -1214,7 +1175,7 @@ if nn is not None:
                     self.config.shape_protocol
                 ).max_mapper_tiles)
                 if self.config.routing_peak_normalization == (
-                    "protocol_max_tiles_v1"
+                    "protocol_max_tiles"
                 ) else 16.0
             )
             normalized_peak = (
@@ -1300,7 +1261,7 @@ if nn is not None:
                 dfg_nodes, dfg_mask, dfg_adjacency = (
                     self.dfg_encoder.encode_nodes(dfg_graphs)
                 )
-                if self.config.dfg_representation == "route_expanded_v2":
+                if self.config.dfg_representation == "route_expanded":
                     dfg_interaction_mask = pad_node_feature_mask(
                         dfg_graphs,
                         ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES.index(
@@ -1358,7 +1319,7 @@ if nn is not None:
             joint_parts = [
                 dfg, cgra, dfg * cgra, torch.abs(dfg - cgra), context,
             ]
-            if self.config.dfg_summary_mode == "structural_v1":
+            if self.config.dfg_summary_mode == "structural":
                 structural = batch_dfg_structural_context(
                     dfg_graphs, device,
                 )[:, None, :].expand(batch, candidates, -1)
@@ -1565,15 +1526,15 @@ if nn is not None:
 
 else:  # pragma: no cover - exercised only in NumPy-only installations.
     class JointGraphShapeModel:  # type: ignore
-        def __init__(self, config: Model2Config = Model2Config()) -> None:
+        def __init__(self, config: PointwiseConfig = PointwiseConfig()) -> None:
             del config
             _require_torch()
 
 
-def model2_loss(
+def pointwise_loss(
     output: Mapping[str, Tensor], success_target: Tensor,
     residual_target: Tensor, optimal_ii_target: Tensor, oracle_index: Tensor,
-    config: Model2Config, placement_target: Optional[Tensor] = None,
+    config: PointwiseConfig, placement_target: Optional[Tensor] = None,
 ) -> Dict[str, Tensor]:
     """Combine the configured candidate objectives.
 
@@ -1587,7 +1548,7 @@ def model2_loss(
     config.validate()
     logits = output["success_logits"]
     if logits.shape != success_target.shape or logits.shape != residual_target.shape:
-        raise ValueError("Model 2 target tensors have inconsistent shapes")
+        raise ValueError("pointwise model target tensors have inconsistent shapes")
     success_target = success_target.to(logits.device, dtype=logits.dtype)
     residual_target = residual_target.to(logits.device, dtype=logits.dtype)
     optimal_ii_target = optimal_ii_target.to(logits.device, dtype=torch.bool)
@@ -1903,9 +1864,9 @@ __all__ = [
     "ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES",
     "ROUTE_EXPANDED_OPERATION_TYPES", "ROUTING_CONTEXT_NAMES", "GraphData",
     "JointGraphShapeModel",
-    "Model2Config", "OPERATION_TYPES", "candidate_context",
+    "PointwiseConfig", "OPERATION_TYPES", "candidate_context",
     "batch_dfg_structural_context", "censored_top1_metrics",
-    "dfg_structural_context", "make_cgra_graph", "model2_loss",
+    "dfg_structural_context", "make_cgra_graph", "pointwise_loss",
     "pad_graphs", "pad_node_feature_mask", "pad_semantic_adjacency",
     "pad_shortest_path_distances", "parse_neura_dfg",
     "parse_neura_dfg_representation", "parse_neura_route_expanded_dfg",

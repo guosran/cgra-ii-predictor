@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate an Amoeba v2 task/shape cost catalogue from pointwise models.
+"""Generate an Amoeba task/shape cost catalogue from pointwise models.
 
 The adapter consumes a frozen candidate JSONL manifest, one pre-mapper Neura
 DFG per task, analytical RecMII/ResMII facts, and frontend-provided startup
@@ -28,24 +28,35 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 import torch  # noqa: E402
 
+from amoeba_protocol import (  # noqa: E402
+    CANDIDATE_SCHEMA,
+    COST_SCHEMA,
+    SEARCH_SCOPE,
+    SHAPE_POLICY,
+)
 from cgra_ii_predictor.graph_model import (  # noqa: E402
     JointGraphShapeModel,
-    Model2Config,
+    PointwiseConfig,
     candidate_context,
     make_cgra_graph,
     parse_neura_dfg_representation,
 )
 from cgra_ii_predictor.shape_protocol import (  # noqa: E402
-    AMOEBA_STATIC_PROTOCOL,
-    AMOEBA_STATIC_SHAPE_PROTOCOL,
+    SHAPE_PROTOCOL,
+    SHAPE_PROTOCOL_ID,
     get_shape_protocol,
 )
 
 
-CANDIDATE_SCHEMA = "amoeba-analytical-task-candidates-v2"
-COST_SCHEMA = "amoeba-task-shape-cost-v2"
-ANALYTICAL_INPUT_SCHEMA = "cgra-ii-amoeba-query-features-v1"
-ADAPTER_FEATURE_SCHEMA = "cgra-ii-amoeba-pointwise-features-v1"
+ANALYTICAL_INPUT_SCHEMA = "cgra-ii-amoeba-query-features"
+ADAPTER_FEATURE_SCHEMA = "cgra-ii-amoeba-pointwise-features"
+CHECKPOINT_SCHEMA = "cgra-ii-pointwise-model"
+FINAL_MODEL_DIR = PROJECT_ROOT / "models" / "final"
+DEFAULT_CHECKPOINTS = (
+    f"large_operation={FINAL_MODEL_DIR / 'large-operation.pt'}",
+    f"baseline={FINAL_MODEL_DIR / 'baseline.pt'}",
+    f"ranking={FINAL_MODEL_DIR / 'ranking.pt'}",
+)
 
 QueryKey = Tuple[str, int, int]
 
@@ -121,9 +132,9 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         raise ValueError("candidate manifest is incomplete")
     if not isinstance(header.get("function"), str) or not header["function"]:
         raise ValueError("candidate manifest function is missing")
-    if header.get("search_scope") != "static-shape-only-v2":
+    if header.get("search_scope") != SEARCH_SCOPE:
         raise ValueError("only static Amoeba candidate manifests are supported")
-    if header.get("shape_policy") != "static-rectangles-v2":
+    if header.get("shape_policy") != SHAPE_POLICY:
         raise ValueError("only rectangular Amoeba candidate manifests are supported")
     if footer.get("candidate_count") != len(candidates):
         raise ValueError("candidate manifest footer count mismatch")
@@ -324,81 +335,6 @@ def load_ensemble_report(
     }
 
 
-def load_analytical_hybrid_report(
-    path: Path, checkpoint_paths: Mapping[str, Path],
-    ensemble: Mapping[str, Any],
-) -> Dict[str, Any]:
-    """Load one deployment-safe fallback chosen entirely on validation."""
-    report = _object(json.loads(path.read_text()), "analytical hybrid report")
-    if report.get("schema_version") != "cgra-ii-pointwise-hybrid-analysis-v1":
-        raise ValueError("analytical hybrid report schema_version mismatch")
-    if report.get("selection_split") != "validation_only":
-        raise ValueError("analytical hybrid must be selected on validation only")
-    if report.get("manifest_sha256") != ensemble.get("manifest_sha256"):
-        raise ValueError("analytical hybrid training manifest mismatch")
-    records = _object(report.get("checkpoints"), "hybrid checkpoints")
-    if set(records) != set(checkpoint_paths):
-        raise ValueError("analytical hybrid checkpoints do not match ensemble")
-    for name, checkpoint_path in checkpoint_paths.items():
-        record = _object(records[name], f"hybrid checkpoint {name}")
-        if record.get("sha256") != sha256_file(checkpoint_path):
-            raise ValueError(f"analytical hybrid checkpoint mismatch for {name}")
-    hybrid_weights = {
-        str(name): float(value) for name, value in _object(
-            report.get("ensemble_weights"), "hybrid ensemble weights",
-        ).items()
-    }
-    if set(hybrid_weights) != set(ensemble["weights"]) or any(
-        not math.isclose(
-            hybrid_weights[name], float(ensemble["weights"][name]),
-            abs_tol=1e-9,
-        )
-        for name in hybrid_weights
-    ):
-        raise ValueError("analytical hybrid ensemble weights mismatch")
-    if not math.isclose(
-        float(report.get("uncertainty_exponent")),
-        float(ensemble["uncertainty_exponent"]), abs_tol=1e-9,
-    ):
-        raise ValueError("analytical hybrid uncertainty gate mismatch")
-
-    validation = _object(report.get("validation"), "hybrid validation")
-    baseline = float(_object(
-        validation.get("ensemble"), "hybrid validation ensemble",
-    )["mae"])
-    raw_rules = _object(
-        validation.get("hybrid_rules"), "hybrid validation rules",
-    )
-    deployable = []
-    allowed_kinds = {
-        "rec_gt_res", "lb_le", "prediction_le", "rec_gt_res_or_lb_le",
-    }
-    for name, raw_record in raw_rules.items():
-        record = _object(raw_record, f"hybrid rule {name}")
-        rule = dict(_object(record.get("rule"), f"hybrid rule {name} body"))
-        if rule.get("kind") not in allowed_kinds:
-            raise ValueError("analytical hybrid contains a non-deployable rule")
-        hybrid_mae = float(_object(
-            record.get("hybrid"), f"hybrid rule {name} metrics",
-        )["mae"])
-        improvement = float(record.get("mae_improvement_over_ensemble"))
-        if not all(math.isfinite(value) for value in (
-            baseline, hybrid_mae, improvement,
-        )):
-            raise ValueError("analytical hybrid metrics must be finite")
-        if improvement > 0.0 and hybrid_mae < baseline:
-            deployable.append((hybrid_mae, len(str(rule["kind"])), str(name), rule))
-    selected_rule = min(deployable)[3] if deployable else None
-    return {
-        "sha256": sha256_file(path),
-        "selected_rule": selected_rule,
-        "validation_ensemble_mae": baseline,
-        "validation_selected_hybrid_mae": (
-            min(row[0] for row in deployable) if deployable else baseline
-        ),
-    }
-
-
 def _gated_weights(
     names: Sequence[str], base_weights: Mapping[str, float],
     deviations: Mapping[str, float], exponent: float,
@@ -455,33 +391,11 @@ def _combine_prediction(
     }
 
 
-def _use_analytical_mean(
-    rule: Optional[Mapping[str, Any]], facts: Mapping[str, float],
-    predicted_ii: float,
-) -> bool:
-    if rule is None:
-        return False
-    kind = str(rule["kind"])
-    if kind == "rec_gt_res":
-        return facts["rec_mii"] > facts["res_mii"]
-    if kind == "lb_le":
-        return facts["lower_bound"] <= float(rule["threshold"])
-    if kind == "prediction_le":
-        return predicted_ii <= float(rule["threshold"])
-    if kind == "rec_gt_res_or_lb_le":
-        return (
-            facts["rec_mii"] > facts["res_mii"] or
-            facts["lower_bound"] <= float(rule["threshold"])
-        )
-    raise ValueError("unknown analytical hybrid rule")
-
-
 def generate_catalog(
     candidate_manifest: Path, analytical_input: Path,
     task_paths: Mapping[str, Path], checkpoint_paths: Mapping[str, Path],
     ensemble_report: Path, device: torch.device,
     ensemble_mode: str = "selected",
-    analytical_hybrid_report: Optional[Path] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     total_started = time.perf_counter()
     manifest = load_candidate_manifest(candidate_manifest)
@@ -499,18 +413,20 @@ def generate_catalog(
         raise ValueError("task DFG mapping must exactly cover manifest tasks")
 
     load_started = time.perf_counter()
-    models: Dict[str, Tuple[JointGraphShapeModel, Model2Config]] = {}
+    models: Dict[str, Tuple[JointGraphShapeModel, PointwiseConfig]] = {}
     checkpoint_metadata = {}
     representations = set()
     for name, path in checkpoint_paths.items():
         artifact = torch.load(path, map_location=device, weights_only=False)
-        config = Model2Config(**artifact["config"]).validate()
+        if artifact.get("schema_version") != CHECKPOINT_SCHEMA:
+            raise ValueError(f"checkpoint {name} has an unsupported schema")
+        config = PointwiseConfig(**artifact["config"]).validate()
         if config.interaction_mode not in {
             "discrete_pointwise", "residual_pointwise",
             "continuous_residual_pointwise",
         }:
             raise ValueError(f"checkpoint {name} is not pointwise")
-        if config.shape_protocol != AMOEBA_STATIC_SHAPE_PROTOCOL:
+        if config.shape_protocol != SHAPE_PROTOCOL_ID:
             raise ValueError(f"checkpoint {name} does not support Amoeba shapes")
         model = JointGraphShapeModel(config).to(device)
         model.load_state_dict(artifact["state_dict"])
@@ -525,12 +441,6 @@ def generate_catalog(
         raise ValueError("ensemble checkpoints must share one DFG representation")
     representation = next(iter(representations))
     ensemble = load_ensemble_report(ensemble_report, checkpoint_paths)
-    analytical_hybrid = (
-        load_analytical_hybrid_report(
-            analytical_hybrid_report, checkpoint_paths, ensemble,
-        )
-        if analytical_hybrid_report is not None else None
-    )
     selected_mode = (
         ensemble["selected_mode"] if ensemble_mode == "selected" else
         ensemble_mode
@@ -566,7 +476,7 @@ def generate_catalog(
 
     supported_queries = [
         key for key in manifest["queries"]
-        if (key[1], key[2]) in AMOEBA_STATIC_PROTOCOL.mapper_shapes
+        if (key[1], key[2]) in SHAPE_PROTOCOL.mapper_shapes
     ]
     unsupported_queries = {
         key for key in manifest["queries"] if key not in supported_queries
@@ -582,7 +492,7 @@ def generate_catalog(
     for key in supported_queries:
         queries_by_shape.setdefault((key[1], key[2]), []).append(key)
     cgra_graphs = {
-        shape: make_cgra_graph(*shape, AMOEBA_STATIC_SHAPE_PROTOCOL)
+        shape: make_cgra_graph(*shape, SHAPE_PROTOCOL_ID)
         for shape in queries_by_shape
     }
 
@@ -650,13 +560,6 @@ def generate_catalog(
             combined = _combine_prediction(
                 analytical[key], predictions[key], ensemble, selected_mode,
             )
-            use_analytical = _use_analytical_mean(
-                analytical_hybrid["selected_rule"]
-                if analytical_hybrid is not None else None,
-                analytical[key], combined["predicted_ii"],
-            )
-            if use_analytical:
-                combined["predicted_ii"] = analytical[key]["lower_bound"]
             entry.update({
                 "support_status": "supported",
                 "predicted_ii": combined["predicted_ii"],
@@ -666,17 +569,14 @@ def generate_catalog(
                     combined["mapper_success_probability"]
                 ),
                 "analytical_lower_bound": analytical[key]["lower_bound"],
-                "ii_mean_source": (
-                    "validation_selected_analytical_fallback"
-                    if use_analytical else "pointwise_ensemble"
-                ),
+                "ii_mean_source": "pointwise_ensemble",
             })
         entries.append(entry)
 
     namespace_contract = {
         "feature_schema": ADAPTER_FEATURE_SCHEMA,
         "shape_protocol": get_shape_protocol(
-            AMOEBA_STATIC_SHAPE_PROTOCOL
+            SHAPE_PROTOCOL_ID
         ).to_dict(),
         "candidate_manifest_sha256": manifest["manifest_sha256"],
         "analytical_input_sha256": sha256_file(analytical_input),
@@ -697,13 +597,12 @@ def generate_catalog(
         "ensemble_weights": ensemble["weights"],
         "uncertainty_exponent": ensemble["uncertainty_exponent"],
         "uncertainty_scales": ensemble["uncertainty_scales"],
-        "analytical_hybrid": analytical_hybrid,
     }
     namespace_hash = canonical_json_sha256(namespace_contract)
     catalog = {
         "schema_version": COST_SCHEMA,
         "function": function,
-        "namespace": f"cgra-ii-v8-{namespace_hash[:24]}",
+        "namespace": f"cgra-ii-pointwise-{namespace_hash[:24]}",
         "predictor_metadata": namespace_contract,
         "entries": entries,
     }
@@ -739,8 +638,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint", action="append", default=[], metavar="NAME=PATH",
     )
-    parser.add_argument("--ensemble-report", type=Path, required=True)
-    parser.add_argument("--analytical-hybrid-report", type=Path)
+    parser.add_argument(
+        "--ensemble-report", type=Path,
+        default=FINAL_MODEL_DIR / "ensemble.json",
+    )
     parser.add_argument(
         "--ensemble-mode",
         choices=("selected", "static", "uncertainty_gated"),
@@ -755,13 +656,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     task_paths = parse_task_paths(args.task_dfg)
-    checkpoint_paths = parse_checkpoint_paths(args.checkpoint)
+    checkpoint_paths = parse_checkpoint_paths(
+        args.checkpoint if args.checkpoint else DEFAULT_CHECKPOINTS
+    )
     catalog, timing = generate_catalog(
         args.manifest.resolve(), args.analytical_input.resolve(),
         task_paths, checkpoint_paths, args.ensemble_report.resolve(),
         torch.device(args.device), args.ensemble_mode,
-        (args.analytical_hybrid_report.resolve()
-         if args.analytical_hybrid_report else None),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

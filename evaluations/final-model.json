@@ -1,0 +1,15 @@
+{
+  "schema_version": "cgra-ii-final-model-evaluation",
+  "selection_split": "validation_only",
+  "point_prediction": {
+    "validation": {"candidate_count": 655, "mae": 0.3352061576878256, "rmse": 0.6364995009297296},
+    "test": {"candidate_count": 649, "mae": 0.3804980511051972, "rmse": 0.6953829117726544}
+  },
+  "conservative_attention_guard": {
+    "formula": "max(point_mean, structural_expert_mean + 0.5 * structural_expert_std)",
+    "role": "mapper_replay_trigger_only",
+    "validation": {"mae": 0.5604251476548505, "underprediction_rate": 0.15725190839694655},
+    "test": {"mae": 0.6083311991469337, "underprediction_rate": 0.15716486902927582}
+  },
+  "deployment_rule": "Use the point ensemble for shape ordering and expose the conservative upper estimate only as a replay-risk signal."
+}
