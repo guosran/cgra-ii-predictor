@@ -1,12 +1,15 @@
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import pickle
 import re
+import torch
 import zipfile
 
 from cgra_ii_predictor.graph_model import (
+    JointGraphShapeModel,
     PointwiseConfig,
     candidate_context,
     make_cgra_graph,
@@ -24,7 +27,11 @@ CHECKPOINTS = {
     "large-operation.pt": "eda6f5e5b2b9410859efc887c533350f96cd40e260a69fd70ffcc97d6d782fe2",
     "baseline.pt": "6e0bdb7f9ebd44d2efa13387821460609eb3b802a39edd96d876e91701856e06",
     "ranking.pt": "1d9af87fa7274303d6a5e50ae0cd05fbfb081f5d670a722c39d34863f6ce7ac0",
-    "structural-expert.pt": "fefd0b09cfc944ec0b4d251ae42c386b7d9b708c6205f79fe234a2d43cd7a167",
+}
+EXPECTED_SMOKE_II = {
+    "large-operation.pt": 1.4982157945632935,
+    "baseline.pt": 2.3798537254333496,
+    "ranking.pt": 2.031731367111206,
 }
 
 
@@ -80,18 +87,15 @@ def test_final_checkpoint_hashes_and_metadata():
         assert len(artifact["state_dict"]) >= 120
 
 
-def test_ensemble_and_policy_are_bound_to_final_checkpoints():
+def test_ensemble_is_bound_to_final_checkpoints():
     ensemble = json.loads((MODEL_DIR / "ensemble.json").read_text())
-    policy = json.loads((MODEL_DIR / "conservative-policy.json").read_text())
     reported = {
         Path(record["path"]).name: record["sha256"]
         for record in ensemble["checkpoints"].values()
     }
-    assert reported == {name: digest for name, digest in CHECKPOINTS.items() if name != "structural-expert.pt"}
-    assert policy["expert"]["sha256"] == CHECKPOINTS["structural-expert.pt"]
+    assert reported == CHECKPOINTS
     assert abs(sum(ensemble["weights"].values()) - 1.0) < 1e-6
     assert ensemble["selection_split"] == "validation_only"
-    assert policy["selection_split"] == "validation_only"
 
 
 def test_shape_protocol_and_route_expanded_features():
@@ -113,6 +117,40 @@ def test_shape_protocol_and_route_expanded_features():
     assert config.dfg_representation == "route_expanded"
     assert config.dfg_message_mode == "dual_mean"
     assert config.interaction_mode == "residual_pointwise"
+
+
+def test_pytorch_strict_load_and_forward():
+    dfg = parse_neura_dfg_representation(
+        '''
+        %0 = "neura.constant"() : () -> !neura.data<i32, i1>
+        %1 = "neura.data_mov"(%0) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %2 = "neura.add"(%1, %0) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        '''
+    )
+    cgra = make_cgra_graph(4, 4)
+    for name in CHECKPOINTS:
+        artifact = torch.load(
+            MODEL_DIR / name, map_location="cpu", weights_only=False
+        )
+        config = PointwiseConfig(**artifact["config"]).validate()
+        model = JointGraphShapeModel(config)
+        model.load_state_dict(artifact["state_dict"], strict=True)
+        model.eval()
+        context = torch.tensor([[
+            candidate_context(
+                4, 4, 1, 1, 1,
+                config.mapper_ii_ceiling, config.shape_protocol,
+            )
+        ]])
+        with torch.inference_mode():
+            output = model([dfg], [cgra], context)
+        assert torch.isfinite(output["predicted_ii"]).all()
+        assert torch.isfinite(output["predicted_ii_std"]).all()
+        assert output["predicted_ii"].item() >= 1.0
+        assert math.isclose(
+            output["predicted_ii"].item(), EXPECTED_SMOKE_II[name],
+            abs_tol=1e-6,
+        )
 
 
 def test_no_internal_iteration_tokens():

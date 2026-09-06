@@ -12,11 +12,8 @@ The deployed predictor is a validation-selected uncertainty-gated ensemble:
 - `models/final/ranking.pt`
 - `models/final/ensemble.json`
 
-`models/final/structural-expert.pt` and
-`models/final/conservative-policy.json` provide the attention/OOD guard. The
-ordinary ensemble remains the shape-ordering score. The conservative value is
-exported separately as `predicted_ii_upper` and is used only to trigger mapper
-replay unless the caller explicitly requests upper-bound scoring.
+This ordinary ensemble is the sole deployment model and supplies the shape
+ordering score directly.
 
 ## Model
 
@@ -35,9 +32,7 @@ The finite physical-to-mapper shape domain is:
 
 ## Results
 
-The frozen validation/test continuous-II MAE is `0.33521 / 0.38050`. The
-conservative attention guard has validation/test underprediction rate
-`15.73% / 15.72%`; it deliberately trades MAE for lower underprediction risk.
+The frozen validation/test continuous-II MAE is `0.33521 / 0.38050`.
 
 The same-architecture true-mapper DSE comparison is recorded in
 `evaluations/dse-vs-legacy-amoeba-2026-09-06.json`. With fusion/fission
@@ -47,16 +42,14 @@ interval and a 6.28% lower corrected dependency-DAG makespan.
 
 ## Usage
 
-Install PyTorch and run the adapters from the repository root. A point catalog
-uses the three primary checkpoints and `models/final/ensemble.json`; an expert
-catalog uses `structural-expert.pt` and `models/final/expert.json`. Combine them
-with:
+Install PyTorch and run the cost adapter from the repository root. It uses the
+three checkpoints and `models/final/ensemble.json` by default:
 
 ```sh
-python3 adapters/apply_conservative_amoeba_policy.py \
-  --point-catalog point.json \
-  --expert-catalog expert.json \
-  --policy-report models/final/conservative-policy.json \
+python3 adapters/amoeba_cost_catalog.py \
+  --manifest candidates.jsonl \
+  --analytical-input analytical.json \
+  --task-dfg TASK=task.mlir \
   --output costs.json
 ```
 

@@ -6,8 +6,7 @@ Last updated: 2026-09-06 (Asia/Hong_Kong)
 
 - Predict one continuous compiled II per `(task DFG, mapper shape)`.
 - Use `models/final/ensemble.json` and its three checkpoints for DSE ordering.
-- Use `models/final/conservative-policy.json` only to produce the optional
-  `predicted_ii_upper` mapper-replay trigger.
+- The ordinary three-checkpoint ensemble is the only deployment model.
 - Keep exact rectangle packing, task dependencies, fusion/fission decisions,
   and program scoring in Amoeba.
 - Treat mapper failures and timeouts as censored outcomes, never as numeric II.
@@ -16,7 +15,6 @@ Last updated: 2026-09-06 (Asia/Hong_Kong)
 ## Frozen results
 
 - Point ensemble validation/test II MAE: `0.335206 / 0.380498`.
-- Conservative guard validation/test underprediction: `15.725% / 15.716%`.
 - Attention no-fusion DSE: interval `29,360,129`, dependency-DAG makespan
   `62,588,435`; corrected earlier Amoeba makespan `66,782,741`.
 - ResNet no-fusion DSE: interval `7,077,891`, dependency-DAG makespan

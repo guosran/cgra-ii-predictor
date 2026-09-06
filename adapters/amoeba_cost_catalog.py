@@ -421,11 +421,8 @@ def generate_catalog(
         if artifact.get("schema_version") != CHECKPOINT_SCHEMA:
             raise ValueError(f"checkpoint {name} has an unsupported schema")
         config = PointwiseConfig(**artifact["config"]).validate()
-        if config.interaction_mode not in {
-            "discrete_pointwise", "residual_pointwise",
-            "continuous_residual_pointwise",
-        }:
-            raise ValueError(f"checkpoint {name} is not pointwise")
+        if config.interaction_mode != "residual_pointwise":
+            raise ValueError(f"checkpoint {name} is not an ensemble component")
         if config.shape_protocol != SHAPE_PROTOCOL_ID:
             raise ValueError(f"checkpoint {name} does not support Amoeba shapes")
         model = JointGraphShapeModel(config).to(device)

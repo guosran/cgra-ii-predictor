@@ -4,9 +4,7 @@ The retained adapters implement only the final Amoeba path:
 
 - enumerate exact-packable static shape candidates;
 - extract task DFGs and obtain analysis-only RecMII/ResMII;
-- generate the point ensemble cost catalog;
-- optionally generate the structural-expert catalog and attach the conservative
-  replay trigger;
+- generate the ordinary ensemble cost catalog;
 - score frozen candidates and compare them with true mapper oracles.
 
 The model never chooses a program or bypasses Amoeba's exact packing checks.
