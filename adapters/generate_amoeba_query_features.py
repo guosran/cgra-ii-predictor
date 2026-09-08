@@ -32,6 +32,7 @@ from amoeba_cost_catalog import (  # noqa: E402
     load_candidate_manifest,
     parse_task_paths,
     sha256_file,
+    source_task_body_sha256,
 )
 from cgra_ii_predictor.graph_model import parse_neura_dfg  # noqa: E402
 from neura_cost_features import parse_cost_features  # noqa: E402
@@ -118,11 +119,19 @@ def generate_query_features(
         raise ValueError(f"Neura optimizer does not exist: {opt}")
     if not architecture.is_file():
         raise ValueError(f"architecture does not exist: {architecture}")
+    architecture_sha = sha256_file(architecture)
+    if architecture_sha != manifest["architecture_sha256"]:
+        raise ValueError(
+            "architecture SHA-256 does not match the frozen candidate manifest"
+        )
 
     startup_by_task: Dict[str, int] = {}
     task_hashes: Dict[str, str] = {}
     for task in tasks:
         text = task_paths[task].read_text()
+        source_body_sha = source_task_body_sha256(text, task)
+        if source_body_sha != manifest["task_body_sha256"][task]:
+            raise ValueError(f"task DFG source body hash mismatch for {task}")
         startup_by_task[task] = semantic_critical_path_depth(text)
         task_hashes[task] = sha256_file(task_paths[task])
 
@@ -177,7 +186,8 @@ def generate_query_features(
         "neura_opt_path": str(opt.resolve()),
         "neura_opt_sha256": sha256_file(opt),
         "architecture_path": str(architecture.resolve()),
-        "architecture_sha256": sha256_file(architecture),
+        "architecture_sha256": architecture_sha,
+        "task_body_sha256": manifest["task_body_sha256"],
         "task_dfg_sha256": task_hashes,
         "rec_res_source": "neura-analysis-only-x-y-override",
         "startup_cycles_source": (
@@ -185,7 +195,7 @@ def generate_query_features(
         ),
     }
     result = {
-        "schema_version": ANALYTICAL_INPUT_SCHEMA,
+        "schema": ANALYTICAL_INPUT_SCHEMA,
         "function": header["function"],
         "provenance": provenance,
         "entries": entries,

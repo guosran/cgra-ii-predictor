@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from functools import lru_cache
 import json
 import math
 import os
@@ -31,83 +30,20 @@ from amoeba_cost_catalog import (  # noqa: E402
     COST_SCHEMA,
     load_candidate_manifest,
     sha256_file,
+    source_task_body_sha256,
 )
-from amoeba_protocol import CANDIDATE_SCHEMA, SCORE_SCHEMA  # noqa: E402
+from amoeba_protocol import (  # noqa: E402
+    CANDIDATE_SCHEMA,
+    SCORE_MODEL,
+    SCORE_SCHEMA,
+)
 from build_amoeba_query_oracle import parse_single_mapping  # noqa: E402
 from evaluate_amoeba_scores import load_oracle  # noqa: E402
 
 
 PIPELINE_SCHEMA = "cgra-ii-independent-frozen-pipeline"
-SCORE_MODEL = "static-shape-grid-packable-compute-bottleneck"
 QueryKey = Tuple[str, int, int]
 Runner = Callable[..., subprocess.CompletedProcess]
-
-
-@lru_cache(maxsize=None)
-def _grid_packable(
-    grid_rows: int, grid_cols: int,
-    rectangles: Tuple[Tuple[int, int], ...],
-) -> bool:
-    """Return whether oriented rectangles fit concurrently without overlap."""
-    ordered = tuple(sorted(
-        rectangles,
-        key=lambda shape: (
-            shape[0] * shape[1], max(shape), min(shape), shape[0], shape[1],
-        ),
-        reverse=True,
-    ))
-    if any(
-        rows <= 0 or cols <= 0 or rows > grid_rows or cols > grid_cols
-        for rows, cols in ordered
-    ):
-        return False
-    if sum(rows * cols for rows, cols in ordered) > grid_rows * grid_cols:
-        return False
-
-    placement_masks = []
-    for rows, cols in ordered:
-        masks = []
-        for row in range(grid_rows - rows + 1):
-            for col in range(grid_cols - cols + 1):
-                mask = 0
-                row_bits = (1 << cols) - 1
-                for offset in range(rows):
-                    mask |= row_bits << ((row + offset) * grid_cols + col)
-                masks.append(mask)
-        placement_masks.append(tuple(masks))
-
-    @lru_cache(maxsize=None)
-    def place(rectangle_index: int, occupied: int) -> bool:
-        if rectangle_index == len(placement_masks):
-            return True
-        for mask in placement_masks[rectangle_index]:
-            if not occupied & mask and place(rectangle_index + 1, occupied | mask):
-                return True
-        return False
-
-    return place(0, 0)
-
-
-def _candidate_grid_packable(
-    candidate: Mapping[str, Any], grid_rows: int, grid_cols: int,
-) -> bool:
-    choices = candidate.get("task_shapes")
-    if not isinstance(choices, list) or not choices:
-        raise ValueError("candidate has no task shapes")
-    rectangles = tuple(sorted(
-        (
-            _positive_integer(
-                _object(choice.get("shape"), "candidate shape").get("rows"),
-                "shape rows",
-            ),
-            _positive_integer(
-                _object(choice.get("shape"), "candidate shape").get("cols"),
-                "shape cols",
-            ),
-        )
-        for choice in choices
-    ))
-    return _grid_packable(grid_rows, grid_cols, rectangles)
 
 
 def _object(value: object, label: str) -> Mapping[str, Any]:
@@ -137,8 +73,8 @@ def load_cost_catalog(
     """Load a complete, provenance-bound Amoeba cost catalogue."""
     root = _object(json.loads(path.read_text()), "cost catalogue")
     header = _object(manifest["header"], "candidate header")
-    if root.get("schema_version") != COST_SCHEMA:
-        raise ValueError("cost catalogue schema_version mismatch")
+    if root.get("schema") != COST_SCHEMA:
+        raise ValueError("cost catalogue schema mismatch")
     if root.get("function") != header.get("function"):
         raise ValueError("cost catalogue function mismatch")
     namespace = root.get("namespace")
@@ -147,6 +83,36 @@ def load_cost_catalog(
     metadata = _object(root.get("predictor_metadata"), "predictor metadata")
     if metadata.get("candidate_manifest_sha256") != manifest["manifest_sha256"]:
         raise ValueError("cost catalogue candidate manifest SHA-256 mismatch")
+    ranking_policy = _object(metadata.get("ranking_policy"), "ranking policy")
+    if (
+        ranking_policy.get("mapper_success_probability") != "diagnostic_only" or
+        ranking_policy.get("uses_mapper_success_probability") is not False
+    ):
+        raise ValueError(
+            "cost catalogue must keep mapper success probability diagnostic-only"
+        )
+    analytical_provenance = _object(
+        metadata.get("analytical_provenance"), "analytical provenance",
+    )
+    task_body_hashes = _object(
+        analytical_provenance.get("task_body_sha256"), "task body provenance",
+    )
+    if task_body_hashes != manifest["task_body_sha256"]:
+        raise ValueError("cost catalogue task body provenance mismatch")
+    architecture_contract = _object(
+        metadata.get("architecture_contract"), "architecture contract",
+    )
+    architecture_sha = analytical_provenance.get("architecture_sha256")
+    supported_architectures = architecture_contract.get(
+        "supported_architecture_sha256"
+    )
+    if (
+        not isinstance(supported_architectures, list) or
+        architecture_sha not in supported_architectures
+    ):
+        raise ValueError(
+            "cost catalogue architecture is outside the model contract"
+        )
 
     entries = root.get("entries")
     if not isinstance(entries, list):
@@ -171,6 +137,21 @@ def load_cost_catalog(
             normalized["startup_cycles"] = _positive_number(
                 entry.get("startup_cycles"), "startup_cycles",
             )
+            lower_bound = entry.get("analytical_lower_bound")
+            if isinstance(lower_bound, bool) or not isinstance(
+                lower_bound, (int, float),
+            ):
+                raise ValueError(
+                    "analytical_lower_bound must be a positive finite number"
+                )
+            lower_bound = float(lower_bound)
+            if not math.isfinite(lower_bound) or lower_bound <= 0.0:
+                raise ValueError(
+                    "analytical_lower_bound must be a positive finite number"
+                )
+            if normalized["predicted_ii"] < lower_bound:
+                raise ValueError("predicted_ii must not be below analytical_lower_bound")
+            normalized["analytical_lower_bound"] = lower_bound
         elif status != "unsupported":
             raise ValueError("support_status must be supported or unsupported")
         by_query[key] = normalized
@@ -188,7 +169,7 @@ def load_cost_catalog(
 def score_candidates(
     manifest: Mapping[str, Any], catalog: Mapping[str, Any], top_k: int,
 ) -> Dict[str, Any]:
-    """Score only programs that fit concurrently on the physical CGRA grid."""
+    """Score every frozen, concurrently packable shape candidate."""
     if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0:
         raise ValueError("top_k must be a non-negative integer")
     costs = _object(catalog["by_query"], "cost lookup")
@@ -200,13 +181,6 @@ def score_candidates(
     valid_count = 0
     manifest_header = _object(manifest["header"], "manifest header")
     function = str(manifest_header["function"])
-    architecture = _object(
-        manifest_header.get("architecture"), "manifest architecture",
-    )
-    grid_rows = _positive_integer(architecture.get("grid_rows"), "grid_rows")
-    grid_cols = _positive_integer(architecture.get("grid_cols"), "grid_cols")
-    unpackable_count = 0
-
     for manifest_index, candidate in enumerate(manifest["candidates"]):
         candidate = _object(candidate, "candidate")
         candidate_id = candidate.get("candidate_id")
@@ -215,13 +189,11 @@ def score_candidates(
         choices = candidate.get("task_shapes")
         if not isinstance(choices, list) or not choices:
             raise ValueError("candidate has no task shapes")
-        hardware_grid_packable = _candidate_grid_packable(
-            candidate, grid_rows, grid_cols,
-        )
-        valid = hardware_grid_packable
-        reject_reason = None if valid else "HARDWARE_GRID_UNPACKABLE"
-        if not hardware_grid_packable:
-            unpackable_count += 1
+        # The manifest has already proved that all fixed-orientation task
+        # rectangles can coexist. This layer only applies pointwise costs; it
+        # neither re-runs packing nor uses temporal reuse to relax capacity.
+        valid = True
+        reject_reason = None
         bottleneck = 0.0
         task_costs = []
         for raw_choice in choices:
@@ -266,10 +238,9 @@ def score_candidates(
             task_costs.append(task_cost)
         score_row = {
             "record_type": "score",
-            "schema_version": SCORE_SCHEMA,
+            "schema": SCORE_SCHEMA,
             "candidate_id": candidate_id,
             "valid": valid,
-            "hardware_grid_packable": hardware_grid_packable,
             "task_costs": task_costs,
         }
         if valid:
@@ -292,25 +263,24 @@ def score_candidates(
     ]
     header = {
         "record_type": "header",
-        "schema_version": SCORE_SCHEMA,
-        "candidate_schema_version": CANDIDATE_SCHEMA,
+        "schema": SCORE_SCHEMA,
+        "candidate_schema": CANDIDATE_SCHEMA,
         "function": function,
         "cost_namespace": catalog["namespace"],
         "score_model": SCORE_MODEL,
         "producer": PIPELINE_SCHEMA,
-        "hardware_grid_constraint": {
-            "kind": "concurrent_oriented_rectangle_packing",
-            "grid_rows": grid_rows,
-            "grid_cols": grid_cols,
+        "candidate_space": {
+            "kind": "complete_concurrently_packable_shape_subset",
+            "resource_semantics": "all_task_rectangles_co_resident",
+            "packing": "fixed_orientation_nonoverlap",
         },
     }
     footer = {
         "record_type": "footer",
-        "schema_version": SCORE_SCHEMA,
+        "schema": SCORE_SCHEMA,
         "candidate_count": manifest["candidate_count"],
         "scored_count": len(score_rows),
         "valid_count": valid_count,
-        "hardware_grid_unpackable_count": unpackable_count,
         "top_k_requested": top_k,
         "shortlist": shortlist,
         "cache": {"hits": hits, "misses": misses, "entries": len(seen_queries)},
@@ -382,6 +352,11 @@ def validate_mapper_provenance(
         raw_dfg_hashes[task] != dfg_hashes[task] for task in tasks
     ):
         raise ValueError("task DFGs differ from catalogue provenance")
+    for task, path in task_paths.items():
+        if source_task_body_sha256(path.read_text(), task) != (
+            manifest["task_body_sha256"][task]
+        ):
+            raise ValueError(f"task DFG source body hash mismatch for {task}")
     return {
         "neura_opt_sha256": opt_sha,
         "architecture_sha256": architecture_sha,
@@ -633,15 +608,8 @@ def evaluate_against_oracle(
         raise ValueError("oracle query set does not match frozen cost queries")
     costs = catalog["by_query"]
     manifest_header = _object(manifest["header"], "manifest header")
-    architecture = _object(
-        manifest_header.get("architecture"), "manifest architecture",
-    )
-    grid_rows = _positive_integer(architecture.get("grid_rows"), "grid_rows")
-    grid_cols = _positive_integer(architecture.get("grid_cols"), "grid_cols")
     objectives: Dict[str, float] = {}
     for candidate in manifest["candidates"]:
-        if not _candidate_grid_packable(candidate, grid_rows, grid_cols):
-            continue
         durations = []
         for choice in candidate["task_shapes"]:
             shape = choice["shape"]
@@ -693,9 +661,7 @@ def evaluate_against_oracle(
     return {
         "oracle_path": str(oracle_path),
         "oracle_sha256": sha256_file(oracle_path),
-        "candidate_scope": "concurrent_oriented_rectangles_packable_on_grid",
-        "hardware_grid_rows": grid_rows,
-        "hardware_grid_cols": grid_cols,
+        "candidate_scope": "complete_concurrently_packable_shape_subset",
         "evaluable_candidate_count": len(objectives),
         "best_objective_cycles": best,
         "optimal_candidate_ids": optimal_ids,
@@ -758,7 +724,7 @@ def run_pipeline(
         manifest, catalog, scores["shortlist_ids"], mapping_results,
     )
     report: Dict[str, Any] = {
-        "schema_version": PIPELINE_SCHEMA,
+        "schema": PIPELINE_SCHEMA,
         "status": (
             "complete" if shortlist_evaluation["selected_candidate_id"]
             else "complete_with_no_evaluable_shortlist_candidate"
@@ -793,9 +759,6 @@ def run_pipeline(
             "candidate_count": manifest["candidate_count"],
             "scored_count": len(scores["scores"]),
             "valid_count": scores["footer"]["valid_count"],
-            "hardware_grid_unpackable_count": scores["footer"][
-                "hardware_grid_unpackable_count"
-            ],
             "cost_query_count": len(manifest["queries"]),
             "cache": scores["footer"]["cache"],
             "shortlist": scores["footer"]["shortlist"],
@@ -803,14 +766,12 @@ def run_pipeline(
         "mapper_replay": {
             "status": "faithful_direct_task_shape_replay",
             "exhaustive_program_candidate_calls": manifest["candidate_count"],
-            "hardware_grid_legal_program_candidates": scores["footer"][
-                "valid_count"
-            ],
+            "supported_program_candidates": scores["footer"]["valid_count"],
             "actual_shortlist_program_candidates": len(scores["shortlist_ids"]),
             "program_candidate_reduction_fraction": (
                 1.0 - len(scores["shortlist_ids"]) / manifest["candidate_count"]
             ),
-            "legal_program_candidate_reduction_fraction": (
+            "supported_program_candidate_reduction_fraction": (
                 1.0 - len(scores["shortlist_ids"]) /
                 scores["footer"]["valid_count"]
             ),

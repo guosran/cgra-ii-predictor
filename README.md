@@ -2,8 +2,11 @@
 
 This repository contains the final pointwise model used to rank static Amoeba
 CGRA shapes. For each `(task DFG, mapper shape)` query it predicts continuous
-compiled II. Amoeba retains ownership of candidate generation, exact rectangle
-packing, task dependencies, and program-level scoring.
+compiled II. Amoeba owns candidate enumeration, task dependencies, physical
+capacity, and program-level scoring. The current candidate protocol retains exactly the
+fixed-orientation shape tuples whose task rectangles can all coexist without
+overlap on the physical multi-CGRA grid; concrete origins remain a downstream
+heuristic choice.
 
 The deployed predictor is a validation-selected uncertainty-gated ensemble:
 
@@ -32,13 +35,21 @@ The finite physical-to-mapper shape domain is:
 
 ## Results
 
-The frozen validation/test continuous-II MAE is `0.33521 / 0.38050`.
+The frozen validation/test continuous-II MAE is `0.33521 / 0.38050`, measured
+only on the 655/649 successful mapper candidates. The corresponding full split
+sizes are 1776/1824; failures and timeouts remain censored rather than being
+converted into numeric II labels.
 
-The same-architecture true-mapper DSE comparison is recorded in
-`evaluations/dse-vs-legacy-amoeba-2026-09-06.json`. With fusion/fission
-disabled, ResNet's selected allocation reduces the objective interval by 25%
-relative to the earlier Amoeba allocation. Attention has the same steady-state
-interval and a 6.28% lower corrected dependency-DAG makespan.
+The true-mapper policy comparison in
+`evaluations/dse-vs-legacy-amoeba-2026-09-06.json` is not evidence of learned
+ranking quality: its ResNet run had only one surviving candidate under an older
+pruned search policy. It is retained as historical mapper evidence only.
+
+The frozen checkpoints are bound to architecture SHA-256
+`f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6`.
+Catalog generation rejects any other architecture. In particular, Amoeba's
+current `architecture_with_counter.yaml` needs newly collected labels and a
+retrained model before its rankings are valid.
 
 ## Usage
 
@@ -61,3 +72,8 @@ python3 -m pytest -q
 
 Amoeba's current external JSON identifiers retain their upstream names for
 wire compatibility. They are not model revisions.
+
+`mapper_success_probability` is exported only for diagnostics. It does not
+change query support, predicted II, candidate score, or top-k order. Revisit
+this decision only if real mapper failures in the selected shortlist become a
+measured problem; any threshold must then be selected on validation data.

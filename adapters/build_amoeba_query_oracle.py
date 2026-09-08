@@ -104,7 +104,7 @@ def build_oracle(
             ),
         })
     return {
-        "schema_version": "cgra-ii-amoeba-query-oracle",
+        "schema": "cgra-ii-amoeba-query-oracle",
         "function": manifest["header"]["function"],
         "candidate_manifest_sha256": manifest["manifest_sha256"],
         "query_count": len(entries),

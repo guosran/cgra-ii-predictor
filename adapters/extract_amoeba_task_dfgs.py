@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 from typing import Dict, List, Sequence, Tuple
 
+from amoeba_protocol import SOURCE_TASK_BODY_SHA_ATTR
+
 
 def _balanced_region(lines: Sequence[str], start: int) -> Tuple[List[str], int]:
     depth = 0
@@ -85,6 +87,22 @@ def _normalize_empty_store_indexed(line: str) -> str:
     )
 
 
+def _source_task_body_sha256(task_name: str,
+                             task_region: Sequence[str]) -> str:
+    """Read the exact body identity written by Amoeba during enumeration."""
+    matches = re.findall(
+        rf'\b{re.escape(SOURCE_TASK_BODY_SHA_ATTR)}\s*=\s*"([0-9a-f]{{64}})"',
+        "\n".join(task_region),
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            f"task {task_name} needs exactly one "
+            f"{SOURCE_TASK_BODY_SHA_ATTR} attribute; run Amoeba candidate "
+            "enumeration and extract DFGs from its bound IR output"
+        )
+    return matches[0]
+
+
 def extract_task_dfg_texts(text: str) -> Dict[str, str]:
     lines = text.splitlines()
     result: Dict[str, str] = {}
@@ -96,6 +114,7 @@ def extract_task_dfg_texts(text: str) -> Dict[str, str]:
             continue
         task_name = task_match.group(1)
         task_region, index = _balanced_region(lines, index)
+        source_body_sha = _source_task_body_sha256(task_name, task_region)
         kernel_starts = [
             position for position, line in enumerate(task_region)
             if re.search(r"\bneura\.kernel\b", line)
@@ -131,7 +150,9 @@ def extract_task_dfg_texts(text: str) -> Dict[str, str]:
         )
         symbol = re.sub(r"[^A-Za-z0-9_.$-]", "_", task_name)
         result[task_name] = "\n".join([
-            "module {",
+            "module attributes {",
+            f'  {SOURCE_TASK_BODY_SHA_ATTR} = "{source_body_sha}"',
+            "} {",
             f"  func.func @{symbol}_dfg({function_args}) {{",
             *dedented,
             "    return",
