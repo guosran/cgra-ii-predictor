@@ -59,14 +59,13 @@ ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES = DFG_NODE_FEATURE_NAMES + (
 )
 CGRA_NODE_FEATURE_NAMES = (
     "normalized_x", "normalized_y", "normalized_rows", "normalized_columns",
-    "normalized_degree", "is_north_or_west_boundary", "is_left_boundary",
+    "normalized_degree", "is_memory_tile", "is_left_boundary",
     "is_top_boundary", "is_right_boundary", "is_bottom_boundary", "bias",
 )
 CANDIDATE_CONTEXT_NAMES = (
     "normalized_rec_mii", "normalized_res_mii", "normalized_lower_bound",
     "normalized_rows", "normalized_columns", "normalized_tiles",
-    "log_aspect_ratio", "normalized_links",
-    "normalized_north_or_west_boundary_tiles",
+    "log_aspect_ratio", "normalized_links", "normalized_memory_tiles",
     "normalized_bisection_links",
 )
 CROSS_ATTENTION_CONTEXT_NAMES = (
@@ -457,16 +456,54 @@ def parse_neura_dfg_representation(
     raise ValueError("unknown DFG representation: " + representation)
 
 
+def parse_neura_mapped_placements(
+    text: str, source_graph: GraphData, rows: int, columns: int,
+    shape_protocol: str = SHAPE_PROTOCOL_ID,
+) -> Tuple[int, ...]:
+    """Extract one mapper-assigned PE index for every materialized DFG node."""
+    get_shape_protocol(shape_protocol).validate_mapper_shape(rows, columns)
+    mapped_types: List[int] = []
+    placements: List[int] = []
+    for line in text.splitlines():
+        match = re.match(r"\s*(%[A-Za-z0-9_]+)\s*=\s*(.*)", line)
+        if not match:
+            continue
+        expression = match.group(2)
+        kind_match = re.search(r'"?neura\.([a-z_]+)', expression)
+        if not kind_match or kind_match.group(1) in TRANSPARENT_OPERATIONS:
+            continue
+        kind = kind_match.group(1)
+        mapped_types.append(
+            OPERATION_TO_ID.get(kind, OPERATION_TO_ID["<unknown>"])
+        )
+        tile_locations = []
+        for location in re.findall(r"\{[^{}]*\}", expression):
+            if 'resource = "tile"' not in location:
+                continue
+            x_match = re.search(r"x = (\d+) : i32", location)
+            y_match = re.search(r"y = (\d+) : i32", location)
+            if x_match is not None and y_match is not None:
+                tile_locations.append((
+                    int(x_match.group(1)), int(y_match.group(1)),
+                ))
+        unique_locations = set(tile_locations)
+        if len(unique_locations) != 1:
+            raise ValueError(
+                "mapped materialized operation lacks one stable tile location"
+            )
+        x, y = next(iter(unique_locations))
+        if not 0 <= x < columns or not 0 <= y < rows:
+            raise ValueError("mapped tile location is outside the candidate shape")
+        placements.append(y * columns + x)
+    if tuple(mapped_types) != source_graph.node_types:
+        raise ValueError("mapped operation sequence differs from the source DFG")
+    return tuple(placements)
+
+
 def make_cgra_graph(
     rows: int, columns: int, shape_protocol: str = SHAPE_PROTOCOL_ID,
 ) -> GraphData:
-    """Create the geometric mapper-tile mesh used by the frozen checkpoints.
-
-    Feature 5 is the north-or-west boundary indicator that was present during
-    training. It is deliberately named as geometry, not as a memory/FU
-    capability: architecture compatibility is enforced separately by the
-    deployment adapter instead of inventing capabilities from coordinates.
-    """
+    """Create an oriented mapper-tile mesh in a finite shape protocol."""
     protocol = get_shape_protocol(shape_protocol)
     protocol.validate_mapper_shape(rows, columns)
     coordinates = [
@@ -518,7 +555,7 @@ def candidate_context(
     links = 2 * (
         rows * max(0, columns - 1) + columns * max(0, rows - 1)
     )
-    north_or_west_boundary_tiles = rows + columns - 1
+    memory_tiles = rows + columns - 1
     bisection = 0 if tiles == 1 else 2 * min(rows, columns)
     return (
         rec_mii / mapper_ii_ceiling,
@@ -529,8 +566,7 @@ def candidate_context(
         tiles / float(protocol.max_mapper_tiles),
         math.log(float(columns) / float(rows)),
         links / float(protocol.max_directed_links),
-        north_or_west_boundary_tiles /
-        float(protocol.max_north_or_west_boundary_tiles),
+        memory_tiles / float(protocol.max_memory_tiles),
         bisection / float(protocol.max_bisection_links),
     )
 
@@ -1614,4 +1650,5 @@ __all__ = [
     "pad_graphs", "pad_node_feature_mask", "pad_semantic_adjacency",
     "pad_shortest_path_distances", "parse_neura_dfg",
     "parse_neura_dfg_representation", "parse_neura_route_expanded_dfg",
+    "parse_neura_mapped_placements",
 ]

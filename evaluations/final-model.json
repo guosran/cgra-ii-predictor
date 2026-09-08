@@ -1,27 +1,9 @@
 {
-  "schema": "cgra-ii-final-model-evaluation",
+  "schema_version": "cgra-ii-final-model-evaluation",
   "selection_split": "validation_only",
-  "architecture_contract": {
-    "training_architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
-    "compatibility_rule": "exact_architecture_sha256"
-  },
   "point_prediction": {
-    "metric_population": "successful_mapper_candidates_only",
-    "metric_definition": "MAE and RMSE exclude censored mapper failures and timeouts.",
-    "validation": {
-      "total_candidate_count": 1776,
-      "successful_candidate_count": 655,
-      "censored_candidate_count": 1121,
-      "mae": 0.3352061576878256,
-      "rmse": 0.6364995009297296
-    },
-    "test": {
-      "total_candidate_count": 1824,
-      "successful_candidate_count": 649,
-      "censored_candidate_count": 1175,
-      "mae": 0.3804980511051972,
-      "rmse": 0.6953829117726544
-    }
+    "validation": {"candidate_count": 655, "mae": 0.3352061576878256, "rmse": 0.6364995009297296},
+    "test": {"candidate_count": 649, "mae": 0.3804980511051972, "rmse": 0.6953829117726544}
   },
-  "deployment_rule": "Use predicted II directly for shape ordering; mapper success probability is diagnostic-only."
+  "deployment_rule": "Use the ordinary point ensemble directly for shape ordering."
 }

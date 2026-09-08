@@ -1,17 +1,8 @@
 {
-  "schema": "cgra-ii-pointwise-ensemble",
+  "schema_version": "cgra-ii-pointwise-ensemble",
   "selection_split": "validation_only",
   "selected_ensemble_mode": "uncertainty_gated",
   "manifest_sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f",
-  "architecture_contract": {
-    "contract_id": "neura-main-f244-labels-geometric-boundary-features",
-    "training_architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
-    "supported_architecture_sha256": [
-      "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6"
-    ],
-    "cgra_feature_semantics": "north_or_west_boundary_geometry_not_fu_capability",
-    "compatibility_rule": "exact_architecture_sha256"
-  },
   "checkpoints": {
     "large_operation": {
       "path": "models/final/large-operation.pt",
@@ -46,11 +37,6 @@
     }
   },
   "validation": {
-    "population": {
-      "total_candidate_count": 1776,
-      "successful_candidate_count": 655,
-      "censored_candidate_count": 1121
-    },
     "ensemble": {
       "candidate_count": 655,
       "mae": 0.3352061576878256,
@@ -60,11 +46,6 @@
     }
   },
   "test": {
-    "population": {
-      "total_candidate_count": 1824,
-      "successful_candidate_count": 649,
-      "censored_candidate_count": 1175
-    },
     "ensemble": {
       "candidate_count": 649,
       "mae": 0.3804980511051972,

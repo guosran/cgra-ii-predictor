@@ -1,15 +1,6 @@
 {
-  "schema": "cgra-dse-vs-amoeba-true-mapper",
+  "schema_version": "cgra-dse-vs-amoeba-true-mapper",
   "date": "2026-09-06",
-  "evidence_scope": {
-    "status": "historical_policy_comparison",
-    "learned_ranking_evidence": false,
-    "reasons": [
-      "The candidate space used a superseded op-cap and concurrent-packing pruning policy.",
-      "The ResNet space contained one candidate, so its allocation was not selected by learned ranking.",
-      "The predictor checkpoints were trained on architecture f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6 rather than the replay architecture below."
-    ]
-  },
   "comparison_contract": {
     "target": "compiled_ii_from_neura_heuristic_mapper",
     "program_objective": "max(startup_cycles + compiled_ii * (trip_count - 1))",

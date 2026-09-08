@@ -17,4 +17,3 @@ where = ["src"]
 # this repository's unit-test command scoped to the predictor package.
 testpaths = ["tests"]
 addopts = "-p no:pytest-pymtl3"
-pythonpath = ["src", "."]

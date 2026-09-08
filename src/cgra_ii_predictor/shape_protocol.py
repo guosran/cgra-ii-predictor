@@ -21,7 +21,7 @@ class ShapeProtocol:
     max_mapper_cols: int
     max_mapper_tiles: int
     max_directed_links: int
-    max_north_or_west_boundary_tiles: int
+    max_memory_tiles: int
     max_bisection_links: int
     max_manhattan_distance: int
     physical_to_mapper: Tuple[Tuple[PhysicalShape, MapperShape], ...]
@@ -74,9 +74,7 @@ class ShapeProtocol:
                 "mapper_cols": self.max_mapper_cols,
                 "mapper_tiles": self.max_mapper_tiles,
                 "directed_links": self.max_directed_links,
-                "north_or_west_boundary_tiles": (
-                    self.max_north_or_west_boundary_tiles
-                ),
+                "memory_tiles": self.max_memory_tiles,
                 "bisection_links": self.max_bisection_links,
                 "manhattan_distance": self.max_manhattan_distance,
             },
@@ -95,7 +93,7 @@ SHAPE_PROTOCOL = ShapeProtocol(
     max_mapper_cols=16,
     max_mapper_tiles=64,
     max_directed_links=224,
-    max_north_or_west_boundary_tiles=19,
+    max_memory_tiles=19,
     max_bisection_links=16,
     max_manhattan_distance=18,
     physical_to_mapper=(

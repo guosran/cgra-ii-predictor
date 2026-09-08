@@ -37,8 +37,8 @@ def load_scores(path: Path) -> Dict[str, Any]:
     header = _object(records[0], "score header")
     footer = _object(records[-1], "score footer")
     scores = [_object(record, "score") for record in records[1:-1]]
-    if any(record.get("schema") != SCORE_SCHEMA for record in records):
-        raise ValueError("score schema mismatch")
+    if any(record.get("schema_version") != SCORE_SCHEMA for record in records):
+        raise ValueError("score schema_version mismatch")
     if header.get("record_type") != "header" or footer.get("record_type") != "footer":
         raise ValueError("score header/footer is invalid")
     if any(record.get("record_type") != "score" for record in scores):
@@ -68,8 +68,8 @@ def load_scores(path: Path) -> Dict[str, Any]:
 
 def load_oracle(path: Path, function: str) -> Dict[QueryKey, Dict[str, Any]]:
     root = _object(json.loads(path.read_text()), "oracle")
-    if root.get("schema") != ORACLE_SCHEMA:
-        raise ValueError("oracle schema mismatch")
+    if root.get("schema_version") != ORACLE_SCHEMA:
+        raise ValueError("oracle schema_version mismatch")
     if root.get("function") != function:
         raise ValueError("oracle function mismatch")
     entries = root.get("entries")
@@ -198,7 +198,7 @@ def evaluate_scores(
     if predictor_timing_path is not None:
         timing = json.loads(predictor_timing_path.read_text())
     result = {
-        "schema": "cgra-ii-amoeba-dse-evaluation",
+        "schema_version": "cgra-ii-amoeba-dse-evaluation",
         "function": function,
         "artifacts": {
             "candidate_manifest_sha256": candidates["manifest_sha256"],
