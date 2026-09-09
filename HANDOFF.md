@@ -1,53 +1,49 @@
 # Final model handoff
 
-Last updated: 2026-09-08 (Asia/Hong_Kong)
+Last updated: 2026-09-09 (Asia/Hong_Kong)
 
 ## Deployment contract
 
-- Predict one continuous compiled II per `(task DFG, mapper shape)`.
-- Use `models/final/ensemble.json` and its three checkpoints for DSE ordering.
-- The ordinary three-checkpoint ensemble is the only deployment model.
-- Enumerate every fixed-orientation task-shape tuple in Amoeba, then retain it
-  only if all task rectangles have an exact simultaneous, non-overlapping
-  placement on the physical grid. Total area is only a quick necessary check;
-  temporal reuse must not make an over-capacity tuple legal.
-- TODO: a future analytical spatial-temporal scheduler may model cross-time
-  tile reuse as a separate search scope; it must not weaken the current
-  co-resident validity rule.
-- Keep concrete placement coordinates in the downstream heuristic for the
-  current shape-only phase, but preserve the selected orientation because
-  `1xN` and `Nx1` are separately scored mapper shapes.
-- Keep task dependencies, fusion/fission decisions, and program scoring in
-  Amoeba.
-- Treat mapper failures and timeouts as censored outcomes, never as numeric II.
-- Keep `mapper_success_probability` diagnostic-only. It must not affect
-  support, score, or top-k ordering in this phase.
-- The current taskflow decision is to disable resource-aware fusion/fission.
+- Use only `models/final/mapper.pt` and `models/final/model.json`.
+- Predict one continuous heuristic-mapper `compiled_ii` per pre-mapper task DFG
+  and mapper shape. Do not consume mapped artifacts as model inputs.
+- Rank shapes directly by predicted II. The model has no placement, routing,
+  uncertainty, or mapper-success output.
+- Keep mapper failures and timeouts censored; confirm selected candidates with
+  the real mapper and fall back to the next candidate on failure.
+- Enumerate fixed-orientation shape tuples in Amoeba and retain only tuples
+  whose task rectangles have an exact simultaneous non-overlapping placement.
+- Keep concrete origins, dependencies, program scoring, and top-k selection in
+  Amoeba. Fusion/fission remains disabled.
 
-## Frozen results
+## Frozen model
 
-- Point ensemble validation/test II MAE: `0.335206 / 0.380498`.
-- Attention no-fusion DSE: interval `29,360,129`, dependency-DAG makespan
-  `62,588,435`; corrected earlier Amoeba makespan `66,782,741`.
-- ResNet no-fusion DSE: interval `7,077,891`, dependency-DAG makespan
-  `7,119,366`; earlier Amoeba interval `9,437,190`, makespan `18,958,393`.
+- Architecture: standardized 112-value input, `64 -> 32` GELU hidden layers,
+  scalar residual output; 9,345 trainable parameters.
+- Target: final `compiled_ii` from the fixed Neura heuristic mapper.
+- Training inputs: pre-mapper DFG structure, mapper shape, RecMII, ResMII, and
+  their lower bound; no mapped-result feature or placement supervision.
+- Successful split counts: 3,138 train / 655 validation / 649 test.
+- Validation: MAE `0.430708`, pairwise `0.738333`, top-1 hit `0.866071`, mean
+  regret `0.187500`.
+- Test: MAE `0.438052`, pairwise `0.778146`, top-1 hit `0.807339`, mean regret
+  `0.247706`.
 
-Machine-readable evidence is in `evaluations/final-model.json` and
+On the identical split, the removed graph ensemble achieved validation/test
+MAE `0.335206 / 0.380498`, pairwise `0.728333 / 0.740066`, top-1 hit
+`0.803571 / 0.752294`, and regret `0.276786 / 0.394495`. The direct model was
+selected because DSE ordering and regret take precedence over point MAE.
+
+Machine-readable evidence is in `evaluations/final-model.json`. Historical
+true-mapper DSE comparisons remain in
 `evaluations/dse-vs-legacy-amoeba-2026-09-06.json`.
 
-The final checkpoints are valid only for architecture SHA-256
+## Architecture boundary
+
+The checkpoint supports only architecture SHA-256
 `f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6`.
-The graph's historical boundary feature is geometric; it is not a memory-tile
-capability mask. The current Amoeba `architecture_with_counter.yaml` has hash
+The current Amoeba counter architecture has SHA-256
 `5c228166de4ceacf49b0ea6286a4a8c1ce45a718ef3da8899a21cea07aa7a174`
-and is therefore rejected. Collect mapper labels on that exact
-architecture and retrain before enabling its catalog.
+and is rejected. Collect mapper labels and retrain before enabling its catalog.
 
-TODO: if shortlist mapper failures later become material, evaluate whether the
-diagnostic success probability improves top-k recall. Select any policy and
-threshold on validation only; do not retrofit it from test outcomes.
-
-## Repository boundary
-
-Detailed local training reports and mapper logs remain untracked and must not
-be added accidentally.
+Local training reports and mapper logs are ignored and must remain untracked.

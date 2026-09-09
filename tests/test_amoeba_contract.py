@@ -7,11 +7,13 @@ import torch
 from adapters.amoeba_cost_catalog import (
     _packable_shape_index_tuples,
     _static_shape_alphabet,
+    generate_catalog,
     load_candidate_manifest,
     load_analytical_input,
-    load_ensemble_report,
+    load_mapper_model,
+    sha256_file,
     source_task_body_sha256,
-    validate_ensemble_architecture,
+    validate_model_architecture,
 )
 from adapters.amoeba_frozen_pipeline import load_cost_catalog, score_candidates
 from adapters.extract_amoeba_task_dfgs import extract_task_dfg_texts
@@ -23,14 +25,12 @@ from adapters.amoeba_protocol import (
     SCORE_MODEL,
     SPATIAL_CAPACITY_POLICY,
 )
-from cgra_ii_predictor.graph_model import (
-    CGRA_NODE_FEATURE_NAMES,
-    CANDIDATE_CONTEXT_NAMES,
-    JointGraphShapeModel,
-    PointwiseConfig,
-    candidate_context,
-    make_cgra_graph,
-    parse_neura_dfg_representation,
+from cgra_ii_predictor.dfg import (
+    parse_neura_route_expanded_dfg,
+)
+from cgra_ii_predictor.mapper_model import (
+    MAPPER_FEATURE_NAMES,
+    mapper_feature_vector,
 )
 from cgra_ii_predictor.shape_protocol import SHAPE_PROTOCOL
 
@@ -127,7 +127,7 @@ def _write_two_task_manifest(path):
     path.write_text("".join(json.dumps(record) + "\n" for record in records))
 
 
-def _catalog(success_probability):
+def _catalog():
     return {
         "namespace": "test-model",
         "by_query": {
@@ -135,7 +135,6 @@ def _catalog(success_probability):
                 "support_status": "supported",
                 "predicted_ii": float(1 if cols == 8 else 2),
                 "startup_cycles": 1.0,
-                "mapper_success_probability": success_probability,
             }
             for task in ("A", "B")
             for rows, cols in ((4, 4), (4, 8), (8, 4))
@@ -304,7 +303,7 @@ def test_cost_catalog_is_bound_to_exact_manifest_bytes(tmp_path):
         "predictor_metadata": {
             "candidate_manifest_sha256": "f" * 64,
             "ranking_policy": {
-                "mapper_success_probability": "diagnostic_only",
+                "mapper_success_probability": "not_predicted",
                 "uses_mapper_success_probability": False,
             },
         },
@@ -316,7 +315,7 @@ def test_cost_catalog_is_bound_to_exact_manifest_bytes(tmp_path):
 
 def test_scoring_uses_the_packing_pruned_manifest():
     manifest = _two_task_manifest()
-    scores = score_candidates(manifest, _catalog(0.01), top_k=0)
+    scores = score_candidates(manifest, _catalog(), top_k=0)
 
     assert scores["footer"]["candidate_count"] == 7
     assert scores["footer"]["valid_count"] == 7
@@ -382,66 +381,104 @@ module {
         extract_task_dfg_texts(source)
 
 
-def test_success_probability_is_diagnostic_only_for_ranking():
-    manifest = _two_task_manifest()
-    low = score_candidates(manifest, _catalog(0.01), top_k=7)
-    high = score_candidates(manifest, _catalog(0.99), top_k=7)
-
-    assert low["footer"]["shortlist"] == high["footer"]["shortlist"]
-    assert low["scores"] == high["scores"]
-
-
-def test_frozen_geometry_features_are_not_named_as_memory_capabilities():
-    assert CGRA_NODE_FEATURE_NAMES[5] == "is_north_or_west_boundary"
-    assert CANDIDATE_CONTEXT_NAMES[8] == (
-        "normalized_north_or_west_boundary_tiles"
+def test_direct_mapper_rejects_the_current_amoeba_architecture():
+    _, _, metadata = load_mapper_model(
+        ROOT / "models/final/mapper.pt", torch.device("cpu"),
     )
-    for rows, cols in SHAPE_PROTOCOL.mapper_shapes:
-        graph = make_cgra_graph(rows, cols)
-        boundary_count = sum(row[5] for row in graph.node_features)
-        assert boundary_count == rows + cols - 1
-        context = candidate_context(rows, cols, 0, 1, 1)
-        assert len(context) == len(CANDIDATE_CONTEXT_NAMES)
-
-
-def test_final_ensemble_rejects_the_current_amoeba_architecture():
-    checkpoint_paths = {
-        "large_operation": ROOT / "models/final/large-operation.pt",
-        "baseline": ROOT / "models/final/baseline.pt",
-        "ranking": ROOT / "models/final/ranking.pt",
-    }
-    ensemble = load_ensemble_report(
-        ROOT / "models/final/ensemble.json", checkpoint_paths,
-    )
-    validate_ensemble_architecture(ensemble, TRAINING_ARCHITECTURE)
+    validate_model_architecture(metadata, TRAINING_ARCHITECTURE)
     with pytest.raises(ValueError, match="outside the deployed model contract"):
-        validate_ensemble_architecture(ensemble, CURRENT_AMOEBA_ARCHITECTURE)
+        validate_model_architecture(metadata, CURRENT_AMOEBA_ARCHITECTURE)
 
 
 def test_frozen_checkpoint_runs_all_eight_static_shapes():
-    artifact = torch.load(
-        ROOT / "models/final/ranking.pt",
-        map_location="cpu",
-        weights_only=False,
+    model, config, _ = load_mapper_model(
+        ROOT / "models/final/mapper.pt", torch.device("cpu"),
     )
-    config = PointwiseConfig(**artifact["config"]).validate()
-    model = JointGraphShapeModel(config)
-    model.load_state_dict(artifact["state_dict"], strict=True)
-    model.eval()
-    dfg = parse_neura_dfg_representation(
+    dfg = parse_neura_route_expanded_dfg(
         '''
         %0 = "neura.constant"() : () -> !neura.data<i32, i1>
-        %1 = "neura.add"(%0, %0) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
+        %1 = "neura.add"(%0, %0)
         ''',
-        config.dfg_representation,
     )
     with torch.inference_mode():
         for rows, cols in SHAPE_PROTOCOL.mapper_shapes:
-            context = torch.tensor([[
-                candidate_context(
-                    rows, cols, 0, 1, 1,
-                    config.mapper_ii_ceiling, config.shape_protocol,
-                )
-            ]])
-            output = model([dfg], [make_cgra_graph(rows, cols)], context)
-            assert torch.isfinite(output["predicted_ii"]).all()
+            features = torch.tensor([
+                mapper_feature_vector(dfg, rows, cols, 0, 1, 1)
+            ])
+            output = model(features, torch.tensor([1.0]))
+            assert len(features[0]) == len(MAPPER_FEATURE_NAMES)
+            assert torch.isfinite(output).all()
+
+
+def test_direct_mapper_generates_a_loadable_cost_catalog(tmp_path):
+    manifest_path = tmp_path / "candidates.jsonl"
+    _write_two_task_manifest(manifest_path)
+    manifest = load_candidate_manifest(manifest_path)
+
+    task_paths = {}
+    for task in ("A", "B"):
+        path = tmp_path / f"{task}.mlir"
+        path.write_text(f'''module {{
+          func.func @{task}_dfg() attributes {{
+            amoeba.source_task_body_sha256 = "{'0' * 64}"
+          }} {{
+            %0 = "neura.constant"() : () -> !neura.data<i32, i1>
+            %1 = "neura.add"(%0, %0)
+            return
+          }}
+        }}''')
+        task_paths[task] = path
+
+    analytical_path = tmp_path / "analytical.json"
+    analytical_path.write_text(json.dumps({
+        "schema": "cgra-ii-amoeba-query-features",
+        "function": "main",
+        "provenance": {
+            "candidate_manifest_sha256": manifest["manifest_sha256"],
+            "task_dfg_sha256": {
+                task: sha256_file(path) for task, path in task_paths.items()
+            },
+            "task_body_sha256": manifest["task_body_sha256"],
+            "neura_opt_sha256": "1" * 64,
+            "architecture_sha256": TRAINING_ARCHITECTURE,
+            "rec_res_source": "analysis_only",
+            "startup_cycles_source": "analysis_only",
+        },
+        "entries": [{
+            "task": task,
+            "mapper_tile_rows": rows,
+            "mapper_tile_cols": cols,
+            "rec_mii": 1,
+            "res_mii": 1,
+            "lower_bound": 1,
+            "startup_cycles": 2,
+        } for task, rows, cols in manifest["queries"]],
+    }))
+
+    catalog, timing = generate_catalog(
+        manifest_path, analytical_path, task_paths,
+        ROOT / "models/final/mapper.pt", torch.device("cpu"),
+    )
+    catalog_path = tmp_path / "costs.json"
+    catalog_path.write_text(json.dumps(catalog))
+    loaded = load_cost_catalog(catalog_path, manifest)
+
+    assert len(loaded["by_query"]) == 6
+    assert all(
+        entry["ii_mean_source"] == "direct_mapper_surrogate"
+        for entry in catalog["entries"]
+    )
+    assert all("mapper_success_probability" not in entry for entry in catalog["entries"])
+    assert timing["model_load_count"] == 1
+    assert timing["model_forward_pass_count"] == 1
+
+    mismatched = json.loads(analytical_path.read_text())
+    mismatched["provenance"]["architecture_sha256"] = (
+        CURRENT_AMOEBA_ARCHITECTURE
+    )
+    analytical_path.write_text(json.dumps(mismatched))
+    with pytest.raises(ValueError, match="architecture does not match manifest"):
+        generate_catalog(
+            manifest_path, analytical_path, task_paths,
+            ROOT / "models/final/mapper.pt", torch.device("cpu"),
+        )

@@ -1,27 +1,45 @@
 {
   "schema": "cgra-ii-final-model-evaluation",
   "selection_split": "validation_only",
+  "target": "compiled_ii_from_neura_heuristic_mapper",
+  "metric_population": "successful_mapper_candidates_only",
   "architecture_contract": {
     "training_architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
     "compatibility_rule": "exact_architecture_sha256"
   },
-  "point_prediction": {
-    "metric_population": "successful_mapper_candidates_only",
-    "metric_definition": "MAE and RMSE exclude censored mapper failures and timeouts.",
+  "direct_mapper_model": {
+    "parameter_count": 9345,
     "validation": {
-      "total_candidate_count": 1776,
-      "successful_candidate_count": 655,
-      "censored_candidate_count": 1121,
-      "mae": 0.3352061576878256,
-      "rmse": 0.6364995009297296
+      "candidate_count": 655,
+      "mae": 0.4307083189487457,
+      "pairwise_accuracy": 0.7383333333333333,
+      "top1_true_ii_hit_rate": 0.8660714285714286,
+      "top1_mean_regret": 0.1875
     },
     "test": {
-      "total_candidate_count": 1824,
-      "successful_candidate_count": 649,
-      "censored_candidate_count": 1175,
-      "mae": 0.3804980511051972,
-      "rmse": 0.6953829117726544
+      "candidate_count": 649,
+      "mae": 0.43805208802223206,
+      "pairwise_accuracy": 0.7781456953642384,
+      "top1_true_ii_hit_rate": 0.8073394495412844,
+      "top1_mean_regret": 0.24770642201834864
     }
   },
-  "deployment_rule": "Use predicted II directly for shape ordering; mapper success probability is diagnostic-only."
+  "removed_graph_ensemble_reference": {
+    "parameter_count": 10576581,
+    "validation": {
+      "candidate_count": 655,
+      "mae": 0.3352061483,
+      "pairwise_accuracy": 0.7283333333,
+      "top1_true_ii_hit_rate": 0.8035714286,
+      "top1_mean_regret": 0.2767857143
+    },
+    "test": {
+      "candidate_count": 649,
+      "mae": 0.380498047,
+      "pairwise_accuracy": 0.7400662252,
+      "top1_true_ii_hit_rate": 0.752293578,
+      "top1_mean_regret": 0.3944954128
+    }
+  },
+  "deployment_rule": "Use direct predicted II for shape ordering and confirm shortlisted candidates with the real mapper."
 }

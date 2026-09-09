@@ -1,0 +1,51 @@
+{
+  "schema": "cgra-ii-direct-mapper-selection",
+  "selection_split": "validation_only",
+  "target": "compiled_ii_from_neura_heuristic_mapper",
+  "checkpoint": {
+    "path": "models/final/mapper.pt",
+    "sha256": "afc744ee15de4fc1e6bb6574dc755edc36f53b33662b6c01eefeb52ba16993fc",
+    "parameter_count": 9345,
+    "feature_count": 112
+  },
+  "training": {
+    "manifest_sha256": "33ef4a2dc8385b8245234cb4cc95817ab321c35291a2663f0f09103f0888823f",
+    "split_seed": 20260911,
+    "training_seed": 20260911,
+    "pairwise_loss_weight": 0.1,
+    "pairwise_margin": 0.5,
+    "top1_loss_weight": 0.3,
+    "top1_temperature": 1.0,
+    "checkpoint_selection": "validation_top1_regret_then_hit_rate_then_pairwise_then_mae",
+    "placement_supervision": false,
+    "mapped_artifact_features": false
+  },
+  "architecture_contract": {
+    "training_architecture_sha256": "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6",
+    "supported_architecture_sha256": [
+      "f244f15be30604eb32eb96e4837a4bf1ce5c34961c3a46299b90931505cc97e6"
+    ],
+    "compatibility_rule": "exact_architecture_sha256"
+  },
+  "validation": {
+    "candidate_count": 655,
+    "mae": 0.4307083189487457,
+    "rmse": 0.732599675655365,
+    "round_exact_ii": 0.6900763511657715,
+    "round_within_one_ii": 0.9236640930175781,
+    "pairwise_accuracy": 0.7383333333333333,
+    "top1_true_ii_hit_rate": 0.8660714285714286,
+    "top1_mean_regret": 0.1875
+  },
+  "test": {
+    "candidate_count": 649,
+    "mae": 0.43805208802223206,
+    "rmse": 0.731799840927124,
+    "round_exact_ii": 0.6733435988426208,
+    "round_within_one_ii": 0.9352850317955017,
+    "pairwise_accuracy": 0.7781456953642384,
+    "top1_true_ii_hit_rate": 0.8073394495412844,
+    "top1_mean_regret": 0.24770642201834864
+  },
+  "selection_rationale": "Prefer validation shape ordering and top-1 regret over point MAE."
+}

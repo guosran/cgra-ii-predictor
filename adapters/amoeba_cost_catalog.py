@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate an Amoeba task/shape cost catalogue from pointwise models.
+"""Generate an Amoeba task/shape cost catalogue from a mapper surrogate.
 
 The adapter consumes a frozen candidate JSONL manifest, one pre-mapper Neura
 DFG per task, analytical RecMII/ResMII facts, and frontend-provided startup
@@ -37,12 +37,14 @@ from amoeba_protocol import (  # noqa: E402
     SOURCE_TASK_BODY_SHA_ATTR,
     SPATIAL_CAPACITY_POLICY,
 )
-from cgra_ii_predictor.graph_model import (  # noqa: E402
-    JointGraphShapeModel,
-    PointwiseConfig,
-    candidate_context,
-    make_cgra_graph,
-    parse_neura_dfg_representation,
+from cgra_ii_predictor.dfg import (  # noqa: E402
+    parse_neura_route_expanded_dfg,
+)
+from cgra_ii_predictor.mapper_model import (  # noqa: E402
+    DirectMapperIIModel,
+    MAPPER_FEATURE_NAMES,
+    MapperModelConfig,
+    mapper_feature_vector,
 )
 from cgra_ii_predictor.shape_protocol import (  # noqa: E402
     SHAPE_PROTOCOL,
@@ -52,14 +54,10 @@ from cgra_ii_predictor.shape_protocol import (  # noqa: E402
 
 
 ANALYTICAL_INPUT_SCHEMA = "cgra-ii-amoeba-query-features"
-ADAPTER_FEATURE_SCHEMA = "cgra-ii-amoeba-pointwise-features"
-CHECKPOINT_SCHEMA = "cgra-ii-pointwise-model"
+ADAPTER_FEATURE_SCHEMA = "cgra-ii-amoeba-direct-mapper-features"
+CHECKPOINT_SCHEMA = "cgra-ii-direct-mapper-model"
 FINAL_MODEL_DIR = PROJECT_ROOT / "models" / "final"
-DEFAULT_CHECKPOINTS = (
-    f"large_operation={FINAL_MODEL_DIR / 'large-operation.pt'}",
-    f"baseline={FINAL_MODEL_DIR / 'baseline.pt'}",
-    f"ranking={FINAL_MODEL_DIR / 'ranking.pt'}",
-)
+DEFAULT_MODEL = FINAL_MODEL_DIR / "mapper.pt"
 
 QueryKey = Tuple[str, int, int]
 
@@ -474,184 +472,51 @@ def parse_task_paths(values: Iterable[str]) -> Dict[str, Path]:
     return result
 
 
-def parse_checkpoint_paths(values: Iterable[str]) -> Dict[str, Path]:
-    result: Dict[str, Path] = {}
-    for value in values:
-        name, separator, raw_path = value.partition("=")
-        if not separator or not name or not raw_path:
-            raise ValueError("checkpoint must be NAME=PATH")
-        if name in result:
-            raise ValueError(f"duplicate checkpoint name: {name}")
-        path = Path(raw_path).resolve()
-        if not path.is_file():
-            raise ValueError(f"checkpoint does not exist: {path}")
-        result[name] = path
-    if not result:
-        raise ValueError("at least one checkpoint is required")
-    return result
-
-
-def load_ensemble_report(
-    path: Path, checkpoint_paths: Mapping[str, Path],
-) -> Dict[str, Any]:
-    report = _object(json.loads(path.read_text()), "ensemble report")
-    if report.get("selection_split") != "validation_only":
-        raise ValueError("ensemble must be selected on validation only")
-    raw_checkpoints = _object(report.get("checkpoints"), "ensemble checkpoints")
-    for name, checkpoint_path in checkpoint_paths.items():
-        record = _object(raw_checkpoints.get(name), f"checkpoint {name}")
-        if record.get("sha256") != sha256_file(checkpoint_path):
-            raise ValueError(f"checkpoint SHA-256 mismatch for {name}")
-    weights = _object(report.get("weights"), "ensemble weights")
-    expected_names = {"analytical_lower_bound", *checkpoint_paths}
-    if set(weights) != expected_names:
-        raise ValueError("ensemble weights do not match checkpoints")
-    numeric_weights = {
-        name: float(value) for name, value in weights.items()
-    }
-    if any(
-        not math.isfinite(value) or value < 0.0
-        for value in numeric_weights.values()
-    ) or not math.isclose(sum(numeric_weights.values()), 1.0, abs_tol=1e-6):
-        raise ValueError("ensemble weights must form a probability simplex")
-    gating = _object(report.get("uncertainty_gating"), "uncertainty gating")
-    exponent = float(gating.get("exponent"))
-    scales = _object(gating.get("scales"), "uncertainty scales")
-    if set(scales) != expected_names:
-        raise ValueError("uncertainty scales do not match ensemble weights")
-    numeric_scales = {name: float(value) for name, value in scales.items()}
-    if not math.isfinite(exponent) or exponent < 0.0 or any(
-        not math.isfinite(value) or value <= 0.0
-        for value in numeric_scales.values()
+def load_mapper_model(
+    path: Path, device: torch.device,
+) -> Tuple[DirectMapperIIModel, MapperModelConfig, Dict[str, Any]]:
+    """Strictly load the one fixed-heuristic mapper surrogate."""
+    artifact = torch.load(path, map_location=device, weights_only=False)
+    if not isinstance(artifact, Mapping) or artifact.get("schema") != (
+        CHECKPOINT_SCHEMA
     ):
-        raise ValueError("uncertainty gating parameters are invalid")
-    architecture_contract = _object(
-        report.get("architecture_contract"), "architecture contract",
+        raise ValueError("mapper checkpoint has an unsupported schema")
+    if artifact.get("feature_names") != list(MAPPER_FEATURE_NAMES):
+        raise ValueError("mapper checkpoint feature contract mismatch")
+    raw_config = _object(artifact.get("config"), "mapper model config")
+    config = MapperModelConfig(**raw_config).validate()
+    model = DirectMapperIIModel(config).to(device)
+    model.load_state_dict(artifact["state_dict"], strict=True)
+    model.eval()
+    architecture = _sha256_string(
+        artifact.get("architecture_sha256"), "training architecture SHA-256",
     )
-    contract_id = architecture_contract.get("contract_id")
-    training_architecture = architecture_contract.get(
-        "training_architecture_sha256"
-    )
-    supported_architectures = architecture_contract.get(
-        "supported_architecture_sha256"
-    )
-    if not isinstance(contract_id, str) or not contract_id:
-        raise ValueError("ensemble architecture contract_id is missing")
-    if (
-        not isinstance(training_architecture, str) or
-        len(training_architecture) != 64 or
-        any(character not in "0123456789abcdef" for character in training_architecture)
-    ):
-        raise ValueError("ensemble training architecture SHA-256 is invalid")
-    if (
-        not isinstance(supported_architectures, list) or
-        not supported_architectures or
-        any(
-            not isinstance(value, str) or len(value) != 64 or
-            any(character not in "0123456789abcdef" for character in value)
-            for value in supported_architectures
-        ) or training_architecture not in supported_architectures
-    ):
-        raise ValueError("ensemble supported architecture set is invalid")
-
-    selected_mode = report.get("selected_ensemble_mode")
-    if selected_mode not in {"static", "uncertainty_gated"}:
-        validation = _object(report.get("validation"), "validation metrics")
-        gated = _object(validation.get("ensemble"), "gated validation metrics")
-        static = _object(
-            validation.get("static_ensemble"), "static validation metrics",
-        )
-        selected_mode = (
-            "uncertainty_gated"
-            if float(gated["mae"]) < float(static["mae"]) else "static"
-        )
-    return {
-        "weights": numeric_weights,
-        "uncertainty_exponent": exponent,
-        "uncertainty_scales": numeric_scales,
-        "selected_mode": selected_mode,
-        "manifest_sha256": report.get("manifest_sha256"),
-        "architecture_contract": dict(architecture_contract),
-        "supported_architecture_sha256": tuple(supported_architectures),
+    return model, config, {
         "sha256": sha256_file(path),
+        "training_manifest_sha256": _sha256_string(
+            artifact.get("training_manifest_sha256"),
+            "training manifest SHA-256",
+        ),
+        "training_architecture_sha256": architecture,
+        "supported_architecture_sha256": [architecture],
+        "compatibility_rule": "exact_architecture_sha256",
+        "config_sha256": canonical_json_sha256(config.to_dict()),
     }
 
 
-def _gated_weights(
-    names: Sequence[str], base_weights: Mapping[str, float],
-    deviations: Mapping[str, float], exponent: float,
-    scales: Mapping[str, float],
-) -> Dict[str, float]:
-    result = {}
-    for name in names:
-        modulation = 1.0
-        if name != "analytical_lower_bound":
-            relative = max(deviations[name] / scales[name], 1e-4)
-            modulation = relative ** (-exponent)
-        result[name] = base_weights[name] * modulation
-    total = sum(result.values())
-    if total <= 0.0:
-        raise ValueError("uncertainty gating produced zero total weight")
-    return {name: value / total for name, value in result.items()}
-
-
-def _combine_prediction(
-    facts: Mapping[str, float], model_values: Mapping[str, Mapping[str, float]],
-    ensemble: Mapping[str, Any], mode: str,
-) -> Dict[str, float]:
-    names = ["analytical_lower_bound", *model_values]
-    means = {"analytical_lower_bound": facts["lower_bound"]}
-    means.update({name: value["mean"] for name, value in model_values.items()})
-    deviations = {"analytical_lower_bound": 0.0}
-    deviations.update({name: value["std"] for name, value in model_values.items()})
-    weights = dict(ensemble["weights"])
-    if mode == "uncertainty_gated":
-        weights = _gated_weights(
-            names, weights, deviations,
-            float(ensemble["uncertainty_exponent"]),
-            ensemble["uncertainty_scales"],
-        )
-    mean = sum(weights[name] * means[name] for name in names)
-    second = sum(
-        weights[name] * (deviations[name] ** 2 + means[name] ** 2)
-        for name in names
-    )
-    model_weight = sum(weights[name] for name in model_values)
-    success_probability = (
-        sum(
-            weights[name] * model_values[name]["success_probability"]
-            for name in model_values
-        ) / model_weight
-        if model_weight > 0.0 else
-        sum(value["success_probability"] for value in model_values.values()) /
-        len(model_values)
-    )
-    return {
-        "predicted_ii": max(facts["lower_bound"], mean),
-        "predicted_ii_std": math.sqrt(max(0.0, second - mean * mean)),
-        "mapper_success_probability": success_probability,
-    }
-
-
-def validate_ensemble_architecture(
-    ensemble: Mapping[str, Any], architecture_sha256: object,
+def validate_model_architecture(
+    model_metadata: Mapping[str, Any], architecture_sha256: object,
 ) -> None:
-    """Reject inference on hardware for which these labels were not trained."""
-    supported = ensemble["supported_architecture_sha256"]
+    supported = model_metadata["supported_architecture_sha256"]
     if architecture_sha256 not in supported:
-        supported_text = ", ".join(supported)
         raise ValueError(
-            "analytical architecture is outside the deployed model contract: "
-            f"got {architecture_sha256!r}; supported SHA-256: {supported_text}. "
-            "Collect labels and retrain before using a different architecture."
+            "analytical architecture is outside the deployed model contract"
         )
 
 
 def generate_catalog(
     candidate_manifest: Path, analytical_input: Path,
-    task_paths: Mapping[str, Path], checkpoint_paths: Mapping[str, Path],
-    ensemble_report: Path, device: torch.device,
-    ensemble_mode: str = "selected",
+    task_paths: Mapping[str, Path], model_path: Path, device: torch.device,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     total_started = time.perf_counter()
     manifest = load_candidate_manifest(candidate_manifest)
@@ -664,45 +529,18 @@ def generate_catalog(
         manifest["manifest_sha256"]
     ):
         raise ValueError("analytical input candidate manifest SHA-256 mismatch")
+    if analytical_provenance.get("architecture_sha256") != (
+        manifest["architecture_sha256"]
+    ):
+        raise ValueError("analytical input architecture does not match manifest")
     tasks = sorted({task for task, _, _ in manifest["queries"]})
     if set(task_paths) != set(tasks):
         raise ValueError("task DFG mapping must exactly cover manifest tasks")
 
     load_started = time.perf_counter()
-    models: Dict[str, Tuple[JointGraphShapeModel, PointwiseConfig]] = {}
-    checkpoint_metadata = {}
-    representations = set()
-    for name, path in checkpoint_paths.items():
-        artifact = torch.load(path, map_location=device, weights_only=False)
-        if artifact.get("schema_version") != CHECKPOINT_SCHEMA:
-            raise ValueError(f"checkpoint {name} has an unsupported schema")
-        config = PointwiseConfig(**artifact["config"]).validate()
-        if config.interaction_mode != "residual_pointwise":
-            raise ValueError(f"checkpoint {name} is not an ensemble component")
-        if config.shape_protocol != SHAPE_PROTOCOL_ID:
-            raise ValueError(f"checkpoint {name} does not support Amoeba shapes")
-        model = JointGraphShapeModel(config).to(device)
-        model.load_state_dict(artifact["state_dict"])
-        model.eval()
-        models[name] = (model, config)
-        representations.add(config.dfg_representation)
-        checkpoint_metadata[name] = {
-            "sha256": sha256_file(path),
-            "config_sha256": canonical_json_sha256(config.to_dict()),
-        }
-    if len(representations) != 1:
-        raise ValueError("ensemble checkpoints must share one DFG representation")
-    representation = next(iter(representations))
-    ensemble = load_ensemble_report(ensemble_report, checkpoint_paths)
-    validate_ensemble_architecture(
-        ensemble, analytical_provenance.get("architecture_sha256"),
-    )
-    selected_mode = (
-        ensemble["selected_mode"] if ensemble_mode == "selected" else
-        ensemble_mode
-    )
-    if selected_mode not in {"static", "uncertainty_gated"}:
-        raise ValueError("ensemble mode must be static or uncertainty_gated")
+    model, config, model_metadata = load_mapper_model(model_path, device)
+    architecture_sha256 = analytical_provenance.get("architecture_sha256")
+    validate_model_architecture(model_metadata, architecture_sha256)
     model_load_ms = (time.perf_counter() - load_started) * 1000.0
 
     parse_started = time.perf_counter()
@@ -717,9 +555,7 @@ def generate_catalog(
             raise ValueError(
                 f"task DFG source body hash mismatch for {task}"
             )
-        graphs[task] = parse_neura_dfg_representation(
-            dfg_text, representation,
-        )
+        graphs[task] = parse_neura_route_expanded_dfg(dfg_text)
     provenance_task_hashes = _object(
         analytical_provenance.get("task_dfg_sha256"),
         "analytical provenance task DFG hashes",
@@ -756,57 +592,27 @@ def generate_catalog(
     if extra_analytical:
         raise ValueError("analytical input contains queries outside the manifest")
 
-    queries_by_shape: Dict[Tuple[int, int], List[QueryKey]] = {}
-    for key in supported_queries:
-        queries_by_shape.setdefault((key[1], key[2]), []).append(key)
-    cgra_graphs = {
-        shape: make_cgra_graph(*shape, SHAPE_PROTOCOL_ID)
-        for shape in queries_by_shape
-    }
-
     inference_started = time.perf_counter()
-    predictions: Dict[QueryKey, Dict[str, Dict[str, float]]] = {
-        key: {} for key in supported_queries
-    }
+    predictions: Dict[QueryKey, float] = {}
     with torch.inference_mode():
-        for name, (model, config) in models.items():
-            for shape, shape_queries in queries_by_shape.items():
-                rows, cols = shape
-                contexts = [
-                    [
-                        candidate_context(
-                            rows, cols,
-                            analytical[(task, rows, cols)]["rec_mii"],
-                            analytical[(task, rows, cols)]["res_mii"],
-                            analytical[(task, rows, cols)]["lower_bound"],
-                            config.mapper_ii_ceiling, config.shape_protocol,
-                        )
-                    ]
-                    for task, _, _ in shape_queries
-                ]
-                output = model(
-                    [graphs[task] for task, _, _ in shape_queries],
-                    [cgra_graphs[shape]],
-                    torch.tensor(contexts, dtype=torch.float32, device=device),
+        for offset in range(0, len(supported_queries), 4096):
+            keys = supported_queries[offset:offset + 4096]
+            features = torch.tensor([
+                mapper_feature_vector(
+                    graphs[task], rows, cols,
+                    analytical[key]["rec_mii"],
+                    analytical[key]["res_mii"],
+                    analytical[key]["lower_bound"],
+                    mapper_ii_ceiling=config.mapper_ii_ceiling,
+                    shape_protocol=config.shape_protocol,
                 )
-                means = output["predicted_ii"].detach().cpu().tolist()
-                stds = output["predicted_ii_std"].detach().cpu().tolist()
-                success = output["success_probability"].detach().cpu().tolist()
-                modes = output.get("predicted_ii_mode")
-                mode_values = (
-                    modes.detach().cpu().tolist() if modes is not None else means
-                )
-                for query_index, key in enumerate(shape_queries):
-                    predictions[key][name] = {
-                        "mean": float(means[query_index][0]),
-                        "std": float(stds[query_index][0]),
-                        "success_probability": float(
-                            success[query_index][0]
-                        ),
-                        "integer_mode": float(
-                            mode_values[query_index][0]
-                        ),
-                    }
+                for key in keys for task, rows, cols in (key,)
+            ], dtype=torch.float32, device=device)
+            lower_bounds = torch.tensor([
+                analytical[key]["lower_bound"] for key in keys
+            ], dtype=torch.float32, device=device)
+            values = model(features, lower_bounds).detach().cpu().tolist()
+            predictions.update(zip(keys, map(float, values)))
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     inference_ms = (time.perf_counter() - inference_started) * 1000.0
@@ -825,19 +631,12 @@ def generate_catalog(
         if key in unsupported_queries:
             entry["support_status"] = "unsupported"
         else:
-            combined = _combine_prediction(
-                analytical[key], predictions[key], ensemble, selected_mode,
-            )
             entry.update({
                 "support_status": "supported",
-                "predicted_ii": combined["predicted_ii"],
+                "predicted_ii": predictions[key],
                 "startup_cycles": analytical[key]["startup_cycles"],
-                "predicted_ii_std": combined["predicted_ii_std"],
-                "mapper_success_probability": (
-                    combined["mapper_success_probability"]
-                ),
                 "analytical_lower_bound": analytical[key]["lower_bound"],
-                "ii_mean_source": "pointwise_ensemble",
+                "ii_mean_source": "direct_mapper_surrogate",
             })
         entries.append(entry)
 
@@ -860,27 +659,19 @@ def generate_catalog(
                 "startup_cycles_source"
             ],
         },
-        "checkpoints": checkpoint_metadata,
-        "ensemble_report_sha256": ensemble["sha256"],
-        "ensemble_mode": selected_mode,
-        "architecture_contract": ensemble["architecture_contract"],
-        # The classifier output is retained for later diagnostics. Per the
-        # current DSE policy it never changes support_status, predicted_ii,
-        # candidate score, or top-k order.
+        "model": model_metadata,
+        "architecture_contract": model_metadata,
         "ranking_policy": {
             "objective": "predicted_compute_bottleneck",
-            "mapper_success_probability": "diagnostic_only",
+            "mapper_success_probability": "not_predicted",
             "uses_mapper_success_probability": False,
         },
-        "ensemble_weights": ensemble["weights"],
-        "uncertainty_exponent": ensemble["uncertainty_exponent"],
-        "uncertainty_scales": ensemble["uncertainty_scales"],
     }
     namespace_hash = canonical_json_sha256(namespace_contract)
     catalog = {
         "schema": COST_SCHEMA,
         "function": function,
-        "namespace": f"cgra-ii-pointwise-{namespace_hash[:24]}",
+        "namespace": f"cgra-ii-direct-mapper-{namespace_hash[:24]}",
         "predictor_metadata": namespace_contract,
         "entries": entries,
     }
@@ -898,9 +689,8 @@ def generate_catalog(
         "supported_query_count": len(supported_queries),
         "unsupported_query_count": len(unsupported_queries),
         "task_dfg_parse_count": len(graphs),
-        "model_load_count": len(models),
-        "model_forward_pass_count": len(models) * len(queries_by_shape),
-        "ensemble_mode": selected_mode,
+        "model_load_count": 1,
+        "model_forward_pass_count": math.ceil(len(supported_queries) / 4096),
     }
     return catalog, timing
 
@@ -913,18 +703,7 @@ def parse_args() -> argparse.Namespace:
         "--task-dfg", action="append", default=[], metavar="TASK=PATH",
         help="Pre-mapper Neura DFG; repeat exactly once for each manifest task.",
     )
-    parser.add_argument(
-        "--checkpoint", action="append", default=[], metavar="NAME=PATH",
-    )
-    parser.add_argument(
-        "--ensemble-report", type=Path,
-        default=FINAL_MODEL_DIR / "ensemble.json",
-    )
-    parser.add_argument(
-        "--ensemble-mode",
-        choices=("selected", "static", "uncertainty_gated"),
-        default="selected",
-    )
+    parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timing-output", type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -934,13 +713,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     task_paths = parse_task_paths(args.task_dfg)
-    checkpoint_paths = parse_checkpoint_paths(
-        args.checkpoint if args.checkpoint else DEFAULT_CHECKPOINTS
-    )
     catalog, timing = generate_catalog(
         args.manifest.resolve(), args.analytical_input.resolve(),
-        task_paths, checkpoint_paths, args.ensemble_report.resolve(),
-        torch.device(args.device), args.ensemble_mode,
+        task_paths, args.model.resolve(), torch.device(args.device),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

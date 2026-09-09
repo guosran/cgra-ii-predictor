@@ -85,12 +85,10 @@ def load_cost_catalog(
         raise ValueError("cost catalogue candidate manifest SHA-256 mismatch")
     ranking_policy = _object(metadata.get("ranking_policy"), "ranking policy")
     if (
-        ranking_policy.get("mapper_success_probability") != "diagnostic_only" or
+        ranking_policy.get("mapper_success_probability") != "not_predicted" or
         ranking_policy.get("uses_mapper_success_probability") is not False
     ):
-        raise ValueError(
-            "cost catalogue must keep mapper success probability diagnostic-only"
-        )
+        raise ValueError("cost catalogue must not predict mapper success")
     analytical_provenance = _object(
         metadata.get("analytical_provenance"), "analytical provenance",
     )

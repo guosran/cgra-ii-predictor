@@ -4,7 +4,7 @@ The retained adapters implement only the final Amoeba path:
 
 - consume the packing-pruned static-shape manifest emitted by Amoeba;
 - extract task DFGs and obtain analysis-only RecMII/ResMII;
-- generate the ordinary ensemble cost catalog;
+- generate the direct heuristic-mapper II cost catalog;
 - score frozen candidates and compare them with true mapper oracles.
 
 The model never chooses a program. Amoeba's current candidate protocol guarantees

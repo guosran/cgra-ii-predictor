@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate analytical inputs for the Amoeba pointwise cost adapter.
+"""Generate analytical inputs for the direct mapper-II cost adapter.
 
 RecMII and ResMII come from Neura's analysis-only pass for every frozen
 task/shape query.  Startup is a frontend property: the critical-path depth of
@@ -34,7 +34,7 @@ from amoeba_cost_catalog import (  # noqa: E402
     sha256_file,
     source_task_body_sha256,
 )
-from cgra_ii_predictor.graph_model import parse_neura_dfg  # noqa: E402
+from cgra_ii_predictor.dfg import parse_neura_dfg  # noqa: E402
 from neura_cost_features import parse_cost_features  # noqa: E402
 
 
