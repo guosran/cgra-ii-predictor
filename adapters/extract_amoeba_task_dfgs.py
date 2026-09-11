@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 import re
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from amoeba_protocol import SOURCE_TASK_BODY_SHA_ATTR
 
@@ -103,8 +103,33 @@ def _source_task_body_sha256(task_name: str,
     return matches[0]
 
 
-def extract_task_dfg_texts(text: str) -> Dict[str, str]:
+def _select_function_lines(lines: Sequence[str], function: str) -> List[str]:
+    """Return one requested ``func.func`` region from an MLIR module."""
+    matches = [
+        index for index, line in enumerate(lines)
+        if re.search(
+            rf'\bfunc\.func\s+@(?:{re.escape(function)}|'
+            rf'"{re.escape(function)}")'
+            r"(?![A-Za-z0-9_.$-])",
+            line,
+        )
+    ]
+    if not matches:
+        raise ValueError(f"requested function {function} does not exist")
+    if len(matches) != 1:
+        raise ValueError(f"requested function {function} is ambiguous")
+    selected, _ = _balanced_region(lines, matches[0])
+    return selected
+
+
+def extract_task_dfg_texts(
+    text: str, function: Optional[str] = None,
+) -> Dict[str, str]:
     lines = text.splitlines()
+    if function is not None:
+        if not function:
+            raise ValueError("requested function name is empty")
+        lines = _select_function_lines(lines, function)
     result: Dict[str, str] = {}
     index = 0
     while index < len(lines):
@@ -170,12 +195,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--index-output", type=Path)
+    parser.add_argument(
+        "--function",
+        help="Taskflow function to select before extracting its task DFGs.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    outputs = extract_task_dfg_texts(args.input.read_text())
+    outputs = extract_task_dfg_texts(args.input.read_text(), args.function)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     index = {}
     for task, text in sorted(outputs.items()):

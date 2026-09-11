@@ -5,8 +5,6 @@ import pytest
 import torch
 
 from adapters.amoeba_cost_catalog import (
-    _packable_shape_index_tuples,
-    _static_shape_alphabet,
     generate_catalog,
     load_candidate_manifest,
     load_analytical_input,
@@ -56,7 +54,13 @@ def _shape(rows, cols):
     }
 
 
-def _two_task_manifest():
+def _trip_count_fields(value):
+    if value == "symbol_dynamic":
+        return {"trip_count_kind": "symbol_dynamic"}
+    return {"trip_count": value}
+
+
+def _two_task_manifest(trip_counts=(10, 10)):
     shapes = (_shape(1, 1), _shape(1, 2), _shape(2, 1))
     candidates = []
     for first in shapes:
@@ -67,8 +71,10 @@ def _two_task_manifest():
             candidates.append({
                 "candidate_id": f"candidate-{len(candidates)}",
                 "task_shapes": [
-                    {"task": "A", "trip_count": 10, "shape": first},
-                    {"task": "B", "trip_count": 10, "shape": second},
+                    {"task": "A", **_trip_count_fields(trip_counts[0]),
+                     "shape": first},
+                    {"task": "B", **_trip_count_fields(trip_counts[1]),
+                     "shape": second},
                 ],
             })
     return {
@@ -83,8 +89,8 @@ def _two_task_manifest():
     }
 
 
-def _write_two_task_manifest(path):
-    manifest = _two_task_manifest()
+def _write_two_task_manifest(path, trip_counts=(10, 10)):
+    manifest = _two_task_manifest(trip_counts)
     header = {
         "record_type": "header",
         "schema": CANDIDATE_SCHEMA,
@@ -99,10 +105,10 @@ def _write_two_task_manifest(path):
             "per_cgra_tile_cols": 4,
             "spec_sha256": TRAINING_ARCHITECTURE,
         },
-        "max_cgras_per_task": 2,
         "tasks": [
-            {"task": task, "body_sha256": "0" * 64, "trip_count": 10}
-            for task in ("A", "B")
+            {"task": task, "body_sha256": "0" * 64,
+             **_trip_count_fields(trip_count)}
+            for task, trip_count in zip(("A", "B"), trip_counts)
         ],
         "cost_queries": [
             {
@@ -182,7 +188,9 @@ def test_negative_rec_mii_is_rejected(tmp_path):
         load_analytical_input(path, "main")
 
 
-def test_manifest_loader_accepts_packing_pruned_manifest(tmp_path):
+def test_manifest_loader_accepts_corrected_frozen_manifest_without_max_cgras(
+    tmp_path,
+):
     path = tmp_path / "candidates.jsonl"
     _write_two_task_manifest(path)
     manifest = load_candidate_manifest(path)
@@ -195,12 +203,56 @@ def test_manifest_loader_accepts_packing_pruned_manifest(tmp_path):
     }
 
 
+def test_manifest_loader_accepts_symbol_dynamic_trip_counts(tmp_path):
+    path = tmp_path / "candidates.jsonl"
+    _write_two_task_manifest(path, ("symbol_dynamic", 10))
+
+    manifest = load_candidate_manifest(path)
+
+    assert manifest["task_trip_counts"] == {"A": None, "B": 10}
+    assert manifest["task_facts"][0] == {
+        "task": "A",
+        "body_sha256": "0" * 64,
+        "trip_count_kind": "symbol_dynamic",
+    }
+    assert all(
+        "trip_count_kind" in choice and "trip_count" not in choice
+        for candidate in manifest["candidates"]
+        for choice in [candidate["task_shapes"][0]]
+    )
+
+
+def test_manifest_loader_rejects_mixed_trip_count_encodings(tmp_path):
+    path = tmp_path / "candidates.jsonl"
+    _write_two_task_manifest(path)
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    records[0]["tasks"][0].update({
+        "trip_count_kind": "symbol_dynamic",
+    })
+    path.write_text("".join(json.dumps(record) + "\n" for record in records))
+
+    with pytest.raises(ValueError, match="exactly one"):
+        load_candidate_manifest(path)
+
+
+def test_manifest_loader_rejects_candidate_trip_count_kind_mismatch(tmp_path):
+    path = tmp_path / "candidates.jsonl"
+    _write_two_task_manifest(path)
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    records[1]["task_shapes"][0].pop("trip_count")
+    records[1]["task_shapes"][0]["trip_count_kind"] = "symbol_dynamic"
+    path.write_text("".join(json.dumps(record) + "\n" for record in records))
+
+    with pytest.raises(ValueError, match="task facts"):
+        load_candidate_manifest(path)
+
+
 def test_manifest_loader_accepts_sparse_used_query_set(tmp_path):
     path = tmp_path / "candidates.jsonl"
     _write_two_task_manifest(path)
     records = [json.loads(line) for line in path.read_text().splitlines()]
-    # On a 1x2 physical grid, the only feasible two-task tuple is 1x1/1x1.
-    # Therefore the header must omit the otherwise legal single-task 1x2 query.
+    # The frozen manifest contains only the 1x1/1x1 candidate. Therefore its
+    # header must omit the otherwise legal single-task 1x2 query.
     records = [records[0], records[1], records[-1]]
     records[0]["architecture"].update({"grid_rows": 1, "grid_cols": 2})
     records[0]["cost_queries"] = [
@@ -213,32 +265,6 @@ def test_manifest_loader_accepts_sparse_used_query_set(tmp_path):
     manifest = load_candidate_manifest(path)
     assert manifest["candidate_count"] == 1
     assert manifest["queries"] == [("A", 4, 4), ("B", 4, 4)]
-
-
-def test_four_by_four_exact_packing_removes_crossing_strips():
-    shapes = _static_shape_alphabet(4, 4, 4)
-    tuples = list(_packable_shape_index_tuples(2, shapes, 4, 4))
-    horizontal = shapes.index((1, 4))
-    vertical = shapes.index((4, 1))
-
-    assert len(shapes) == 8
-    assert len(tuples) == 62
-    assert (horizontal, vertical) not in tuples
-    assert (vertical, horizontal) not in tuples
-    assert (horizontal, horizontal) in tuples
-    assert (vertical, vertical) in tuples
-
-
-def test_manifest_loader_rejects_fixed_orientation_overlap(tmp_path):
-    path = tmp_path / "candidates.jsonl"
-    _write_two_task_manifest(path)
-    records = [json.loads(line) for line in path.read_text().splitlines()]
-    records[1]["task_shapes"][0]["shape"] = _shape(1, 2)
-    records[1]["task_shapes"][1]["shape"] = _shape(2, 1)
-    path.write_text("".join(json.dumps(record) + "\n" for record in records))
-
-    with pytest.raises(ValueError, match="unpackable"):
-        load_candidate_manifest(path)
 
 
 def test_manifest_loader_rejects_unused_cost_query(tmp_path):
@@ -276,21 +302,6 @@ def test_manifest_loader_requires_contiguous_candidate_ids(tmp_path):
         load_candidate_manifest(path)
 
 
-def test_manifest_loader_rejects_omitted_packable_candidate(tmp_path):
-    path = tmp_path / "candidates.jsonl"
-    _write_two_task_manifest(path)
-    records = [json.loads(line) for line in path.read_text().splitlines()]
-    # Remove the final legal tuple while preserving contiguous IDs 0..5. The
-    # loader must detect that the manifest is incomplete, not just trust the
-    # footer count.
-    records.pop(-2)
-    records[-1]["candidate_count"] = 6
-    path.write_text("".join(json.dumps(record) + "\n" for record in records))
-
-    with pytest.raises(ValueError, match="omits packable"):
-        load_candidate_manifest(path)
-
-
 def test_cost_catalog_is_bound_to_exact_manifest_bytes(tmp_path):
     manifest_path = tmp_path / "candidates.jsonl"
     _write_two_task_manifest(manifest_path)
@@ -313,7 +324,7 @@ def test_cost_catalog_is_bound_to_exact_manifest_bytes(tmp_path):
         load_cost_catalog(cost_path, manifest)
 
 
-def test_scoring_uses_the_packing_pruned_manifest():
+def test_scoring_uses_the_frozen_manifest_candidates():
     manifest = _two_task_manifest()
     scores = score_candidates(manifest, _catalog(), top_k=0)
 
@@ -381,6 +392,50 @@ module {
         extract_task_dfg_texts(source)
 
 
+def test_task_dfg_extractor_can_select_one_function_region():
+    source = """
+module {
+  func.func @main() {
+    taskflow.task @A {
+      amoeba.source_task_body_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    } {
+      neura.kernel inputs(%arg0 : memref<4xf32>) {
+        neura.yield
+      }
+    }
+  }
+  func.func @helper() {
+    taskflow.task @B {
+      amoeba.source_task_body_sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    } {
+      neura.kernel inputs(%arg0 : memref<4xf32>) {
+        neura.yield
+      }
+    }
+  }
+}
+"""
+
+    assert set(extract_task_dfg_texts(source, "main")) == {"A"}
+    assert set(extract_task_dfg_texts(source)) == {"A", "B"}
+
+
+def test_task_dfg_extractor_rejects_missing_selected_function():
+    with pytest.raises(ValueError, match="does not exist"):
+        extract_task_dfg_texts("module { func.func @main() {} }", "missing")
+
+
+def test_task_dfg_extractor_rejects_ambiguous_selected_function():
+    source = """
+module {
+  func.func @main() {}
+  func.func @main() {}
+}
+"""
+    with pytest.raises(ValueError, match="ambiguous"):
+        extract_task_dfg_texts(source, "main")
+
+
 def test_direct_mapper_rejects_the_current_amoeba_architecture():
     _, _, metadata = load_mapper_model(
         ROOT / "models/final/mapper.pt", torch.device("cpu"),
@@ -441,7 +496,7 @@ def test_direct_mapper_generates_a_loadable_cost_catalog(tmp_path):
             "task_body_sha256": manifest["task_body_sha256"],
             "neura_opt_sha256": "1" * 64,
             "architecture_sha256": TRAINING_ARCHITECTURE,
-            "rec_res_source": "analysis_only",
+            "analytical_lower_bound_source": "analysis_only",
             "startup_cycles_source": "analysis_only",
         },
         "entries": [{

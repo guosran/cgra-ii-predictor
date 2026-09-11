@@ -2,7 +2,7 @@
 """Generate an Amoeba task/shape cost catalogue from a mapper surrogate.
 
 The adapter consumes a frozen candidate JSONL manifest, one pre-mapper Neura
-DFG per task, analytical RecMII/ResMII facts, and frontend-provided startup
+DFG per task, analytical lower-bound facts, and frontend-provided startup
 cycles.  It predicts only unique ``(task DFG, mapper rows, mapper cols)``
 queries.  Program-level scoring and top-k selection remain Amoeba's job.
 """
@@ -10,14 +10,13 @@ queries.  Program-level scoring and top-k selection remain Amoeba's job.
 from __future__ import annotations
 
 import argparse
-from functools import lru_cache
 import hashlib
 import json
 import math
 from pathlib import Path
 import sys
 import time
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -133,108 +132,42 @@ def source_task_body_sha256(dfg_text: str, task: str) -> str:
     return _sha256_string(values[0], f"source body hash for task {task}")
 
 
-def _static_shape_alphabet(
-    grid_rows: int, grid_cols: int, max_cgras_per_task: int,
-) -> List[Tuple[int, int]]:
-    """Mirror Amoeba's deterministic fixed-orientation rectangle order."""
-    shapes = []
-    for count in range(1, min(max_cgras_per_task, grid_rows * grid_cols) + 1):
-        for rows in range(1, grid_rows + 1):
-            if count % rows == 0 and count // rows <= grid_cols:
-                shapes.append((rows, count // rows))
-    return shapes
+def _parse_trip_count(
+    record: Mapping[str, Any], label: str,
+) -> Optional[int]:
+    """Parse the mutually exclusive static and symbol-dynamic encodings.
 
+    A symbolic trip count is intentionally represented as ``None``.  The
+    predictor can still build a shape cost catalogue because inference only
+    needs the task DFG and analytical shape facts; a later duration scorer must
+    bind the runtime value or reject ranking rather than treating it as one.
+    """
+    has_numeric = "trip_count" in record
+    has_kind = "trip_count_kind" in record
+    if has_numeric == has_kind:
+        raise ValueError(
+            f"{label} must contain exactly one of trip_count or "
+            "trip_count_kind"
+        )
+    if has_numeric:
+        return _positive_integer(record.get("trip_count"), f"{label} trip_count")
 
-@lru_cache(maxsize=None)
-def _pack_normalized_rectangles(
-    rectangles: Tuple[Tuple[int, int], ...], grid_rows: int, grid_cols: int,
-) -> bool:
-    """Exactly place fixed-orientation rectangles using a physical-cell mask."""
-    placements = []
-    for rows, cols in rectangles:
-        masks = []
-        for origin_row in range(grid_rows - rows + 1):
-            for origin_col in range(grid_cols - cols + 1):
-                mask = 0
-                for row in range(origin_row, origin_row + rows):
-                    for col in range(origin_col, origin_col + cols):
-                        mask |= 1 << (row * grid_cols + col)
-                masks.append(mask)
-        placements.append(tuple(masks))
-
-    @lru_cache(maxsize=None)
-    def place(rectangle_index: int, occupied: int) -> bool:
-        if rectangle_index == len(placements):
-            return True
-        for mask in placements[rectangle_index]:
-            if mask & occupied == 0 and place(
-                rectangle_index + 1, occupied | mask,
-            ):
-                return True
-        return False
-
-    return place(0, 0)
-
-
-def _can_pack_fixed_rectangles(
-    rectangles: Sequence[Tuple[int, int]], grid_rows: int, grid_cols: int,
-) -> bool:
-    """Check simultaneous fit; no rectangle is rotated implicitly."""
-    if sum(rows * cols for rows, cols in rectangles) > grid_rows * grid_cols:
-        return False
-    if any(
-        rows <= 0 or cols <= 0 or rows > grid_rows or cols > grid_cols
-        for rows, cols in rectangles
-    ):
-        return False
-    # Packing feasibility ignores task identity. Normalizing improves cache reuse
-    # without changing the direction of any rectangle.
-    normalized = tuple(sorted(
-        rectangles,
-        key=lambda shape: (shape[0] * shape[1], max(shape), shape),
-        reverse=True,
-    ))
-    return _pack_normalized_rectangles(normalized, grid_rows, grid_cols)
-
-
-def _packable_shape_index_tuples(
-    task_count: int, shape_alphabet: Sequence[Tuple[int, int]],
-    grid_rows: int, grid_cols: int,
-) -> Iterable[Tuple[int, ...]]:
-    """Yield the exact packed subset in Amoeba's task-major shape order."""
-    grid_area = grid_rows * grid_cols
-    selected_indices: List[int] = []
-    selected_shapes: List[Tuple[int, int]] = []
-
-    def visit(task_index: int, selected_area: int) -> Iterable[Tuple[int, ...]]:
-        if task_index == task_count:
-            if _can_pack_fixed_rectangles(
-                selected_shapes, grid_rows, grid_cols,
-            ):
-                yield tuple(selected_indices)
-            return
-        for shape_index, shape in enumerate(shape_alphabet):
-            area = shape[0] * shape[1]
-            if selected_area + area > grid_area:
-                continue
-            selected_indices.append(shape_index)
-            selected_shapes.append(shape)
-            yield from visit(task_index + 1, selected_area + area)
-            selected_shapes.pop()
-            selected_indices.pop()
-
-    yield from visit(0, 0)
+    kind = record.get("trip_count_kind")
+    if not isinstance(kind, str):
+        raise ValueError(f"{label} trip_count_kind must be a string")
+    if kind != "symbol_dynamic":
+        raise ValueError(f"unsupported {label} trip_count_kind {kind!r}")
+    return None
 
 
 def load_candidate_manifest(path: Path) -> Dict[str, Any]:
-    """Validate Amoeba's packing-pruned static space and derive its queries.
+    """Validate a frozen static-shape manifest and derive its used queries.
 
-    Amoeba enumerates the full single-task shape alphabet, keeps only tuples
-    whose fixed-orientation rectangles can coexist on the physical grid, and
-    assigns contiguous IDs to those survivors.  This adapter validates that
-    frozen feasible set; it does not use temporal reuse to admit an
-    over-capacity tuple.  ``cost_queries`` is the exact set of task/shape
-    pairs referenced by at least one retained candidate.
+    Candidate enumeration, canonical ordering, and exact concurrent packing
+    belong to Amoeba's C++ manifest reader.  This adapter deliberately does not
+    reconstruct that space.  It validates only the JSONL record order/schema,
+    task facts, candidate IDs, redundant shape fields, and that ``cost_queries``
+    is exactly the set referenced by the frozen candidates.
     """
     header: Optional[Mapping[str, Any]] = None
     footer: Optional[Mapping[str, Any]] = None
@@ -275,7 +208,10 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         raise ValueError("only rectangular Amoeba candidate manifests are supported")
     if header.get("spatial_capacity_policy") != SPATIAL_CAPACITY_POLICY:
         raise ValueError("candidate manifest spatial capacity policy mismatch")
-    if footer.get("candidate_count") != len(candidates):
+    footer_count = _positive_integer(
+        footer.get("candidate_count"), "candidate manifest candidate_count",
+    )
+    if footer_count != len(candidates):
         raise ValueError("candidate manifest footer count mismatch")
     architecture = _object(header.get("architecture"), "header architecture")
     grid_rows = _positive_integer(architecture.get("grid_rows"), "grid_rows")
@@ -291,13 +227,6 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
     architecture_sha256 = _sha256_string(
         architecture.get("spec_sha256"), "architecture spec_sha256",
     )
-    max_cgras_per_task = _positive_integer(
-        header.get("max_cgras_per_task"), "max_cgras_per_task",
-    )
-    shape_alphabet = _static_shape_alphabet(
-        grid_rows, grid_cols, max_cgras_per_task,
-    )
-
     raw_tasks = header.get("tasks")
     if not isinstance(raw_tasks, list) or not raw_tasks:
         raise ValueError("candidate manifest has no task facts")
@@ -309,10 +238,11 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         if not isinstance(name, str) or not name or name in task_names:
             raise ValueError("candidate manifest task names must be unique")
         task_names.add(name)
+        trip_count = _parse_trip_count(task, "task fact")
         task_facts.append((
             name,
             _sha256_string(task.get("body_sha256"), "task body_sha256"),
-            _positive_integer(task.get("trip_count"), "task trip_count"),
+            trip_count,
         ))
     task_body_sha256 = {name: body_sha for name, body_sha, _ in task_facts}
 
@@ -334,15 +264,11 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         seen.add(key)
         queries.append(key)
 
-    task_order = [fact[0] for fact in task_facts]
     for task, _, _ in queries:
         if task not in task_names:
             raise ValueError("cost query names a task outside header task facts")
 
     candidate_queries = set()
-    expected_tuples = iter(_packable_shape_index_tuples(
-        len(task_order), shape_alphabet, grid_rows, grid_cols,
-    ))
     for candidate_index, candidate in enumerate(candidates):
         candidate_id = candidate.get("candidate_id")
         if candidate_id != f"candidate-{candidate_index}":
@@ -354,18 +280,22 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
             raise ValueError("candidate has no task_shapes")
         if len(task_shapes) != len(task_facts):
             raise ValueError("candidate task count does not match header")
-        actual_shapes = []
         for task_index, raw_choice in enumerate(task_shapes):
             choice = _object(raw_choice, "candidate task shape")
             task = choice.get("task")
             expected_task, _, expected_trip_count = task_facts[task_index]
-            if task != expected_task or choice.get("trip_count") != expected_trip_count:
+            trip_count = _parse_trip_count(choice, "candidate task shape")
+            if task != expected_task or trip_count != expected_trip_count:
                 raise ValueError("candidate task facts do not match header")
             shape = _object(choice.get("shape"), "candidate shape")
             if shape.get("kind") != "rect":
                 raise ValueError("non-rectangular candidate shape is unsupported")
             physical_rows = _positive_integer(shape.get("rows"), "shape rows")
             physical_cols = _positive_integer(shape.get("cols"), "shape cols")
+            if physical_rows > grid_rows or physical_cols > grid_cols:
+                raise ValueError(
+                    "candidate shape exceeds the manifest architecture grid"
+                )
             if shape.get("cgra_count") != physical_rows * physical_cols:
                 raise ValueError("candidate physical CGRA count is invalid")
             if shape.get("cgra_shape") != f"{physical_rows}x{physical_cols}":
@@ -380,26 +310,7 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
                 physical_rows * per_rows, physical_cols * per_cols,
             ):
                 raise ValueError("candidate physical-to-mapper conversion is invalid")
-            actual_shapes.append((physical_rows, physical_cols))
             candidate_queries.add((task, mapper_rows, mapper_cols))
-        try:
-            expected_indices = next(expected_tuples)
-        except StopIteration as error:
-            raise ValueError(
-                "candidate manifest contains more than the packable shape space"
-            ) from error
-        expected_shapes = [shape_alphabet[index] for index in expected_indices]
-        if actual_shapes != expected_shapes:
-            raise ValueError(
-                "candidate manifest is incomplete, unpackable, duplicated, "
-                "or out of order"
-            )
-    try:
-        next(expected_tuples)
-    except StopIteration:
-        pass
-    else:
-        raise ValueError("candidate manifest omits packable shape tuples")
     if candidate_queries != seen:
         raise ValueError("header cost_queries do not match candidate task shapes")
     return {
@@ -407,6 +318,21 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         "candidates": [dict(candidate) for candidate in candidates],
         "candidate_count": len(candidates),
         "queries": queries,
+        "task_facts": [
+            {
+                "task": task,
+                "body_sha256": body_sha,
+                **(
+                    {"trip_count": trip_count}
+                    if trip_count is not None
+                    else {"trip_count_kind": "symbol_dynamic"}
+                ),
+            }
+            for task, body_sha, trip_count in task_facts
+        ],
+        "task_trip_counts": {
+            task: trip_count for task, _, trip_count in task_facts
+        },
         "task_body_sha256": task_body_sha256,
         "architecture_sha256": architecture_sha256,
         "manifest_sha256": sha256_file(path),
@@ -570,7 +496,7 @@ def generate_catalog(
         raise ValueError("analytical input task body SHA-256 mismatch")
     for field in (
         "neura_opt_sha256", "architecture_sha256",
-        "rec_res_source", "startup_cycles_source",
+        "analytical_lower_bound_source", "startup_cycles_source",
     ):
         if not isinstance(analytical_provenance.get(field), str) or not (
             analytical_provenance[field]
@@ -654,7 +580,9 @@ def generate_catalog(
             ],
             "task_body_sha256": manifest["task_body_sha256"],
             "task_dfg_sha256": task_identities,
-            "rec_res_source": analytical_provenance["rec_res_source"],
+            "analytical_lower_bound_source": analytical_provenance[
+                "analytical_lower_bound_source"
+            ],
             "startup_cycles_source": analytical_provenance[
                 "startup_cycles_source"
             ],

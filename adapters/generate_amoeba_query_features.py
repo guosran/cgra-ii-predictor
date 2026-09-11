@@ -144,7 +144,8 @@ def generate_query_features(
             command = (
                 str(opt.resolve()), str(task_paths[task].resolve()),
                 f"--architecture-spec={architecture.resolve()}",
-                f"--analyze-rec-res-mii=x-tiles={cols} y-tiles={rows}",
+                f"--analyze-analytical-lower-bound=x-tiles={cols} "
+                f"y-tiles={rows}",
                 "-o", str(output),
             )
             completed = runner(command)
@@ -165,7 +166,7 @@ def generate_query_features(
                 )
             rec_mii = int(facts["rec_mii"])
             res_mii = int(facts["res_mii"])
-            lower_bound = max(rec_mii, res_mii)
+            lower_bound = int(facts["analytical_lower_bound"])
             if lower_bound < 1:
                 raise RuntimeError(
                     f"Neura analysis returned a nonpositive lower bound for "
@@ -189,7 +190,7 @@ def generate_query_features(
         "architecture_sha256": architecture_sha,
         "task_body_sha256": manifest["task_body_sha256"],
         "task_dfg_sha256": task_hashes,
-        "rec_res_source": "neura-analysis-only-x-y-override",
+        "analytical_lower_bound_source": "neura-analysis-only-x-y-override",
         "startup_cycles_source": (
             "frontend-semantic-dfg-unit-latency-critical-path"
         ),
