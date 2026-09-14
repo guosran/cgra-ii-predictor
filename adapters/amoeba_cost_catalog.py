@@ -864,11 +864,11 @@ def generate_catalog(
         "ensemble_report_sha256": ensemble["sha256"],
         "ensemble_mode": selected_mode,
         "architecture_contract": ensemble["architecture_contract"],
-        # The classifier output is retained for later diagnostics. Per the
-        # current DSE policy it never changes support_status, predicted_ii,
-        # candidate score, or top-k order.
+        # The classifier output is retained for diagnostics. Amoeba ranks
+        # candidates by the scheduler's predicted program makespan; the
+        # predictor's per-task II remains an input to that scheduler score.
         "ranking_policy": {
-            "objective": "predicted_compute_bottleneck",
+            "objective": "predicted_scheduler_makespan",
             "mapper_success_probability": "diagnostic_only",
             "uses_mapper_success_probability": False,
         },
