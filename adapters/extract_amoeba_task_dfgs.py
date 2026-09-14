@@ -89,7 +89,16 @@ def _normalize_empty_store_indexed(line: str) -> str:
 
 def _source_task_body_sha256(task_name: str,
                              task_region: Sequence[str]) -> str:
-    """Read the exact body identity written by Amoeba during enumeration."""
+    """Read the source-task identity that Amoeba wrote during enumeration.
+
+    This is the SHA-256 of the Taskflow task body used to enumerate the
+    candidate manifest.  It is deliberately read from the bound MLIR instead
+    of being recomputed from this standalone DFG: extraction changes the
+    surrounding module and kernel signature, so the standalone file's byte
+    hash cannot identify the original task body.  The value is copied into
+    each standalone DFG so later feature/catalog/pipeline stages can prove
+    that the DFG still belongs to the task represented by the manifest.
+    """
     matches = re.findall(
         rf'\b{re.escape(SOURCE_TASK_BODY_SHA_ATTR)}\s*=\s*"([0-9a-f]{{64}})"',
         "\n".join(task_region),
@@ -114,6 +123,9 @@ def extract_task_dfg_texts(text: str) -> Dict[str, str]:
             continue
         task_name = task_match.group(1)
         task_region, index = _balanced_region(lines, index)
+        # Preserve Amoeba's task-body hash through extraction.  The hash binds
+        # this derived DFG to the source task used by candidate enumeration;
+        # it is different from the SHA-256 of the standalone DFG file itself.
         source_body_sha = _source_task_body_sha256(task_name, task_region)
         kernel_starts = [
             position for position, line in enumerate(task_region)
@@ -151,6 +163,9 @@ def extract_task_dfg_texts(text: str) -> Dict[str, str]:
         symbol = re.sub(r"[^A-Za-z0-9_.$-]", "_", task_name)
         result[task_name] = "\n".join([
             "module attributes {",
+            # Consumers compare this source identity with the task hash in the
+            # candidate manifest; they must not treat it as a hash of this
+            # extracted MLIR module.
             f'  {SOURCE_TASK_BODY_SHA_ATTR} = "{source_body_sha}"',
             "} {",
             f"  func.func @{symbol}_dfg({function_args}) {{",

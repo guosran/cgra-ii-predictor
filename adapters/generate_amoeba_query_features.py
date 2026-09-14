@@ -119,6 +119,10 @@ def generate_query_features(
         raise ValueError(f"Neura optimizer does not exist: {opt}")
     if not architecture.is_file():
         raise ValueError(f"architecture does not exist: {architecture}")
+    # This is the SHA-256 of the exact architecture YAML bytes consumed by
+    # Neura.  The candidate manifest was enumerated against the same file, so
+    # this check prevents analysis facts for one hardware layout from being
+    # attached to another.  It is a raw file hash, not a canonical JSON hash.
     architecture_sha = sha256_file(architecture)
     if architecture_sha != manifest["architecture_sha256"]:
         raise ValueError(
@@ -129,10 +133,18 @@ def generate_query_features(
     task_hashes: Dict[str, str] = {}
     for task in tasks:
         text = task_paths[task].read_text()
+        # The embedded source-body hash binds this derived DFG back to the
+        # Taskflow body that Amoeba used when making the candidate manifest.
+        # It is checked separately from the raw standalone-DGF file hash below:
+        # the former identifies the source task, while the latter identifies
+        # the exact DFG bytes passed to Neura analysis.
         source_body_sha = source_task_body_sha256(text, task)
         if source_body_sha != manifest["task_body_sha256"][task]:
             raise ValueError(f"task DFG source body hash mismatch for {task}")
         startup_by_task[task] = semantic_critical_path_depth(text)
+        # Record the exact standalone DFG file used for every analysis query.
+        # Catalog generation later compares this identity before running the
+        # predictor, so a regenerated or edited DFG cannot reuse old facts.
         task_hashes[task] = sha256_file(task_paths[task])
 
     entries = []
@@ -182,11 +194,19 @@ def generate_query_features(
             })
 
     provenance = {
+        # This raw-byte identity binds the analysis input to the exact
+        # candidate manifest whose task/shape queries were analyzed.
         "candidate_manifest_sha256": manifest["manifest_sha256"],
         "neura_opt_path": str(opt.resolve()),
+        # Neura's analysis executable is part of the producer.  Pinning its
+        # bytes lets catalog generation reject facts made by a different build.
         "neura_opt_sha256": sha256_file(opt),
         "architecture_path": str(architecture.resolve()),
+        # The architecture hash binds RecMII/ResMII facts to the exact YAML
+        # hardware specification; it is intentionally the raw file SHA-256.
         "architecture_sha256": architecture_sha,
+        # These hashes have two different roles: source bodies bind task
+        # identity, while task_dfg_sha256 binds the extracted input bytes.
         "task_body_sha256": manifest["task_body_sha256"],
         "task_dfg_sha256": task_hashes,
         "rec_res_source": "neura-analysis-only-x-y-override",

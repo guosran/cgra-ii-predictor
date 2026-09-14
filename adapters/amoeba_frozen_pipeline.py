@@ -81,6 +81,9 @@ def load_cost_catalog(
     if not isinstance(namespace, str) or not namespace:
         raise ValueError("cost catalogue namespace is missing")
     metadata = _object(root.get("predictor_metadata"), "predictor metadata")
+    # The catalog producer records the raw-byte identity of the exact
+    # candidate JSONL it scored.  Requiring this link prevents a catalog for a
+    # different task/shape search space from being consumed by this pipeline.
     if metadata.get("candidate_manifest_sha256") != manifest["manifest_sha256"]:
         raise ValueError("cost catalogue candidate manifest SHA-256 mismatch")
     ranking_policy = _object(metadata.get("ranking_policy"), "ranking policy")
@@ -97,12 +100,18 @@ def load_cost_catalog(
     task_body_hashes = _object(
         analytical_provenance.get("task_body_sha256"), "task body provenance",
     )
+    # Task-body hashes identify the original Taskflow bodies, not the derived
+    # DFG files.  They must agree with the manifest before any candidate score
+    # is trusted.
     if task_body_hashes != manifest["task_body_sha256"]:
         raise ValueError("cost catalogue task body provenance mismatch")
     architecture_contract = _object(
         metadata.get("architecture_contract"), "architecture contract",
     )
     architecture_sha = analytical_provenance.get("architecture_sha256")
+    # The architecture SHA is the raw YAML identity used to produce the
+    # analytical facts and model contract.  The mapper replay below must use
+    # that same hardware specification, even if a path points elsewhere.
     supported_architectures = architecture_contract.get(
         "supported_architecture_sha256"
     )
@@ -162,6 +171,8 @@ def load_cost_catalog(
         "metadata": dict(metadata),
         "namespace": namespace,
         "by_query": by_query,
+        # Keep the raw cost-catalog file identity for the final report and for
+        # downstream audit; its namespace above is the semantic contract ID.
         "sha256": sha256_file(path),
     }
 
@@ -333,6 +344,10 @@ def validate_mapper_provenance(
     if not architecture.is_file():
         raise ValueError(f"architecture does not exist: {architecture}")
 
+    # These are raw-byte identities of the exact executable and architecture
+    # YAML used for mapper replay.  They are compared with the analytical
+    # producer's provenance so replay cannot silently use a different Neura
+    # build or hardware layout.
     opt_sha = sha256_file(neura_opt)
     architecture_sha = sha256_file(architecture)
     if expected_neura_opt_sha256 and opt_sha != expected_neura_opt_sha256:
@@ -350,6 +365,9 @@ def validate_mapper_provenance(
     raw_dfg_hashes = _object(
         analytical.get("task_dfg_sha256"), "task DFG provenance",
     )
+    # A task-body hash says which source task the DFG represents; this second
+    # hash says which exact standalone DFG bytes the catalog saw.  Keep both
+    # checks because a valid DFG file can still carry the wrong task binding.
     dfg_hashes = {task: sha256_file(path) for task, path in task_paths.items()}
     if set(raw_dfg_hashes) != tasks or any(
         raw_dfg_hashes[task] != dfg_hashes[task] for task in tasks
@@ -361,6 +379,8 @@ def validate_mapper_provenance(
         ):
             raise ValueError(f"task DFG source body hash mismatch for {task}")
     return {
+        # Return the identities used for mapper replay so the final report
+        # exposes the complete executable/architecture/DFG provenance chain.
         "neura_opt_sha256": opt_sha,
         "architecture_sha256": architecture_sha,
         "task_dfg_sha256": dfg_hashes,
@@ -373,6 +393,9 @@ def _safe_task_name(task: str) -> str:
         safe = "task"
     if safe != task:
         import hashlib
+        # This short hash is only a filesystem-name disambiguator for task
+        # directories after punctuation is sanitized.  It is not provenance,
+        # and must not be confused with the full source-body or DFG hashes.
         safe += "-" + hashlib.sha256(task.encode("utf-8")).hexdigest()[:8]
     return safe
 
@@ -424,6 +447,9 @@ def replay_queries(
             "compiled_ii": None,
             "command": command,
             "source_dfg_path": str(task_paths[task]),
+            # Bind this mapper attempt to the exact standalone DFG bytes that
+            # were passed to Neura; this complements the embedded source-body
+            # identity checked before replay.
             "source_dfg_sha256": sha256_file(task_paths[task]),
             "mapped_artifact_path": str(mapped_path),
             "stdout_path": str(stdout_path),
@@ -460,6 +486,8 @@ def replay_queries(
                             "placement_coordinate_count"
                         ],
                         "shape_faithful": True,
+                        # The mapped artifact hash identifies the exact MLIR
+                        # output whose placement/II facts were parsed here.
                         "mapped_artifact_sha256": sha256_file(mapped_path),
                     })
         except subprocess.TimeoutExpired as error:
@@ -470,6 +498,8 @@ def replay_queries(
         stdout_path.write_text(stdout)
         stderr_path.write_text(stderr)
         row["elapsed_seconds"] = time.perf_counter() - started
+        # Capture logs by raw bytes so an audit can distinguish mapper output
+        # changes from identical status/II values.
         row["stdout_sha256"] = sha256_file(stdout_path)
         row["stderr_sha256"] = sha256_file(stderr_path)
         results[key] = row
@@ -663,6 +693,9 @@ def evaluate_against_oracle(
         })
     return {
         "oracle_path": str(oracle_path),
+        # The oracle hash identifies the exact mapper-result corpus used for
+        # recall/regret comparisons; it is independent of the predictor
+        # catalog and does not identify the candidate manifest.
         "oracle_sha256": sha256_file(oracle_path),
         "candidate_scope": "packing_pruned_static_shape_candidates",
         "evaluable_candidate_count": len(objectives),
@@ -746,10 +779,17 @@ def run_pipeline(
         },
         "artifacts": {
             "candidate_manifest_path": str(manifest_path),
+            # This raw JSONL hash binds the report to the exact candidate
+            # ordering and task/shape set that was scored.
             "candidate_manifest_sha256": manifest["manifest_sha256"],
             "cost_catalog_path": str(catalog_path),
+            # The catalog hash identifies the exact scored cost entries;
+            # catalog["namespace"] separately identifies its semantic input
+            # contract.
             "cost_catalog_sha256": catalog["sha256"],
             "scores_path": str(score_path),
+            # Scores are an emitted artifact, so retain their raw-byte hash to
+            # detect post-run edits without re-running the pipeline.
             "scores_sha256": sha256_file(score_path),
             "neura_opt_path": str(neura_opt),
             "architecture_path": str(architecture),

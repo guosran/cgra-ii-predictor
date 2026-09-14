@@ -65,6 +65,14 @@ QueryKey = Tuple[str, int, int]
 
 
 def sha256_file(path: Path) -> str:
+    """Hash the exact bytes of an on-disk artifact.
+
+    File hashes are used for byte-level provenance: they identify the precise
+    architecture YAML, Neura executable, standalone task DFG, candidate
+    manifest, checkpoint, analytical-input JSON, ensemble report, or emitted
+    result file that a producer consumed.  They intentionally include
+    formatting and line-ending changes.
+    """
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -73,6 +81,14 @@ def sha256_file(path: Path) -> str:
 
 
 def canonical_json_sha256(value: object) -> str:
+    """Hash a JSON value after canonical serialization.
+
+    This is for semantic configuration identities such as a model's validated
+    ``PointwiseConfig`` and the cost-catalog namespace contract.  Sorting keys
+    and removing insignificant whitespace makes equivalent JSON objects share
+    one identity; it must not be substituted for ``sha256_file`` when the
+    contract is about the exact bytes of an input file.
+    """
     encoded = json.dumps(
         value, sort_keys=True, separators=(",", ":"), allow_nan=False,
     ).encode("utf-8")
@@ -111,6 +127,7 @@ def _nonnegative_number(value: object, label: str) -> float:
 
 
 def _sha256_string(value: object, label: str) -> str:
+    """Validate a SHA-256 identity received from another pipeline stage."""
     if (
         not isinstance(value, str) or len(value) != 64 or
         any(character not in "0123456789abcdef" for character in value)
@@ -120,7 +137,14 @@ def _sha256_string(value: object, label: str) -> str:
 
 
 def source_task_body_sha256(dfg_text: str, task: str) -> str:
-    """Read the source Taskflow body identity embedded by the DFG exporter."""
+    """Read the source Taskflow body identity embedded by the DFG exporter.
+
+    Amoeba computes this identity for the task body while enumerating the
+    candidate manifest.  The extractor copies it into the standalone DFG;
+    the caller compares it with the manifest to verify that the DFG belongs
+    to the named source task.  This is deliberately not the raw-byte SHA-256
+    of the DFG file.
+    """
     import re
 
     pattern = re.compile(
@@ -290,6 +314,10 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
     )
     if (per_rows, per_cols) != (4, 4):
         raise ValueError("model protocol requires 4x4 mapper tiles per physical CGRA")
+    # Amoeba's header carries the SHA-256 of the exact architecture
+    # specification used to enumerate shapes.  Preserve that identity so
+    # feature generation and catalog generation can compare it with the YAML
+    # bytes they actually pass to Neura; this is not a hash of the header JSON.
     architecture_sha256 = _sha256_string(
         architecture.get("spec_sha256"), "architecture spec_sha256",
     )
@@ -311,6 +339,10 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         if not isinstance(name, str) or not name or name in task_names:
             raise ValueError("candidate manifest task names must be unique")
         task_names.add(name)
+        # This body hash identifies the original Taskflow task used to make
+        # the candidate space.  It is carried through extracted DFGs and
+        # checked against their embedded attribute; it does not identify the
+        # standalone DFG file bytes.
         task_facts.append((
             name,
             _sha256_string(task.get("body_sha256"), "task body_sha256"),
@@ -411,6 +443,11 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         "queries": queries,
         "task_body_sha256": task_body_sha256,
         "architecture_sha256": architecture_sha256,
+        # Keep the raw JSONL bytes as the manifest identity.  Every analytical
+        # input and cost catalog is bound to this exact candidate ordering and
+        # shape set, so a whitespace, header, or candidate edit creates a new
+        # provenance chain.  This is intentionally different from the
+        # canonical JSON hash used for the catalog namespace.
         "manifest_sha256": sha256_file(path),
     }
 
@@ -494,12 +531,22 @@ def parse_checkpoint_paths(values: Iterable[str]) -> Dict[str, Path]:
 def load_ensemble_report(
     path: Path, checkpoint_paths: Mapping[str, Path],
 ) -> Dict[str, Any]:
+    """Load ensemble metadata and verify its checkpoint byte identities.
+
+    The report is the producer's statement of which checkpoint files were
+    selected and how they are weighted.  Comparing each recorded checkpoint
+    SHA-256 with the current file prevents silently pairing ensemble weights
+    with a different model.  The report's own raw-byte hash is returned for
+    the catalog namespace contract below.
+    """
     report = _object(json.loads(path.read_text()), "ensemble report")
     if report.get("selection_split") != "validation_only":
         raise ValueError("ensemble must be selected on validation only")
     raw_checkpoints = _object(report.get("checkpoints"), "ensemble checkpoints")
     for name, checkpoint_path in checkpoint_paths.items():
         record = _object(raw_checkpoints.get(name), f"checkpoint {name}")
+        # Checkpoint SHA-256 covers serialized weights and metadata exactly;
+        # this is an artifact identity, not the canonical hash of its config.
         if record.get("sha256") != sha256_file(checkpoint_path):
             raise ValueError(f"checkpoint SHA-256 mismatch for {name}")
     weights = _object(report.get("weights"), "ensemble weights")
@@ -528,6 +575,10 @@ def load_ensemble_report(
     architecture_contract = _object(
         report.get("architecture_contract"), "architecture contract",
     )
+    # These architecture hashes describe the hardware used to collect the
+    # training labels and the set of hardware on which the ensemble may run.
+    # They are semantic contract values supplied by the ensemble producer;
+    # the current YAML's raw-byte hash is checked against them later.
     contract_id = architecture_contract.get("contract_id")
     training_architecture = architecture_contract.get(
         "training_architecture_sha256"
@@ -570,9 +621,14 @@ def load_ensemble_report(
         "uncertainty_exponent": exponent,
         "uncertainty_scales": numeric_scales,
         "selected_mode": selected_mode,
+        # Preserve an optional report-declared manifest identity for audit;
+        # the report's own raw-byte identity below is the namespace binding.
         "manifest_sha256": report.get("manifest_sha256"),
         "architecture_contract": dict(architecture_contract),
         "supported_architecture_sha256": tuple(supported_architectures),
+        # Bind generated catalogs to the exact ensemble report bytes, because
+        # changing weights, architecture support, or validation metadata must
+        # produce a new predictor namespace.
         "sha256": sha256_file(path),
     }
 
@@ -660,6 +716,9 @@ def generate_catalog(
     analytical, analytical_provenance = load_analytical_input(
         analytical_input, function,
     )
+    # The analytical JSON was produced from this exact candidate JSONL.  A
+    # mismatch would allow RecMII/ResMII facts for one task/shape search space
+    # to be attached to another, even if their function names match.
     if analytical_provenance.get("candidate_manifest_sha256") != (
         manifest["manifest_sha256"]
     ):
@@ -687,7 +746,12 @@ def generate_catalog(
         models[name] = (model, config)
         representations.add(config.dfg_representation)
         checkpoint_metadata[name] = {
+            # Raw checkpoint bytes identify the weights and serialized model
+            # artifact selected for this catalog.
             "sha256": sha256_file(path),
+            # The config hash uses canonical JSON because it identifies the
+            # validated model contract independent of dict order/whitespace;
+            # it is intentionally distinct from the checkpoint file hash.
             "config_sha256": canonical_json_sha256(config.to_dict()),
         }
     if len(representations) != 1:
@@ -710,8 +774,14 @@ def generate_catalog(
     task_identities = {}
     for task in tasks:
         path = task_paths[task]
+        # This raw-byte DFG identity is the one recorded by query-feature
+        # generation.  It proves that the graph fed to the predictor here is
+        # byte-for-byte the graph used to produce the analytical inputs.
         task_identities[task] = sha256_file(path)
         dfg_text = path.read_text()
+        # Separately verify the source Taskflow body identity carried inside
+        # the DFG against the manifest's task identity.  A valid file hash
+        # alone cannot tell whether a renamed/replaced DFG belongs to task A.
         source_body_sha = source_task_body_sha256(dfg_text, task)
         if source_body_sha != manifest["task_body_sha256"][task]:
             raise ValueError(
@@ -815,6 +885,8 @@ def generate_catalog(
     cache_keys = set()
     for key in manifest["queries"]:
         task, rows, cols = key
+        # Include the DFG file identity in the cache key so a changed task
+        # cannot reuse a prediction for the same name and mapper shape.
         cache_key = (task_identities[task], rows, cols)
         cache_keys.add(cache_key)
         entry: Dict[str, Any] = {
@@ -846,6 +918,9 @@ def generate_catalog(
         "shape_protocol": get_shape_protocol(
             SHAPE_PROTOCOL_ID
         ).to_dict(),
+        # These raw-file identities describe every producer input that can
+        # change a catalog's values or query set.  They make the namespace a
+        # reproducible boundary between Amoeba and this predictor adapter.
         "candidate_manifest_sha256": manifest["manifest_sha256"],
         "analytical_input_sha256": sha256_file(analytical_input),
         "analytical_provenance": {
@@ -860,6 +935,9 @@ def generate_catalog(
                 "startup_cycles_source"
             ],
         },
+        # Each checkpoint record carries both its raw artifact SHA-256 and its
+        # canonical config SHA-256; consumers can distinguish changed weights
+        # from changed model configuration.
         "checkpoints": checkpoint_metadata,
         "ensemble_report_sha256": ensemble["sha256"],
         "ensemble_mode": selected_mode,
@@ -876,6 +954,10 @@ def generate_catalog(
         "uncertainty_exponent": ensemble["uncertainty_exponent"],
         "uncertainty_scales": ensemble["uncertainty_scales"],
     }
+    # Namespace identity is a canonical hash of the semantic contract above,
+    # rather than the pretty-printed catalog file.  It changes when any task,
+    # architecture, optimizer, manifest, input, checkpoint, ensemble, or
+    # ranking contract changes, while remaining stable under JSON formatting.
     namespace_hash = canonical_json_sha256(namespace_contract)
     catalog = {
         "schema": COST_SCHEMA,
