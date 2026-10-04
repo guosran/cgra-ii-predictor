@@ -423,7 +423,8 @@ def test_direct_mapper_generates_a_loadable_cost_catalog(tmp_path):
             amoeba.source_task_body_sha256 = "{'0' * 64}"
           }} {{
             %0 = "neura.constant"() : () -> !neura.data<i32, i1>
-            %1 = "neura.add"(%0, %0)
+            %1 = "neura.data_mov"(%0) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
+            %2 = "neura.add"(%1, %1) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> !neura.data<i32, i1>
             return
           }}
         }}''')

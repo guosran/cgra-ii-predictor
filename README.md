@@ -5,12 +5,60 @@ mapper. For each `(pre-mapper task DFG, mapper shape)` query, it predicts only
 the final `compiled_ii` that the mapper would return. It does not predict an
 ideal placement, construct a soft placement, or use mapped output as an input.
 
-The only deployed model artifacts are:
+The deployed legacy 4x4 model artifacts are:
 
 - `models/final/mapper.pt`
 - `models/final/model.json`
 
-## Model contract
+## Amoeba 2x2 candidate
+
+`models/candidates/per-cgra-2x2/` packages the new checkpoint, training report,
+architecture YAML, source groups, and training exclusions. The hardware has
+4x4 cores with 2x2 tiles per core, for 64 tiles in total. This candidate covers
+eight oriented rectangular allocations of one to four cores per task:
+`2x2`, `2x4`, `4x2`, `2x6`, `6x2`, `2x8`, `8x2`, and `4x4` mapper tiles.
+
+The model uses 61 selected features from its 148-feature input contract and
+averages four MLP members trained for 80 epochs with seeds 17, 41, 113, and
+239. All 2,584 native queries reached a terminal outcome: 2,569 successes and
+15 censored queries with no numeric II. Whole-source-group exclusions and a
+fixed 70/15/15 split leave 1,469 training, 312 validation, and 304 test rows.
+The test set contains 38 DFGs: II MAE is 0.724, rounded predictions are within
+one II for 87.5% of rows, shape hit is 78.9%, and mean shape regret is 0.368 II.
+
+This is a candidate pending the complete Amoeba benchmark overlap audit.
+These task-local metrics do not establish whole-program latency or throughput.
+Its evaluation population differs from the prior 4x4 reports.
+
+Reproduce collection and training using the frozen source corpus and a native
+Neura binary; the raw native collection is stored separately from this repo:
+
+```sh
+python3 adapters/collect_per_cgra_2x2_mappings.py \
+  --source-manifest /path/to/source-corpus/manifest.json \
+  --architecture models/candidates/per-cgra-2x2/architecture.yaml \
+  --neura-opt /path/to/mlir-neura-opt \
+  --output-dir reports/per-cgra-2x2 --jobs 8 --timeout-seconds 0
+
+python3 adapters/train_per_cgra_2x2_model.py \
+  --collection reports/per-cgra-2x2 \
+  --source-groups models/candidates/per-cgra-2x2/source-groups.json \
+  --exclude-dfg models/candidates/per-cgra-2x2/training-exclusions.json \
+  --output-dir reports/per-cgra-2x2-model \
+  --epochs 80 --seeds 17,41,113,239
+```
+
+For a 2x2 cost catalog, pass
+`--model models/candidates/per-cgra-2x2/mapper.pt` to the catalog command below.
+The checkpoint requires the exact packaged architecture and its declared shape
+protocol. Publication removed imports of historical experiment drivers from
+the trainer; replaying all four training seeds produced a byte-identical
+checkpoint and training report.
+
+## Legacy 4x4 checkpoint contract
+
+The following describes the original deployed checkpoint. The updated loader
+accepts the current 156-feature vector and selects its original 112 features.
 
 The input is a 112-value vector computed before mapping:
 

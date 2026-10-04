@@ -1,0 +1,2536 @@
+{
+  "groups": [
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "03c45ea017d79e5cfd53995828297723086b9b2ff1a36123cfa94d9f32842334",
+      "mapper_input_identities": [
+        "0d8d8754ebc9fbc6274f68e1cb23e5ea97e9a60e205780533890a46bde0e48a3",
+        "312276c119486e78884d4ee2bb2ffb5fa2f12ead7390653ad2f7078e454cb3ce"
+      ],
+      "source_program_families": [
+        "global/randomness-test",
+        "upstream/c2hlsc"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0856240490270bc3e0bbc73c49b4afd55d2f76858416cd877fb90f23ad954e9d",
+      "mapper_input_identities": [
+        "84cf4d6b0156489ebbd6b5f3af74c8329ef46a41d60124806fe1df81ecb0eb25"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0096-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "08a7cd61db4fdb3c6c229fde9e5cb91065fd437adbdeb5bbc04a89bd384c7f3a",
+      "mapper_input_identities": [
+        "9e8769fa243d3040cb7d0712876d00528ab7f957339ffd0f29f413b8f6dbd197"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0029-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0986752760c930f00e626b08d3eaa9516b3d9bfe320e345d8a67b4821e1c6171",
+      "mapper_input_identities": [
+        "470c27eb64e22ac1bfbf56247c939bc5311a63bfb63f3827d7c893e6a52b6584"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0029-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "09908cd8ca99f834f761ceb1726ac2d04e6727c340869f90d1355c2b02398e1d",
+      "mapper_input_identities": [
+        "6f422408b957fc3e9e3faaa84b177c5b8ff6d357430c8544a777b90981959215"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0123-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "09d78cbdf9c8054fb4442a0ededbcd14cc0c5ae3dfb02312e2a76c633f701e4e",
+      "mapper_input_identities": [
+        "70013283b0b2886eb565e4cd7c95fa997a0cb0b64feb2c5c9a102b54268a2064"
+      ],
+      "source_program_families": [
+        "zeonica/gemv"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0a98d722978e5156c3d28a786680fd6c3a06582fa8c68e348338e9321ee7d44c",
+      "mapper_input_identities": [
+        "0b68fa934e9de33bcd97337d696181309c07ca7b57db242eade80f8e478ba63e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0120-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0ceee2c05be3813cc1d51a71eb47010a30eb8294764af3ed5924728ec115afd0",
+      "mapper_input_identities": [
+        "faf170c155f029697759a84e786af992f7e355a5769840e72455c1b8132a3fa2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0128-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0d6dcafe63173d8c96e455caad9c9e1daab73e97c3707617033cb793124e068e",
+      "mapper_input_identities": [
+        "9e09eb0d22381a660b1d34ac4b50c84295419c3855ae2e8701f664a83cf70de9"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0038-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0dae3494a7a90c2d062e9ed77e4273f6ae4bb8decb5b011915b6d00b65757300",
+      "mapper_input_identities": [
+        "af5c3c9ac3f23d0f16cd52d1d3f9dbf1da1f76669345a2252db7c745d7bb7343"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0123-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0e33f1a830b9fc3b28e6f6741beb60e8624b52e82b5a99d824d137ea0fb87fc0",
+      "mapper_input_identities": [
+        "aa14fe43a742ae91f52afb98cf09412059224072778221f1f6e2a49fea014109"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0231-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "0ff4610f8df65d1e2d5e9c464b15b4e9412ea74d7cfcf5314d94cb9cf240bb5a",
+      "mapper_input_identities": [
+        "18f4f45a1e4f7f5130decf3b17143d9d78a2bf286e0abc53de5724110e2a62fa"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0009-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "10339d1a43c685d00ca3390ea058dfd4d1af5e4e86f2cdb4696a872aae300b8c",
+      "mapper_input_identities": [
+        "94f189e3d3336a5460d4f1bf1198e33b255878f5b7ebf45f9f3cef3cd02c6096"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0168-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "109dc0d9ded46e179f9e8247a98d5f71f3991cb9627c0447b32d52ac9c76daa9",
+      "mapper_input_identities": [
+        "dd90dbc521eb88b4f33ba71dceb951867a2578567e7c1948fc5266d4f606d4ed"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0039-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "14bd45de79710befb656ee288aa4b0a24b71f37d035b7206c02bb5df717cafd5",
+      "mapper_input_identities": [
+        "bc68cfc7e5fbe923ff934aaf71bd30614229e1d937225d50a539352f76911e04"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0089-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "152ff1d24ff91404f52b389ba822bf037b22e522358e3c8f9cb40388783bdf99",
+      "mapper_input_identities": [
+        "4c9193b20c377b15491d1fd767b91195cfd7fd8adae9b311cd75f65b1bb5b10c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0208-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "15a48ee80d07f051b454962c0eea3b67fcda6067a71fd71df7ec66d2ed061a98",
+      "mapper_input_identities": [
+        "852cef13fb8df72f530def2a0f44e375f36edb653745dc43a60cee35e5352639"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0223-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "174d140e558389d169fb4c5637a1a85325b1aea73b950b013ae16c2cd76cd1f3",
+      "mapper_input_identities": [
+        "7de1d4201167f8a96a8fe7cb34cd9b6584ebe2e7daa9ba021e7ab7a553951e6e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0081-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "17f82755526eb4561ace69fae87c434e35820b4b4df1d4ba9ff2875ec9279e16",
+      "mapper_input_identities": [
+        "13b76c425613836e00600d7f48b98db71ca80023f4f3c5821e346e79d2a49463"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0145-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "182f1d773d6abb2187f5e510c2f803501b755217b765c6b73d51691ad190a6e0",
+      "mapper_input_identities": [
+        "5612ea732c583a7c8d4b4479116aec0861f899a0de3594a16d47644ce147dd9c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0037-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "19f1bb88fba4a66be43f7875a8f4d08ff5e375a6d1df3f24b67a3152135b8734",
+      "mapper_input_identities": [
+        "779effc16517a4036dbc42bd7fa9c665899ace40c790b1f9725ec2155886bb35"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0177-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "19f441362a7d1d1f8cce2f12e6af33275342f0ddcc3e526b1459b55cfd27bf41",
+      "mapper_input_identities": [
+        "2034c7ba9752e4fa52acfbb9be2582b11387cdf94ad28c9e7ee5fdc35d5ac62c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0132-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "1a30082cb3a47d3b38336eec420158d03e071ae55ec4b9788b8384c3f874cb77",
+      "mapper_input_identities": [
+        "282eb7d965e0827e6efaf0fcc5f952cf03f3ccdfa09f6b3a896721c82e265d6f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0087-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "1bd8b9f38ee406b7c5a912ac2c2794580d1909a30b6de786485b20cfdb2b87fb",
+      "mapper_input_identities": [
+        "927e391cd17742e16422d6017d8becf2cb433ee3e4c177124ed9190ef9ac90c3"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0191-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "1d70105e628947f0d03d04c28443d4c5981df474f3654e5693db47e92963f1a0",
+      "mapper_input_identities": [
+        "6adc1f6252b92bfa269ee5e06c06a5c859866f5cf9ae5c6fb1ab2013058d37a5"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0117-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "203ec36127bea8a32b6e2de0c16e0b2ed8851dbc248c4d1fc0150fe7cd43c731",
+      "mapper_input_identities": [
+        "075968c19c382ebe16da53c5b135f2d3dd2195ad9be2ae8c55aa07d8200138c4"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0094-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "20cedda33d2ee845ca74a3cbec1fdb6548e60c4281bb61ababed9a8848e0d8f7",
+      "mapper_input_identities": [
+        "79285e8178be8489088ea5a74ad6ffe13a53100ffaea0329310eb70059544461"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0104-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "21b0aa785aef831edf9aef892f20634c45ec0235edd9c7f1aa27a1019aa7e5ec",
+      "mapper_input_identities": [
+        "e0df805c808d25af6c3d8ed458e96a806dc6dcbb6f1589561f556a16286bae11"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0057-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "21d99e56651a0c88eff41ee5bd84db0ddb48d0b485d74467c00fc90c4c9850c2",
+      "mapper_input_identities": [
+        "49472f03b8dd5fc7f50ca7d7af9226ae644fdde04b9b5eec581318a0c4843dbd"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0081-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "27f79c74d764a0f1952d91f194dbd456928ad0a91848ff2c92faad5229861d3d",
+      "mapper_input_identities": [
+        "c4ca566e94169e8dabc54d136f72d8aae2ac71c602c2b61486c44621b2a042eb"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0212-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2a171107cd26b2784d946c8d92b44da6cb1c8a478d5e8a4884fad24aa4401d2b",
+      "mapper_input_identities": [
+        "de98c41209c717fd847acd8b11086796053732028a00149a35daa473bcb7192c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0028-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2a887ef57d79a97daaa320cd567921d6f577177feb863be6a28b442579746979",
+      "mapper_input_identities": [
+        "f8a923f98018987e5ea79080c462c54bac9dd9d45dbcd6d18b1e41c9bc590456"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0041-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2aa0a511df87c0d41541aceaa0f3fc11f67f924acc11fc616dac53da0c33d1e1",
+      "mapper_input_identities": [
+        "073835563ecd3b600aa20f6dd0e75f707c0bb4aee34b1600e05110a8e55212be"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0120-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2b6910e8abbfbf7f15f2b321748e73cea014a8cd4ebeb10155f9772f4214b8c7",
+      "mapper_input_identities": [
+        "eea36443c76cbe5612780c06f6370eaab4d82082f7e7975bf1944fb1dfd189e8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0108-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+      "mapper_input_identities": [
+        "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+      "mapper_input_identities": [
+        "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2c9a4d3b28330959d4baeeafa391f778c1273a63f54f929a2f51236621f6c15c",
+      "mapper_input_identities": [
+        "ec1b34ba59b78cfcf213b082bff0ea9709bf9f463fd58b50ecc12577ad11a48b"
+      ],
+      "source_program_families": [
+        "kernelbench/case-012"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2ce68791e38a7f57956024aedae5acb2b4ce72769a57d14e958f6998a5b7a5a6",
+      "mapper_input_identities": [
+        "7e854010e24570e4a319c9ab19a93c4076ef7ca513a44a4073b4616de9a0985b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0225-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "2d70f9938be081a557f754a4b6bd0710f2f9dd3bc9fa0cfb84a00522e0a7e3d0",
+      "mapper_input_identities": [
+        "2222e7312711c5e919a8c0e4cb1bc7ac215005fd9eed5d461d60d390d3476bef"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0093-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "304c26f02ea8b018566d9d9a1c84c387942cc6fce886eea243c0f5850c85088a",
+      "mapper_input_identities": [
+        "6aa049a3722c45038e8b802cc7bfd22648b62bf8be010eb49ce5daab144b9183"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0246-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 7,
+      "group_id": "3187c7a6a2ddc8a6d87f4b6b89beac85d53af6151448dcac8c4c80c9a0105c8f",
+      "mapper_input_identities": [
+        "4f4c9dd45492109798a767dd67177c02a4eb6f6497cf13ed73e9701b8ff3bccf",
+        "6ad64798870a23332b56d10e5a19dfc39f86e82670932ce8d4fb2e872029da09",
+        "8d372a89e4b45e260fa2528fe33081f7db169dd4939a3bbae4412278492623bc",
+        "aa8e8766a346686828449dc63eb91d54619705b1a2dda94007c7e64e2d9c2e72",
+        "bf90df56a62a9c173ca7600cce1a668bea7a9af9fbe2028fa9d2d5a819f91fd6",
+        "d097f9b92ac82da5795fed5e8683264fffd96c5390fde421d0f74856ec4f2da6",
+        "d18b99e6c59644eab4ec4d5852db3af7d422ca45c8822831e320d78924e1fc5a"
+      ],
+      "source_program_families": [
+        "torchvision/shared-source-component",
+        "torchvision/shufflenet_v2_x0_5"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "3298567dbd11a4ebce75e71466546dc474720b709dc1008206e286df6351a197",
+      "mapper_input_identities": [
+        "99f31e456a96036fe81bc25be22840043a5eccbbec86778da72b2f91b8e50f60"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0088-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "32af3b18b1ccb6eed170960d6d23554ce82bb2fd25e560bd22c885c1dd33610e",
+      "mapper_input_identities": [
+        "1c18b2b3f26791f328c1408b5b3fa38365bb113b188dcf8fe3fbb49bdcbff2fc"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0240-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "32bce4ad3ceb1ac3c8eff45b1e1c9a534481ce69b432fc197357e9c3706f4379",
+      "mapper_input_identities": [
+        "34e8fef56505250985b6ab20884b2f331b2cad0325908a64c3c42a84848ceb1f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0246-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "37404f7475b6b4ee9625c5153c9e22f2aac5c6fc9452e7062f8405339a3291a3",
+      "mapper_input_identities": [
+        "628a3e81263a8403d7648bc9e8f1dff92c6348f4a01c12d57acf180faae4a2b7"
+      ],
+      "source_program_families": [
+        "kernelbench/case-019"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "388202942473edfee1707d0b7d3fcd110bfab9f964f0f257dad34ae377856af6",
+      "mapper_input_identities": [
+        "1885f729b9b554d369da75e75f3fdb79126aa748975425569e9aa6d2632b55c6"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0123-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "396eaa7faf694db33fde82d624335b8bce03ad81d67ddd68f887e9872a0c5fcd",
+      "mapper_input_identities": [
+        "aab6f69a0bc8a10f4e6de5ac24f510f29bb1067383534fec33bfb4c74d90afa2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0239-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "3c10b4ace4ec6f569a21ca06682a0bac2a0fc30213b28dc3bcecf673164ea95f",
+      "mapper_input_identities": [
+        "c547daf0686c214c5d17c2fdb2a04f2f18f576ec32c4b2db1ac9b471fd489279"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0049-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "3e92eadd1407db40abfbd71e69d9a4b3313fc07d44e9481cbe2a2fd9ca1d8cf3",
+      "mapper_input_identities": [
+        "d5d35e9189d53289a88e191ff806eaf6303433c047f3918af9aeddd49f55b130"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0063-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "409b3d1598df96cac59a1cadaaba9703aa29033fcf0bdc734e41817978a4a519",
+      "mapper_input_identities": [
+        "77e8c1cda86cf5cd4af84384edf7b57f2f8faac056a356ca8ed37d566d74c3d2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0002-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 5,
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "mapper_input_identities": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ],
+      "source_program_families": [
+        "cgra-streaming/gcn"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4281b1ac16e167d563132d0754dc96e640354054fa0c2eddc8124e2bd43e69f2",
+      "mapper_input_identities": [
+        "20a1aa18c07de30adac57e0e61fb923ce7c254af6fbc2599d24ac08e9fd9e270"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0227-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "42ce1f7694a72da8d573b46f806f092b458b736eaaa63896ccb06791266e01e6",
+      "mapper_input_identities": [
+        "65238be01cef2a29776a56b3a62c5e0c2c6615001b567aef7a8f9a6d9964da9b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0018-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "44998118309060f93dbd743d5a3afdb5f44d05230aae730e2d34ee056fbd49ab",
+      "mapper_input_identities": [
+        "52140b19cf3b41673e42ced96879a9c0bb8d34ae0abac24474ad75cfd43032c8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0188-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "46ed7b7538b7ac11cdcbd3ab288905ab38e3c53b0c76c0e0de53d148d32db81c",
+      "mapper_input_identities": [
+        "a09a5aebb242dda611e70c130522446cb25eb2e803b6ac683e018729ded9dc10"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0227-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "48751345b8950274d17a7bd0adee45e481685153554b1cfa84b73ebecad523f3",
+      "mapper_input_identities": [
+        "2510a014bdf7cf7d552c4fb08f428a5790b94606669410fc187bfcb453684af5"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0137-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "48f2d96d5460e0811eaac0f605db4cc4e1f3c16b00ec43d6f347ecdaa1e6c7c1",
+      "mapper_input_identities": [
+        "a5ddfb540f0375e219a04e299d0ad87920d39c0489a4311baa3c483a1182e3f4"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0159-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4913f80b68aa3885b894761666692aabff38911e0eae012753eacd9567853e8c",
+      "mapper_input_identities": [
+        "5cdc9dd5a5115bec3a26410245ffb195875621f54bd0c26d313319d0780067f1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0116-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4b6a0f5a885a09a619981ffa1456ed679fc242d7e041dc7bdfbb2078957feb21",
+      "mapper_input_identities": [
+        "20edf96abadeea001f159f4e3f83b7c1902e80be6bc90da5d076405c45c5a912"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0217-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4b8d3c6648c69f1fac09e1e8993261861a30dac1bc8cd6677e03bee7d452dff6",
+      "mapper_input_identities": [
+        "8beabaf7d6f2678629bfc0c93909d49c3b9fe476b92317be66d8f6713c90ee49"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0212-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4ca89823920c5c82e9c07f4486cd7108b6e1d6a51bfad01164ee0f0aef6490bd",
+      "mapper_input_identities": [
+        "e0575c69fc8ed8b29391b050196c6cf270d2ed7b9fc716b5d8784837806e3434"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0110-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4ce33b6789408a414085b11ba8e9e421df68650836bcc37446068fa40618adc4",
+      "mapper_input_identities": [
+        "e7838ae3c0cdd0eb5fc49e988d1816d7bd30ed444a0c0cd912445935ffe8bb5e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0162-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4d5f1d6ffecfdcae282441b0f55ca2551ab847055f12f5a0f7a721dea9e28efa",
+      "mapper_input_identities": [
+        "3370772ed86612d090c53ac3d6c6aa717117c20e07c9e97d6663e9bbc0f9ca1c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0033-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4e92480f0025fce47fbaf622f4213d38f8c4b9366ff11e83b0c32577693794b5",
+      "mapper_input_identities": [
+        "f2d9c5562573fc32ad863f76c0cd8cb3b3c3e5dda2e8c06202ec407c6fa6a292"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0112-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4ee17c93117cf79dff38293df69a82179b7f085da5d718c2c00a69861651819f",
+      "mapper_input_identities": [
+        "0bc6063f337878d33605f5d07bc185c645ad933bd8135a22db37a3356cb2ae11"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0113-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4eefe1727c66d38cd0a523095f81a6cea42b8fb68f72812bbe91870c9916ea08",
+      "mapper_input_identities": [
+        "62b2916d16805931a4dd1a9b4f1e551d930d855a6b0d9aa78e678aa24b1c22ff"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0040-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "4f98b27f73d56c075aaa3129ad2bed00f57d186ff1d7c0aab01ae003723565ed",
+      "mapper_input_identities": [
+        "61b4b907ed1be7d34572f62004b89c7b862e1fec9145004082416c3afb5ad864"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0188-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "50c45943989234780281506bf55b8c998c9e12ace31776f6fbe3927437e66aac",
+      "mapper_input_identities": [
+        "575b71aeab411360f20503f0fae5f931d16ccfb88b47c677f2ab087dfdfc7334"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0238-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "5119f31e156dc1a2070adddf9d627837a4a2b5d25e8859f946376ab751460735",
+      "mapper_input_identities": [
+        "8b873dd90ea1f5500e7e5a70b0067559b3045892e264e42cd4799e54d102b111"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0178-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "517417a253ce15c52d0b49c9ff49116366bf36eea2fb66db99a2f40463c8aff7",
+      "mapper_input_identities": [
+        "e426759d940b886ad2ca0052de20a5fe3878d678773d8d96f258810205116271"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0227-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "51cb45767f52ff5593bb39ecb4da26fe52cc4ed3b169560b671571a0e5fa37d4",
+      "mapper_input_identities": [
+        "c7f1fbfd8c08e395e2f5b9025bd1f167a5fbd686ab6137d3a0b395281c83bf32"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0018-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "538d5407aff4fdf519e65968e6b22e39e41694fb25c928b55f2045c9dea35e20",
+      "mapper_input_identities": [
+        "9e6e6a59995f3be5adb0fc14337de97d6b86bbf3fa181acdfacbdcc61ca34b84"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0076-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "53adf0b0d223f6a10502c98bdf14ab0c26e9f81f0be18543974ef5a01be6d8a4",
+      "mapper_input_identities": [
+        "b876db1508020fe2a6b6128a9658fdc784e75f632f053a0849c88540375355bc"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0229-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "553297be8818769df6f1695670456ab32a627cd4899bce79a2ad16e65ca2be89",
+      "mapper_input_identities": [
+        "963d891d06ed3471af7d0e621d4a67736ef483159afc073a324c4df71adb0628"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0186-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "583fd95001b75cd28695b42c527b2b36cfdc6bcb83e430aeb9c8e6198815b877",
+      "mapper_input_identities": [
+        "4a4ff5efba6ba5d58d9d858d608529618ef5c734ca76f737becd4cb25f5a3c28"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0169-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "59fc590d9820623f279c214c475d47e4a5ae60fb02314c73cee8805d19440ad0",
+      "mapper_input_identities": [
+        "492cb028ee5ff31db1bd1fa1e59db209d2d7ce35122f313504e9ca88fc50aa22",
+        "d47bf26fd08d16d64ee5e6bb9b3d9fe6c33f6fcee66ca28ed49df9b6e2388b1e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0204-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/compute/base-0228-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "5c319f0fe838ea3ec74cbbf5a55d7904f40943d6600ec31040402d3afc2490e2",
+      "mapper_input_identities": [
+        "9dc969d64199f9f9554736680c5b591085672daea26d05404931e5a8f40b8ba1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0054-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "5f45a47f06ed7263273ef6963d8ee712996074ffb5dc63dc852e78d837aebcc2",
+      "mapper_input_identities": [
+        "36b5ab76532aaa3b403e3acbeafd684adaf221081531914a01c65a6b4928240f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0126-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "61a617c303ea361d77dcbf4bac02fedb924eb1eb4f6787b267177c1d114f19e7",
+      "mapper_input_identities": [
+        "6e0834ec848426a14271050abea79f5af9e5f6a61915e3bd2e5a56586fee7ac1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0219-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "61d428e89de662885f6325321f9fca179dec3b23cc211f7e94ce8fe09f349077",
+      "mapper_input_identities": [
+        "9b736854fffc1151987926aedfd74bd11fe72dd2810d043b1bc4ab3ff557a383"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0030-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "62554073b00dd48d063955ed1206d625529bceeaa882467d267ab81bbed4a37e",
+      "mapper_input_identities": [
+        "5ea220d8fead00f47882e3869583984924b1089bf30fec559f1188db7f722d61"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0054-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "630cdc32b3fd243241dcdda7ede962e652f2d698df8ec92c5b3b6f3f1aaf1ba4",
+      "mapper_input_identities": [
+        "1b057630b52faf46ca870c56b832ca25d80ac03aad056a29dcefbc7ada647e0d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0192-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6388079a6559c7e0ad122028008d863ed094d4741d2dfff6e427364d13fa762f",
+      "mapper_input_identities": [
+        "5e8ee695e09c8400616907a2e926947c95f7bd99a43d92c3d859aa83e8cde037"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0051-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "63c8540653dd425bc9323f78f6ac40d33353a7d3237bae65f581c77927909508",
+      "mapper_input_identities": [
+        "d3e71e22e3543de6bd3ec7aeb849faab87c72a8c5e0c3c1273999c7ee20a883b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0083-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "63eb65663614fb0bbef01c3cef271f0793290cd9083f87254b61a986ceaec6ba",
+      "mapper_input_identities": [
+        "51eab109f9714751a5e367d7a476772806a8674640ef314eba130c74d2f33099"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0065-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "644899749b2363510f4f5627472494aaabc54aac6fbb640fc491fdb1416c6564",
+      "mapper_input_identities": [
+        "b8891012fcb7993db8ddd0bec132593716ac61fac6d00eebe7529af54d2884ca"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0176-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "64e360e9bb7967d1d4a1133230a09b3b09abd5595baaca30d2d42132c7515d15",
+      "mapper_input_identities": [
+        "91a07a6e08838c2dbf81a7cc6cea164131899f80e041cf6ec04cf57a9a8775ec"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0050-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "661c08e3ee034c16d2d70b7860aaa591c2febd22f8df6a3e377aa7c082c7f64d",
+      "mapper_input_identities": [
+        "e3f9adc163da0aa01fe7ff19128efeb6052c08f88d3326e3a8f9ad0c97d2f15e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0060-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "66d6c3669e55093a5e570ad9ea529d167d63022e6fbc601e3fa880b072337ffd",
+      "mapper_input_identities": [
+        "58d37fd3efb607f698531e22d257d60ec7eb8d08f730a2fe38bbeb5b6b800113"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0120-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "67299456041e84a73ee9e1cd84c65004eb844c5ef20b0717eb453d5451128486",
+      "mapper_input_identities": [
+        "46c01b0e6ede45de1ebf82df16eb20a69f6f43b079f3d2cbb15d5adce5a1f453"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0077-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6ac6677af1cb0f9603d75a9aa2c807888967be7553149fc258d2175d6d67d791",
+      "mapper_input_identities": [
+        "ae928069553f8962f7dde16895ce2042d73c5a972ce8ab31533be58913d200ad"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0059-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6adddfd1002db5c23bc2248efdde9f43dfa90188a5b163b5d4125a4cef3c90eb",
+      "mapper_input_identities": [
+        "d791c0ca8323b7078ccf153f445fd5d85b12c3c853b7364c31e78c986fffb823"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0089-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6d421e82d01ca60284f2480b96c25a86dc20602508b80e7a7ae3d1c9317099b5",
+      "mapper_input_identities": [
+        "384d24ee77b04869c6b4e7523e36c9b07de09cd5253bbf601ea51f9a7381c357"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0238-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6eb691e36d43496b57eff1c0aa2c7eea4463a82cebe05b7f4e08adc8859c4f47",
+      "mapper_input_identities": [
+        "9d9d79e3cbaf1d3b5e5d7274514fca2322c0b42c7d837e5f95f0e6033b7713bb"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0147-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "6ef45ec892a772b05135d787b543137cba3473d22006d710030cf46cd217ed09",
+      "mapper_input_identities": [
+        "9dc8f31c5bae5c54fddd5de75670715e3073ffbd672030b2febf300354f5f519"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0221-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "71c2ebef0d62ba1e91dc5c35159d73914b3853c4b7f756012eddf60aab048cd4",
+      "mapper_input_identities": [
+        "afd1d16081d7a1db6e4d45ca988e28fb67c5224bc51ac1cdd0fd12ffeab4fce6"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0150-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "73468eb38be9914d7c6fa19f9e57bd4079c3a67d4edebbf09112391ad7a1b134",
+      "mapper_input_identities": [
+        "db757fc08825ee4f2b3fe6d307d6b3f78616fa1c45cef97509ca34c040abdbaf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0129-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "73d493bf41e1b7f0985cbb00b0678f94819cf86f4e4333e1cce3374d97325476",
+      "mapper_input_identities": [
+        "e8a207f4e3e8817acb9635a88e4b65c943456fddca912926e83a38ac0dab29e0"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0070-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "74d0ff54b05a07c703864fcbdf0179130e6c598bcc047abb54d88fe3d963687b",
+      "mapper_input_identities": [
+        "8560dce0f77118621b3c8e78e4b1e70822cdc4c2bf995c30c4eec711e268251e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0149-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "75d72ea3b382953d362a74b7645adf8cc29618ac930ea879888eaa1e2969a12d",
+      "mapper_input_identities": [
+        "07336bc93f9bc4c26c7344dc3f896e4e2cfe37c15b5251471ba950baed542b0d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0045-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "774d7b4b34e5adb1a7a939e2d056284ce3de98ddd2bab54afd191162cbdd10d5",
+      "mapper_input_identities": [
+        "0fc8cccdf76dc19b108258592b91279363d018b63e3fe82387fcd94388c3a51f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0048-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7823e691e06f586538c269c56ba96bcd9cf0fc20f1c9fb492f51f42efd745335",
+      "mapper_input_identities": [
+        "556f900d35e8de1b8d110310925b9cc582a6979d3d4b3c1135fc235e98d17914"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0162-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "783ef95908d6eb64742b99eef0f548f1e55da1b1f7084acffb7247ccde49c252",
+      "mapper_input_identities": [
+        "af0f9ca91c8c69ec300e6379a2976f1178af8d2e3eda243273e2be6f6d5cd5ed"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0061-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "784219b187d0b3d8cb0494f7e6c273f83b230056a40bf4fcf9338ed36f823632",
+      "mapper_input_identities": [
+        "49e3146eef3c21e2087afb31fa99898e57830173607b0a9a3b6ec8cb783fb7e1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0198-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "79a4398204747f64582ada7350105516ea1d3957bcd693f50a7be1a96bfc380f",
+      "mapper_input_identities": [
+        "f79fd50ddc2f951dd8f4e0b7efc782998442d64bfd1641aca1cbd2317b20dd2b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0048-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7adcae289a76a91cbdb1334e0df09f67c834cd2ac488da8e0d1d8a6d0a8ff299",
+      "mapper_input_identities": [
+        "5275b7ce62028c6c0e212b98decf19e58e4c94efc9cd69954279209bd6b15798"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0200-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7bbfcad8ca5a97192592b0b4b91ab537db6943166bad8d25fce713e0ad9f7dfa",
+      "mapper_input_identities": [
+        "967acd33d706bec15122f7fc0257aa31208a5c0a956e540dca33e844efdb5fae"
+      ],
+      "source_program_families": [
+        "global/nbody",
+        "upstream/benchmarksgame-nbody"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7bf79b23160c8ac3bf075596f8250fb859a6fb2fbd76e9742592a2146c27a97f",
+      "mapper_input_identities": [
+        "216799aa2c8775e135d902b399c24df260b3178a90d7d5b5496114e2b0517a46"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0108-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7c28ad64e30773a7f844e345d432a16d5c73d79c3237d127cc1fc068ad0069e8",
+      "mapper_input_identities": [
+        "eb6f9a82aaca37c6ac343edb6c49982178ecf59ac0e05ea73cfcdb85f3757110"
+      ],
+      "source_program_families": [
+        "global/conv"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+      "mapper_input_identities": [
+        "16bb8b529fe4690ddb9103b55c5608bd3651812c3a16766217fc1c2e900a70ce",
+        "9f12587f9299b7ef628543dccdfd0e1d7d4b375362cb9f0ba6c5903721f9a52c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7d70800813f80447c9302e589cb63dbfa5c6be7e930e59b91015d845c2d2a91b",
+      "mapper_input_identities": [
+        "826d881818f747d7e5da6b7d1dcf11a179958c40e6c06eae46336bb191fa40bd"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0104-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7d74a3eed88b81283005e6988296940df55fac3d87064aa94b2d4806dd5e6b2e",
+      "mapper_input_identities": [
+        "e270e9b1d23d7254c11b14297464f607d19552c44220731e19c1331d850979c4"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0189-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7ec84a371e109ef7c14071f9cc844adc6d749ef17c5ff2f3107f49751aa58f0b",
+      "mapper_input_identities": [
+        "a2524a3b5b1a3cd39562dc35fc27d467f21f8a15ac49fc5efd2afbef086c3e5a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0135-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "7f0f1b2b96dcdedf1b9cbd7950d522d0710f10b17d94907863edbd98e32ce819",
+      "mapper_input_identities": [
+        "b8f707b8c73cc8a6d2db1a6613fd668c8e9f64e8b296592035e3c3ddc67d6f93"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0026-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "80315a7bee0eb52cc701795be2c8ee75ec9dda09518e64a05121437ed87b2047",
+      "mapper_input_identities": [
+        "cc5023e56dfab1e022a818184dce0d682a4dbc2ab28f33997022a76c2783cebf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0198-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "81a3086467529041934a6dc9b54c077d92177e402b8de138c83306cc936b850f",
+      "mapper_input_identities": [
+        "33f8d69bdac370b46f99a7faff37e1acd164ea83df4f4baecc46e507d6731f97"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0148-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "81fd0c1d22da4ef2061a8588cfd71a971abcde66affb54cb9ef869d84284f1ff",
+      "mapper_input_identities": [
+        "13361b198926b2bb447525551d51aef19ac6039c612e007293da46cfe80f3126"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0128-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "82147a80e9b1ca853ee5cd2ce3b436ca03df9a062e5026463e6f6d6e5907d0d2",
+      "mapper_input_identities": [
+        "58cba7ec030d4b2b5d89d7326cc9653b8a929f0090b38e446933fe263f8799cb"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0038-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+      "mapper_input_identities": [
+        "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+        "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "82ae0b86871b405cd04265d6651d0afda7c0b3e16d5da4f870b8ee472d15f3d3",
+      "mapper_input_identities": [
+        "1f6c791349f3933c21994fdc6675bc85e46957ecb8bf78a9808e885c886b00a9"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0135-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "83ddeb09a05e76eb18a9cf47a97753aee207a7fb592ffd76f9d65a91c7a1d0a8",
+      "mapper_input_identities": [
+        "9b27752e5cc097ba543091584c13e8b15d6da338fa5170b5360f69e2329391bd"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0239-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "84a86a6f6eda307985e846aba4b7dc61601fbf7d74c2de21bc5dd7da8b2e6956",
+      "mapper_input_identities": [
+        "5282e02bc68bc496d6c3659715b76ef18d665d42aa333926553dd651a13ff400"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0171-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "854bd7bac004273c4453de1d0bdc06266afe0dd3a5ebd44b09f02e6c330febef",
+      "mapper_input_identities": [
+        "dae5ac9967e728258271ec4f1ba93ec906a029d8390b5056351874c9d32d2551"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0079-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "87b0471efa74eeac00d7005e519551e068ae64139b350b3d34d34716b17f6114",
+      "mapper_input_identities": [
+        "019626032d99c5caba241d1cbc0c63a7029a4e0c0a60b8a6859b2b5796f43e10"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0200-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "8805fcdbc77919c63996c8d3c5dd4e2cd935203166ac730e8a9dbae7d0a6638a",
+      "mapper_input_identities": [
+        "37dced4405ec2b691c4b27217e8e367f945f55c48df3ab43c030b03d49e205f7"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0152-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "8874f5580dc4aeddd298a089098dd487e5242b0cf516e16b23527dc37debdc3f",
+      "mapper_input_identities": [
+        "d66e4e29405143f9c3e85fedf2643f1d1d8785df07f0f5a4bd794756ac5b2786"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0220-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "8931a92b96fe27eef2c756738f5a76c5958b5ab3df3d2c483d47dd71e4052527",
+      "mapper_input_identities": [
+        "dd574d83f3c11055b2a2f338232e60fade5c09335b4db79e0ccdd241057b1e8a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0237-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "8d2e9507a5a7b2ceb72b540fcdb0b09a68879d37744d9af61c7702b7428a0228",
+      "mapper_input_identities": [
+        "49520a43c40381181673c23e2726f071963389eb3ec7a9b686c00949cc374c4d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0028-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "8fb9245058512222b869be1a97f16270c6e99362b5708dfab8d03f6987be4d33",
+      "mapper_input_identities": [
+        "c50de83a4973712488a5f522d253521f7b7fa505ffb9dbdcf9ffca5731107147"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0048-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9010f84d91cd39df2f3dd6ae6cef270ee681f76143401054c08cf96e5c93e445",
+      "mapper_input_identities": [
+        "e3f723862681a3312a92a40fe63d0cfff2f0be2025995f246d0841bd1cd218c2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0053-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "94037b2f47f6d4785141d61e31e506875a50e0cceaf52d5f028a591e00695de3",
+      "mapper_input_identities": [
+        "fd9fd017577aaca57188f79ad4b0f33caecac8a1759d3957a83f3df6596419a0"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0111-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9a166811816a9a237042072c34bcc42041412cf1c9921fbb50e7e0c0fcb239bf",
+      "mapper_input_identities": [
+        "9c70cf685fec49e8b98a0c7a395501fc6b10b1c3ff41b0a903236129cc2a2c71"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0193-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9c5ea69642b679fcf33d20a35753f6e393c3a421320395e88e645a0bd39b88cd",
+      "mapper_input_identities": [
+        "b2534d8b6e62aba2c9aafd71c5cb5dec4db1dd021e91f1f0b2cbe101886b5739"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0132-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9c68f4cb9f2104cbd2937accfde0c1c81c5e8e8983ca5a2466487f84ea12df48",
+      "mapper_input_identities": [
+        "2568154e25c354bd8e7e779d03010e13e04112c25d6c384014e37f72dc4e8b92"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0139-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9dbf0fb88c8ba3bf94fadbe70c2d142388be0e9c3d29663236b1a28424fcc7bb",
+      "mapper_input_identities": [
+        "2a54a3aad4801b4526b96f556333176deeab72b3a8ecf73989d982ad5367e41a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0093-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "9ee4de31491d8e47f2c8756823ba3aa65658c39ab9721e92c6ab7a0a57c25476",
+      "mapper_input_identities": [
+        "2c36a41544f3d4be18012993e32164802f90c0ea263f657b0f9b7f56584b7ff4"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0024-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a0354681eff43cb7c79a78e661479b19e10172251596cda932eb842dc0c59e4b",
+      "mapper_input_identities": [
+        "ad7c46813d241a609a8be40da0d4b92863ee8851c3271014920fdcdc52df0704"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0144-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a36ae5d7d704c6b667402d88a6077988018895c094b8daae5448ffa634c58fcb",
+      "mapper_input_identities": [
+        "1139177941de7c005b2d0926d88c7cac4d2ba50b3a43ad86f2c955c6d8798e8f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0070-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a3bad93dd413234177feaba63b761a986633d7fb500b445d33ec4b9490cebf37",
+      "mapper_input_identities": [
+        "18e5ba7029c05fd01d666f381189b424b507c58a490f97dcd53ad31c105294c8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0203-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a4adbbc0801bb74869cfb0c6d89f864ff9a0cc384468d3d484dc3fcff1b0faac",
+      "mapper_input_identities": [
+        "e25a5c96b20312d7a75c8633f1fd49f4581ffdef5efe600f11624622ca562605"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0029-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a51421488f8d9b20aff953a4359fc2f81b6e4beea55c715f261e92a88c8e86ec",
+      "mapper_input_identities": [
+        "aa859fbd1e6f41797ba49f2832acb41f76bfaff5eda082308bd2e03cf52a9bf8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0099-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a606f6381d13f91b09f6cf54d4d6b026c718d1535700ca94ceaf93ba8eb96aa6",
+      "mapper_input_identities": [
+        "eb1d13c0d8eb0be628977e8785cfa229666c97efbdeab43e074a126746a72a24"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0064-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a68cb0a8373ca6c115687684a9286e4a71f0355504431029dd77c86a75842029",
+      "mapper_input_identities": [
+        "7fd6360de7cfaff31eb9106bf3842656dab3de66f5e0ef9e6b2f923fe4f3e3f5"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0133-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a70f8c215ba2883b2e99da2a7b50b9566e85365dbf055c8bfc38803e8a561148",
+      "mapper_input_identities": [
+        "7d11d2efce7c6fca02aad1a8a473b2c38be4c153c9ee8c1d3ef7209897bd918f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0001-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a9c008bf7bd9020843e32a8241655ff6804679c2f7076438fad15646a256b0e5",
+      "mapper_input_identities": [
+        "523a8463827d64feee193a26259a2462f4e6ae7d136eed8f9be03042436b8dc9"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0165-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+      "mapper_input_identities": [
+        "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "aa61fa5db8434939d1d2c2c8fbbb4466c2d753e0e485d374fee572c386a6a195",
+      "mapper_input_identities": [
+        "62f136e9678bc638d29a0398c6cbac46254437a7efe744cff9f42a18d59d978b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0089-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "aaaf817dfa3d5734c55eb92e4b0eae8e0a96a0a9bfa86ec989f50b57632ecbeb",
+      "mapper_input_identities": [
+        "c079833e26748763712402ca34f8b2a5cc77c79d5551c24db0bbac11c8ff98a6"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0012-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ab9aefa2870df2dc3068ffe3de6f51770ffc78e972ae68759729075decf2561e",
+      "mapper_input_identities": [
+        "1d7ec768180c6ca4e8076418073836148d27d0a6b4dba6781473b457f84bd05e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0136-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "afa7547c3a612a14a96eeb56a96aa20f5276039f89386fb0794e92024d02169b",
+      "mapper_input_identities": [
+        "050cc1a2b5a4f03cce658f74d26bfb335f017f495904426ac7e52a87fbdc9fee",
+        "a4d92d6e93d30a47e877711fc188fdc548bf82c7bb8a5355efb551578094902e"
+      ],
+      "source_program_families": [
+        "global/relu"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b0b6652da868bf333be21fb41fa17e2c5a1f1029db5a9563973f4f7f5fcf268f",
+      "mapper_input_identities": [
+        "bf23f7430132f80ba856708b262cdbf5f98d96fc48c2e4437ae4ea215084e0e8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0226-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b1deabaa241d93503342763fc4c911f6180ebcbc888f8ee79204e0d483de490a",
+      "mapper_input_identities": [
+        "2b469ae5168988975e575c94a44295dda9c963b1c4fde8dc438e02308272d982"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0081-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b2816e4904a7f8a7cdf95923af794ed30ca903b92795de525bfd768a417bae74",
+      "mapper_input_identities": [
+        "d11cb7cfd1c95d07de27f1cf828bab9ec1258c31261dd20ff35cc8474b29c15e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0138-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 3,
+      "group_id": "b3a1b96e2a9e351a681f5de9a62288f0ebd8d57c33852951b444a54a211afffb",
+      "mapper_input_identities": [
+        "cb14b8045db0592ebe88374b4e69c4cb8bfaa37891e36402ebda7d8e368d75c8",
+        "cc3512f8e2449d4badeefd115c94683c271ce83c01713c378fa096aace2c9125",
+        "f4d1ae3e5cae867985a152d700921d81da99d4c815d4d1ca332acb4b4a49e323"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0084-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0096-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0234-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b4004ff19874b079834a72832ce29e005dd19380efdc7aeea473670d3b892d42",
+      "mapper_input_identities": [
+        "79f1f702f398e611b98601158eb05adf1cf987941c1b69c667e3318e9439993d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0026-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b49dc437840ca42995f721c12049651aaccd4b5558de1aaec2163fd40f585b53",
+      "mapper_input_identities": [
+        "ee2b07f1e67425573a5c161e58cbeec5902d8717b7457c036fa19fe7e9b68e5d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0060-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b79306c5ff91b1a8b3c79ea289911d6eeaa2a384dd41c9e55dc4f7c2c1ca94dc",
+      "mapper_input_identities": [
+        "0e747fcf1566e4f22529348efe489e499ad3a73fdc611085640299ccf8a48f64"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0101-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b837c951881df84279a74d000ff909c802573fe07d48e3e2535b1a82843a4ec2",
+      "mapper_input_identities": [
+        "07341795a726e9be591d84a6bc82ac018ff9064221462fc33171c216a53ac2c6"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0062-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b8c30f16e3ace283a926a7d24c2cd1fa987ae55ea09e37bd49c6806944954c3b",
+      "mapper_input_identities": [
+        "f8298c29f7c91123b336620de7129f6883c8e6694c40b4fe61e82e1c1ca03422"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0002-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "b9baa53b1217d8daa51b1db6bb647814a344cdba3cff280830796f01d4d9838f",
+      "mapper_input_identities": [
+        "9053220dc416a61dcc64f8ad4086da8f03155d116ad406d9fa29692428c4d8ba"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0207-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ba06f442ee461ed7c450901a067815ac14b9b9a4b0b01d10aee4f32da2ec9d56",
+      "mapper_input_identities": [
+        "8720db7a2442b1c8fee28851377d590d458f626c2d6c9ef69fd35d66b8b9a6b8"
+      ],
+      "source_program_families": [
+        "global/statistics",
+        "tacle/countnegative",
+        "upstream/mrtc"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "ba6ab38a7f389e930aa16767f14848d907cf6cf771a6e1c15c852c392c3443fe",
+      "mapper_input_identities": [
+        "30b0a251eb7527e46577826f933f66f305e24c28e0c9ee5bd0c5d63c5514b76b",
+        "740c36b36b30b85cf478f5c4bf10144b49ca695e24952b1d474460692a13489f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0090-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/compute/base-0153-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "bb5b4b898ac2542325925f0f431dd9a6f48ed552f7bd9cbf92dacb41b4c9352e",
+      "mapper_input_identities": [
+        "0a16a17c927294fd4149fd8e0a0f5d99ddfb24ebb3aad09a520600ff9f392930"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0144-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "bc6ac8863a53e5aa3ae251c6ed5a0b9c9d00bf8ae84246721fe1b7ae8d0ccf0d",
+      "mapper_input_identities": [
+        "b8bef51f8f30e5aa62e2ebc99fe6b30cb283dd343850676187b7bc44fc394ef5"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0152-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "bd364f97db237b2db3fdef2f436337a2295346f467c3152c8c5e300d74bbc43f",
+      "mapper_input_identities": [
+        "8bd36278e17f580a3375d3ae548abad85ad9be8e855fddd43acf06961cbf8b25"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0164-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 3,
+      "group_id": "be3405505da53b74e1c3a6320b653a1904f82651663fa6ba9a4df9be762e1d0e",
+      "mapper_input_identities": [
+        "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+        "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+        "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3"
+      ],
+      "source_program_families": [
+        "cgra-streaming/lu"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "bf5b78f6c296c1d7828e73865c9b5deedaf55f0a1fb217285a9c9e037634065e",
+      "mapper_input_identities": [
+        "4d2ffd4b344ea255d52719570764bf07f140cc03856f75223597eece14ccbcd1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0187-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c08233db766e46f48bee004407c440429c32f5a43a247648bb5aa76491267f98",
+      "mapper_input_identities": [
+        "0a64da85277d7431440d70a8bf9d62d61a0e2a0100e8624468c8af1c574037ad"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0213-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 8,
+      "group_id": "c18615385f03ec3fd0406eae7728a321b246298af47c843f935bae16f778ad61",
+      "mapper_input_identities": [
+        "12c4b613ef2499144320fd58f0f6b6b8eb4f08ea48527486689fad335cedb05e",
+        "275d4ae7787fd2e8f4787a91cc8368a1a43a9a1ffd1df2323231baa3a8be9ed3",
+        "2fa3567a6a1e2941f13898257c1cc7697642830d90d13220d9d23be9ac3d9215",
+        "8711916dc5158e4ab51e85558473151f567fde6bad52c3a98849455b3d973bef",
+        "8eb69b33b503a8497185a154f21f36a213999f5ac036f51bc310356a2af4bdad",
+        "9b01b830699119bcd0cebb721b99afb6e9a1075d1afd91816b8473719a69db6a",
+        "be2e9fa1e9301cd3d1af8075b4bc427e56a3d097f8faf9c844f158cd269ce320",
+        "da577fc7ac3e71bd48b7fd38cc52bb56b03f5ced551d28e2b2542dbd33184196"
+      ],
+      "source_program_families": [
+        "global/bicg",
+        "global/matvec",
+        "global/mvt",
+        "polybench/atax",
+        "polybench/bicg",
+        "polybench/gemver",
+        "polybench/gesummv",
+        "polybench/mvt"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c246703f522cea8050f62942a5da5513351515865cfbebf24acd2d3d49f633ec",
+      "mapper_input_identities": [
+        "54ece3451623644aebd857990cc17231f8c363b7d33b2be3f404e4bac076379c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0099-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c3d0b3cba8b2c11912162f5861216cdbe0df55244e1b4792ec8befd4a05c26d4",
+      "mapper_input_identities": [
+        "f709528b325fa556a2745e192cfdd02963c52eeac079d8f77e724355ce8301c6"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0126-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c59ac7c317a48d3853b90a06d11932fc8da807c05ba859866f0ad3c8e00ace04",
+      "mapper_input_identities": [
+        "a0dc1eaf055e490df29f06b4ae1443afe9810c51b16adaa303a697001af3245c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0026-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c7ad25e87e44bb66cc56afb81ef66373cea5a2c8545954598b38359c43e19190",
+      "mapper_input_identities": [
+        "1eaeb32a10f44742ed3f7a4b5a709f8f2975538ab4677d170a1698faa778a82b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0239-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c7af5f93812b29a84ff02b7431d7d07a541c32f4d5f2d4d9e06fb1acbb1965f4",
+      "mapper_input_identities": [
+        "1834d74fbb414e6dd00d01281bfbad36b932838a0ba1db5955d2161e7a257068"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0178-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "c7ffd7b904f7e84bbee2be08350165bd9f6a3e12e6af568d77cf16a8c32d73ac",
+      "mapper_input_identities": [
+        "97715de6dbe1008b86bbc8964b5d8aea02e83aba3a757937199f0b21558182f6",
+        "a62e281d33f75cd93e4d12e4b0f1a6079e26d2f50bbda4b8b7b374a0c439f71b"
+      ],
+      "source_program_families": [
+        "global/histogram"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c831d0c4a34c2aa0d6daa23ff27b9796dcfa28454af1c0dfd196da9e76d2cbce",
+      "mapper_input_identities": [
+        "bad76597dcb73e7bb67972c1fe06ffed3b20c60dc38917b4cac407a852c52f63"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0215-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c83becc1924777fd9cd56fc763f7f8d4333eee9c266e88d9038b4ba275562b58",
+      "mapper_input_identities": [
+        "f04fe2a5987b56943a320b88712b3d2a2b0d54700db41b2e7a18c1018a3e5e40"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0193-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c8937c56f01da8bd02a28d0c772143c8d243e6d1bf989408f9c467847f6faa0a",
+      "mapper_input_identities": [
+        "ecc606431d381f72801cc07844a072b30c81a01a96f9ec49cf027e29a893b32d"
+      ],
+      "source_program_families": [
+        "zeonica/axpy"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c91a5c3d706b8f050efa477bad681886e8cdbde8acc6f8c3e617936603257f3e",
+      "mapper_input_identities": [
+        "76b15e0310f6d4d470f8cc3f942432bd0196cf1191edaaec4264b84722dc585c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0165-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "c9be3fbee3df13afd3796ab0a710248464b6bbbb05b132f51405b2633ee95729",
+      "mapper_input_identities": [
+        "f65b4248708695719455b8c7c55f6007cecadf60f5388d06a25f26d51d9e7188"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0014-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cb90c38cdb5eabf03ca924dbcf4f100ee2e30448c30a83f6d14b2abe26036f19",
+      "mapper_input_identities": [
+        "b7db6c0c20b60ccee9934884ffa2ae013f5bbcbbefe3228f55719318a2855bc0"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0089-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cbf65a2154f986aed5bc8e816dd243a8858c2eaefd12503aeb6281398dcca3ee",
+      "mapper_input_identities": [
+        "c50d9cf33a428dca53feca0a7f8a7d788ad3b1ca4fd92ff193feb5ac51c888c1"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0174-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 53,
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "mapper_input_identities": [
+        "00666a90f8ad5c405a3cd87af1309abe77eefae8bcfec44dae0beb65735750be",
+        "00d353bdd8a50e86264fe25c2afb18453513ef4907b7cf68d95c581d1709543b",
+        "0100c42c52343494113baa97d65e1f56f20eecb94dc47e640085f957ffcb7165",
+        "03c60e5de6dbaa7caaa4483d35e82c08004d95a36d431e259c853fc73d8ddf64",
+        "065ab86c040820752a0afe1f3694d08f5238734b003fd3a53ab4b88cd5d90c6b",
+        "087606f342685552a2bc69e3192d607781d83e662da2272b32461fb7015515f6",
+        "15dccc1c6f100dfd34ff83bb63199d294d2cf89980082a2aec33f8d8eb3e6942",
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2631a899f19dcbfdee6bf31d2dec1937e8c4f798ea5bef39699a0da22e6f8913",
+        "26f4df9d27660b8066a55e20d15e58e51b991fb54b6778fe4a00d8e88d2b0f81",
+        "2a3ba96de30d1dd525d0826e2daaba954a266b2ef94b5160e69c3c123ddd5f15",
+        "2a6d33c1ab2ba6f2d3794080dfe16e317b402307b3da734667b07e3cac75a3d2",
+        "2cfc7b1c91a26635a95202d56a155c71620cdb51e920d7c43a5b64953d348a90",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "2e9e4dacdccc3e10ccade39c78d3f0572a56742b7346429b7685e9ed81941c2b",
+        "30dabe3383021ae8b2d15f914798284b763d60acb57c881a0b33009c9bdb3e6e",
+        "34d5cdf1a1154047d27f8866bc5dcb285235ef255ff0a0210cf9359642f01a10",
+        "39554d92e8fe7058154b267b22160cba785746c6dbd4df646ec7344217442e68",
+        "3a49f363ce72dd3b21ae3456c650de2d9b83be0733ddfc3dd890683271cb6866",
+        "3bf4135ed36b1ba85700e7549dff1e23525055decb7e620fd589dd164086058c",
+        "3cc2c0804991b93573d0759c32e0b11532d5a3c54a04a5bebd4f5c0f734fdf1c",
+        "3f924a7fe81b4b8d5c8d7a16fe4d09b4a969d5f6393f0a798f84a88010bbedfa",
+        "481b94de07ffb09e33ea2f62decd7f990e00982600ec1065c508251dabfc7efc",
+        "4c1aaf17347d02a80ae46e2ff88e626131c8f16182d658c9fe2b8f6b0cba62ab",
+        "54aa031aa939fb828ffcb8579fb8e70be962b5f34628005961d2dd6f41857ff8",
+        "5c8397db314d3c5bb83611041df0bb0dacb916d9a9cb9bafb2700d5cfa43ffcc",
+        "651f848bf425b483326ece2768258b9ef785bc0f44020d547c69741c13292650",
+        "7bcd0e0ce5f7c2e421d500392a0383f425b6cf74e420a34a43bb53c6b658e90a",
+        "7fce3c2d74767aab60eb193cca30e159283da54e45996b8373c4494678a0569e",
+        "89fe972efefba30e76291f4fce3a5cb46d1b6b768d46f22492a30d3a9c49a2e8",
+        "8f721b023bb835260a23ad7ba2bc5c908f08d8b79a60b8c320312601384520a1",
+        "945a9fa699f04211b10fe742e872fb2a2bcfee7ece1375d14948a4cdde6060ce",
+        "950e5cc80e0f5dc6928148a614b8326bd7aa9ffcf9ddb6ce5a3c5676a82df815",
+        "992d7d4bfaef5b18c2e036a9e1f6cba884bee172a1c8d8cd1d94a41edd32a315",
+        "a2665e85e52c49f929f79cfa0ced2012c2fabe507d952bff3627aed8e0089840",
+        "b6a83424f7f233f0619d1f90ffd0a6fbe9734d1fef4f17d4090455b4bcb67839",
+        "b88dd3a468e245de43dd0e447a1b22dcf673f906628e23a63f6d32cdef1bf162",
+        "bd14abd661facd343ff86b156dc3b2588ca6005ce678509030e8a2f3d62d1653",
+        "c076b653f854d0b66778b44b3520380122df569c55055ff8d6e40dd14d491b89",
+        "c397700cd5dede2c5a6a72eda2b12daf3ecddfb05618d4eaa54b996b5728eb8f",
+        "cf5dc2155975bdda9a86f50609d4d4a3781e02848454ef0fa8837d4181dacd92",
+        "d05b76ab2fe76b6101c7d251ccc13c394e04f9bde7cd1d04ff9ce05ced0f5131",
+        "d0962693245e36be1b71811782e452d99cfbd1f5b80457862d3b86e02887391d",
+        "d48488a7070a72cba3d305f503e6e196873f7fd9ddc0db6056f92da9f83a5008",
+        "d570c998921e8a5480bc922a87ee073d41c391653c04c96324beea4ca15825b2",
+        "d653fd654af44e04e4fd77f21d9a653b0a0246a24f927b9bf4c4a724470cbd39",
+        "e22ec4b9c34c30b50fc8fba763e20e56813a6d8d14573f64b01dccfbf3fa41d9",
+        "e32ae7f2b58c9f27d5a5cfad64df6a99d93bdb7a6d93bef26cc05313051f3e68",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b",
+        "f5eda55cde91f34fb145c6d02fc2de70946a1098a64b29a34ad7cec5284fcf93",
+        "f7b2ffafb301ec9fa5f359b7aee4d80fbe92cec1f6a3477c23b6db0f1f140e0e",
+        "fccd621dd5fe2bc5273fa720b29b211eee058d14d7916f40d91bb2f8a4bc429a"
+      ],
+      "source_program_families": [
+        "kernelbench/case-001",
+        "kernelbench/case-002",
+        "kernelbench/case-003",
+        "kernelbench/case-004",
+        "kernelbench/case-006",
+        "kernelbench/case-007",
+        "kernelbench/case-008",
+        "kernelbench/case-009",
+        "kernelbench/case-010",
+        "kernelbench/case-011",
+        "kernelbench/case-013",
+        "kernelbench/case-016",
+        "kernelbench/case-017",
+        "kernelbench/case-018",
+        "kernelbench/case-020",
+        "kernelbench/case-041",
+        "kernelbench/case-042",
+        "kernelbench/case-043",
+        "kernelbench/case-044",
+        "kernelbench/case-045",
+        "kernelbench/case-046",
+        "kernelbench/case-047",
+        "kernelbench/case-048",
+        "kernelbench/case-049",
+        "kernelbench/case-050",
+        "kernelbench/case-053",
+        "kernelbench/case-054",
+        "kernelbench/case-056",
+        "kernelbench/case-058",
+        "kernelbench/case-059",
+        "kernelbench/case-060",
+        "kernelbench/case-062",
+        "kernelbench/case-066",
+        "kernelbench/case-072",
+        "kernelbench/case-073",
+        "kernelbench/case-075",
+        "kernelbench/case-077",
+        "kernelbench/case-078",
+        "kernelbench/case-079",
+        "kernelbench/case-080",
+        "kernelbench/case-081"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cd52e3be0612ed35c028909edf191eec9c39bddb108c165ffd44f4e20ca7c682",
+      "mapper_input_identities": [
+        "f20da82bf579829acc583e303da9f9ab79921b6db6cd0baa9b92106e758f33f2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0087-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cd68c88895205c3fb82b15a4106340064fe00e5a0eaf0da361a97b378f2e2dee",
+      "mapper_input_identities": [
+        "77044a43d241cbf15f2966c028798c356ab9d6875ac392ddfa6981dab9e9a471"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0164-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cd8f5610079d97ca0cd7fdf72afe4ace6f74de32f4edbc82e5f1844bcf7c07c1",
+      "mapper_input_identities": [
+        "2561a17e1b77c16625e2ea3b8018bf0128abbe95d05cd8dc1fac50ccc3d60bc3"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0183-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ce00bd737dd2b9c1e15ded3a82145a2360647273dbeda6609fa7f66c993434bb",
+      "mapper_input_identities": [
+        "9840df385a67ac23680d629d9726548a67b1c85f8925cc5417dc9fa6186ecaab"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0166-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ce624e64c59846bc711d3556b070937a587bba97004e69c67717b9d0bce66a22",
+      "mapper_input_identities": [
+        "c79c9a4bb59d11a6b1e085aebbf93ed790e3dc35bce2ea900363eb863c2a6d9c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0156-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ceac0228a5eb9f43d3e027e5f37edee434a400e6bf71ca2d75f0095de496561a",
+      "mapper_input_identities": [
+        "995fa4b851bc194cef34355bb4bb507605685258873ca2149caa55ef97f3560a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0210-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cec195f1bba4cd5ee1f1a389f2c3c5c20be700f6c0f34211c5cd0cd74d0a9f94",
+      "mapper_input_identities": [
+        "c7ef9b9edd3ba3fc298ccdd0a11a5004a928ef14a5315b3a432cee524c58d99c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0075-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cf0bebc6518f3131bc8010830676dea959491f64830bb354f84816ed90118a38",
+      "mapper_input_identities": [
+        "f9effe1a5e1775cde9dfcc8413bcffbb928b9983b9439974627d4a98705eef09"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0245-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cf1080faeb9b2de6458c4333cf95f8fd7f7179fee6da094371f6d42770655094",
+      "mapper_input_identities": [
+        "ad11debad9ed63dc5e93e06604becb07fd57a04acfbcd0a89875f27f5181c3e2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0196-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "cf8a4b9456efc643b435c4fbca20a7ae74dbea92a5de1261adb36513c7b007be",
+      "mapper_input_identities": [
+        "e423facca56f2ff9e03ac185a96ecd2f3ad4d9f533a8355f73e7de2daec258ce"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0042-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d1c7274cd8f0861740eb195dded16633919e9793362b369fe37443731efc5ff8",
+      "mapper_input_identities": [
+        "911d6d44c6691cecbb64bd22c942d0de2433f5cfe7660bd9f3a53148ed0b247b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0069-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d4843a0e34055e20ef32efd5e86d80ae35ff320979e98154a60f8f01c60173ff",
+      "mapper_input_identities": [
+        "e79f039ff5428985b90d4ab1593eff36dad7b9c5880a74d2259369e14bcff0d7"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0214-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d48f2a687394414439ad931b3d041223916be1b3480265b8955571e1d71d37d0",
+      "mapper_input_identities": [
+        "cfa9db41d2541ec4e7e275dd8421684929436a2d11ba20a390991ac951a665fd"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0168-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d4c5f47565ec8293dad74e80ba64a9100ff031ea96d7e44138babbecc2cf51b3",
+      "mapper_input_identities": [
+        "f12b60d77303e09c561a5a0683f0dd1331a7df78321ce3535874d5f5a955d0bf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0113-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d619addc6d41cb81993af930a42d09e791c9e48214a6471117cde40ff1286c1e",
+      "mapper_input_identities": [
+        "ea9993acde7e3e2857bb7d70bcde946dfe51a1070379fb76ecc0cd7850bbd08b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0165-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d6732738f5c9960a9de9b4ba39b08f73250adb27e86e1fe859a08d9d8f558d84",
+      "mapper_input_identities": [
+        "fda27d0d384fef12054ecf328c5b05d3866f5608c902555f398377568bdcda6e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0066-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d6b127f882e6e523af05b17aa494cbbfa5deeacbb84d131933a40c8ff58c7fde",
+      "mapper_input_identities": [
+        "6cfee59aeef223c08154af3557282e29fa9e9b2d802eb7584a97cd196e00426b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0036-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d733569a1107b688aaa9a1ae55d04233310a236706d5c33547eb3760605081d5",
+      "mapper_input_identities": [
+        "3972030536e02792cfdb9430ca2315bd21b1b5ffc050ab2a559ea2c61b2515b5"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0113-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d7e75b350e7a1a9eed8a323aca590ce65b4fd77a539f800f5b873c46b5f2ce51",
+      "mapper_input_identities": [
+        "eb5d8abf0c02c24993ce104b91db5c98807851fcea900335859895cd1fe9fbaf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0041-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 4,
+      "group_id": "d7fccb036f63b9148851d78b2fef3109d0521a45f4349dd49d9ce5db31094c3f",
+      "mapper_input_identities": [
+        "04745268285e7501877edb121b4e46ad6cf627ba24b2d64ffb9dc206a20b7aa6",
+        "38fd5d701d29c65ffe47e3299385f3ba6c68d59f25ae28d7b5117ffb67e377f8",
+        "42d0a5bb2caa3dcc3046ba3b8bf0021af4493e9e0cc16c5fa88b9fc025a5acf5",
+        "6334d024e82ffe2469282a82631dc69a8dac71cca88a5934e318471d6bb8983e"
+      ],
+      "source_program_families": [
+        "global/complex-arithmetic",
+        "global/filter",
+        "tacle/complex_updates",
+        "tacle/iir",
+        "upstream/dspstone"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "d947c23fb09d43b2e769a4ec3e8068ef816e47c8b115772a1ff18c2327d57dec",
+      "mapper_input_identities": [
+        "35c0abdb4523ac311ed76f6a431c59bd5c1d18cbb8cc9cc83374ebeced712606"
+      ],
+      "source_program_families": [
+        "global/fir"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "da85381f5c5c3ed9ba8993807177895f3ae0259027772b4380c30e2c98bcbe94",
+      "mapper_input_identities": [
+        "6251eb262aed4b08b85d6c71544c9509a73f60c301a65c27ed9168492cfed341"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0051-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "db62445cac3a76742e99218e1f84c2c6acd388da2e57a38fc1201bb44e73e26e",
+      "mapper_input_identities": [
+        "90f3cb9d36aab2567f10aa8a25b675c008851c33da5da2ea1bfa34878a17395a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0241-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "dc4f42a982409920b32fe7caec79a61be739ebab598b1941109f21215147c732",
+      "mapper_input_identities": [
+        "24ec15c1c68feb39c61cb8984c02553cb447ed3c2260643764aac737f733ec7c",
+        "e807f5634cfc1406893f0e938ce88667fa342acff895b0a646296182643b1660"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0000-rp20260911",
+        "random-dfg/lineage/generated/motif-v8/compute/base-0051-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+      "mapper_input_identities": [
+        "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "dfd52587807bea59d27fad703684f8a9b2a87afc35a42f74e42af05b9f44ab2b",
+      "mapper_input_identities": [
+        "4166ae61937b6526c3c8d44e22443303b30369aaad9067020615772e7dba81cf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0099-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e0fb78acf61044d6223c7b7254e72a8fe7ee2bd0baf69d58a035686f79578fd5",
+      "mapper_input_identities": [
+        "16ea35e4c69622df50f718e30bea5216126f7de6db32280c33459a729409699c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0112-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e132b7b90e16b8a888ef75ecbb9e529622b63bd41458253baa91083dda27dfa5",
+      "mapper_input_identities": [
+        "7d369ee70bba1f0eb5ba2d7dfc4825fd649d7d6d0c09e49fae7f490db0b6c3cf"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/mixed/base-0129-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e2d0ddcc82a1e2e28c57e37303f1884c562c59f2f4697b3880475e263c0a9784",
+      "mapper_input_identities": [
+        "e8a0254b39a4ef0650c3488407de07a23cf344ef665cdb4e5e2c02ecd22cbc1e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0125-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 2,
+      "group_id": "e35fc5c2e2a3167c69685980c401fd6e770271cbdea33a02bb1d41b022925f2f",
+      "mapper_input_identities": [
+        "b9fbe3accfbff50245092a04c218d8599fa3462d0305eb29520b616fd0839199",
+        "e53d95ce10fa5da53468f4bd8d76d7bac516d104060c80b78707351ca8fcf2dc"
+      ],
+      "source_program_families": [
+        "global/gnn-neighbor-gather",
+        "global/gnn-pooling",
+        "upstream/gnnbuilder"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e40e27ef14a7650d8f3bec6147b499368432613d54ae670dd716ac227dc3fdd4",
+      "mapper_input_identities": [
+        "69c42b089380fcb920fdc3792aa4820b09ce9e2c93c323066969d2fce034fb48"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0114-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e5b4f9d49c33c71c886150f3b16601c492a52b0ffb1c8c724385460713584735",
+      "mapper_input_identities": [
+        "b308f9f857aca69430b5e40282b560397a3817dba38dbc68790719a251657887"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0233-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e77fe0a60d8420ccdc1072eb526ea8e6d15e950a35880264ce15d40d9bf00b58",
+      "mapper_input_identities": [
+        "90361e3c4e4cb59443ec7a10945a2fc26dfcd8b8356bf45680046ef268977d8f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0231-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e8bbad67d6d2490adb34f9831960ad7396d6e9e550d685ac68e78dbf08641ae9",
+      "mapper_input_identities": [
+        "a1116344ea17aa14848b0d3740724a649a38be17af689f1a2cbc1bf775e0f32c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0099-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "e942b4a173e1c87630f2151729b8a5b903d91ca5b7dee308618449634a8ff1ca",
+      "mapper_input_identities": [
+        "6b22a1456190c2e5821c3bbeaa386d3f0d34af06c041de01ff382dd3d53ce690"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0027-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ebf8a96fb8dfefb069974a32059ae4fbec0ff9ede98ccc704d3642067afaa14f",
+      "mapper_input_identities": [
+        "3d7675e56b29ebc9c9bf19cb07e4397342a6e4b9523f1c863debde00ba7090c8"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0101-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ed863530bac3cf8dcd8c4feabb8e25c75f4f227a5ebf893b7cc46ffd16af4015",
+      "mapper_input_identities": [
+        "27e47e7d84d69cd28f0d6248d19d871c2ef51cae428f04a177ff2ec0c71dc08b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0041-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "eddd7e5a54059cfe0ec63fd21123a25ed9eb6c78547370643ba8a6a5c86d6dbd",
+      "mapper_input_identities": [
+        "e98a7431caf09e3eca6139113c443d4ba47762e95181b49aea4d57f17135cce9"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0026-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "eee29bda10d87bcb3bc4bb54167752fc38e98448cf4950584edb13d8917ee4d8",
+      "mapper_input_identities": [
+        "ea5bc1364c8c4a2d42cb52ce328b8be8e26d9ebf643d0a6b7e11d845b052945f"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0174-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "eee6bb5eaa29a83bef26b6b8222c73d697f5349d479d531f022321dd93835f90",
+      "mapper_input_identities": [
+        "b729e05bc20b0cdbbe37604f74a6828c38e9e3f43ddb4091592297a21f79f009"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0208-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ef1b79791503f94c05f90218a16c4813842c32bc68ec6dab9c675e9d23d81266",
+      "mapper_input_identities": [
+        "3402085b4630e1f3384a62250e0b831bdc204e2075a6f849acd394076d04734e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0013-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "efd121fe0c3f07d7f6c2950556a21eb3f187db3acd2597e84418a945ababc8c6",
+      "mapper_input_identities": [
+        "f88bc527e87009f5efb975119069b3e4af5ab2fc791fd0e967eafb8fbc94832c"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/memory/base-0169-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f1aff79e8d2fc2e2edad14315209fbb924163ce9165e0da1caeea7b6d4ba8f00",
+      "mapper_input_identities": [
+        "4a2d7720b062b6672c9b3ced8f03883f3340c49425ee94fa26fdf4a307d6c44a"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0111-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f2125d191d0d322623abdcb6187a7876e381a6768b59f42128ec301036bc24ee",
+      "mapper_input_identities": [
+        "5d0096e912bff70932103a762212208125c006ec09a8eaf00304df765cc81b3d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0112-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+      "mapper_input_identities": [
+        "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f597fac6afd5d8fe22632245927d5558fe9a7c138d2af8edb7620d49cc7573e0",
+      "mapper_input_identities": [
+        "ec7c78630b79d28260544677f42eaed701767fb9bbbe8748fb13a417d329ef00"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/pointer/base-0003-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f739e2b6fdf98a30199185656af58e5f82b76811e82cebe9d57967953b97af6e",
+      "mapper_input_identities": [
+        "ef49f386693b11481ceb24fdad7464fbac0f5e738f19126d1a4b17647a7d4997"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0057-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "f7762824036ce0afc063e39b1d0981410fa80b841c7412f57a3e4bb922409e8e",
+      "mapper_input_identities": [
+        "df9d3e7863d6a0e3a4a11bab15663293f5d50fa11982e74f432e01151b25d49e"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0138-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "fa4dc2047bb247d7c3825c4fe5fa8790f880fd745ac06ce91fd134eacb22dd42",
+      "mapper_input_identities": [
+        "7f6f0a023b7c500e3cb12b16c2c231fcb015a855947ae5503bbea60f07a83402"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0180-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "fbbd2281a357771041f2e84025ee5f16b980067c29956c4a41289bd87e3577be",
+      "mapper_input_identities": [
+        "7cd71bdc9fe47bebf3cea22324414a2919e97029a10e5bab28a7aa5434ae110d"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0210-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "fbc1e9c64f0ec45901501d570de6ecf45cd92ad269a1dd8b9c72cc2a11f7d9c2",
+      "mapper_input_identities": [
+        "d01522a094d781659283c45cd870dec646e3ed95eab55a2cfea08477420553a2"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0062-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "fc75374b699010c6c4e4d213364a9253af5b70e7ed677f0cb77b66a64b8051e2",
+      "mapper_input_identities": [
+        "64d1a78ca74689d85844f3a31f9b18fb5af8f03b83736572f9fd35782af2e645"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0156-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "fcf662933d285cf7f74a9741a66624906ff92e0a0a2ef499e4518adc132ba23c",
+      "mapper_input_identities": [
+        "43f48ac039fbec74b12672b6978e3a0087d9fabc7dea34d76a1cdfaa1b7a9977"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/predicated/base-0141-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ff4b0720e903aefd23f49a433e4f8259e923cd0a22bd67046a8ee9d38711ecda",
+      "mapper_input_identities": [
+        "58fe01806fa0cf813025be33d489c83552bb45bba56e2c017aaa9b45b52348a7"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/compute/base-0235-rp20260911"
+      ]
+    },
+    {
+      "complete_nine_query_count": 1,
+      "group_id": "ff6fef476424b35d36fdaee9d81c0beae0d73748870d7a58c2e12d51cee15d7d",
+      "mapper_input_identities": [
+        "fc127d2e53dad65c5f7ea64ad36ffeaf180cd2730f8dbb46be6b97bd38e32b7b"
+      ],
+      "source_program_families": [
+        "random-dfg/lineage/generated/motif-v8/recurrence/base-0188-rp20260911"
+      ]
+    }
+  ],
+  "manifest_sha256": "9c5b4bb1d52969b70dcad9dd7b4946a7631d23d6463051bbc5039fa5e0bf6991",
+  "schema": "cgra-ii-nine-shape-groups-v1"
+}

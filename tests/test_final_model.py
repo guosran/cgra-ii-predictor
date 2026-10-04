@@ -6,14 +6,11 @@ import zipfile
 
 import torch
 
+from adapters.amoeba_cost_catalog import load_mapper_model
 from cgra_ii_predictor.dfg import parse_neura_route_expanded_dfg
 from cgra_ii_predictor.mapper_model import (
-    DirectMapperIIModel,
-    MAPPER_FEATURE_NAMES,
-    MapperModelConfig,
     mapper_feature_vector,
 )
-from cgra_ii_predictor.shape_protocol import SHAPE_PROTOCOL
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,11 +50,14 @@ def test_final_model_strict_load_and_all_shapes():
         MODEL_DIR / "mapper.pt", map_location="cpu", weights_only=False,
     )
     assert artifact["schema"] == "cgra-ii-direct-mapper-model"
-    assert artifact["feature_names"] == list(MAPPER_FEATURE_NAMES)
-    config = MapperModelConfig(**artifact["config"]).validate()
-    model = DirectMapperIIModel(config)
-    model.load_state_dict(artifact["state_dict"], strict=True)
-    model.eval()
+    assert len(artifact["feature_names"]) == 112
+    model, config, loader_metadata = load_mapper_model(
+        MODEL_DIR / "mapper.pt", torch.device("cpu"),
+    )
+    assert list(config.enabled_feature_names) == artifact["feature_names"]
+    shapes = [tuple(shape) for shape in loader_metadata["supported_mapper_shapes"]]
+    assert len(shapes) == 8
+    assert all(rows * columns <= 64 for rows, columns in shapes)
     graph = parse_neura_route_expanded_dfg('''
         %0 = "neura.constant"() : () -> !neura.data<i32, i1>
         %1 = "neura.data_mov"(%0) : (!neura.data<i32, i1>) -> !neura.data<i32, i1>
@@ -65,12 +65,12 @@ def test_final_model_strict_load_and_all_shapes():
     ''')
     features = torch.tensor([
         mapper_feature_vector(graph, rows, columns, 1, 1, 1)
-        for rows, columns in SHAPE_PROTOCOL.mapper_shapes
+        for rows, columns in shapes
     ])
-    lower_bound = torch.ones(len(SHAPE_PROTOCOL.mapper_shapes))
+    lower_bound = torch.ones(len(shapes))
     with torch.inference_mode():
         prediction = model(features, lower_bound)
-    assert prediction.shape == (len(SHAPE_PROTOCOL.mapper_shapes),)
+    assert prediction.shape == (len(shapes),)
     assert torch.isfinite(prediction).all()
     assert torch.all(prediction >= lower_bound)
     assert torch.all(prediction <= config.mapper_ii_ceiling)

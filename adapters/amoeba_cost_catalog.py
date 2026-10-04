@@ -38,12 +38,16 @@ from amoeba_protocol import (  # noqa: E402
     SPATIAL_CAPACITY_POLICY,
 )
 from cgra_ii_predictor.dfg import (  # noqa: E402
-    parse_neura_route_expanded_dfg,
+    require_neura_route_expanded_dfg,
 )
 from cgra_ii_predictor.mapper_model import (  # noqa: E402
+    CategoricalMapperIIModel,
+    DirectMapperIIEnsemble,
     DirectMapperIIModel,
+    RidgeMapperIIModel,
     MAPPER_FEATURE_NAMES,
     MapperModelConfig,
+    mapper_feature_names,
     mapper_feature_vector,
 )
 from cgra_ii_predictor.shape_protocol import (  # noqa: E402
@@ -56,6 +60,9 @@ from cgra_ii_predictor.shape_protocol import (  # noqa: E402
 ANALYTICAL_INPUT_SCHEMA = "cgra-ii-amoeba-query-features"
 ADAPTER_FEATURE_SCHEMA = "cgra-ii-amoeba-direct-mapper-features"
 CHECKPOINT_SCHEMA = "cgra-ii-direct-mapper-model"
+CATEGORICAL_CHECKPOINT_SCHEMA = "cgra-ii-categorical-mapper-model"
+RIDGE_CHECKPOINT_SCHEMA = "cgra-ii-ridge-mapper-model"
+ENSEMBLE_CHECKPOINT_SCHEMA = "cgra-ii-direct-mapper-ensemble"
 FINAL_MODEL_DIR = PROJECT_ROOT / "models" / "final"
 DEFAULT_MODEL = FINAL_MODEL_DIR / "mapper.pt"
 
@@ -474,34 +481,199 @@ def parse_task_paths(values: Iterable[str]) -> Dict[str, Path]:
 
 def load_mapper_model(
     path: Path, device: torch.device,
-) -> Tuple[DirectMapperIIModel, MapperModelConfig, Dict[str, Any]]:
+) -> Tuple[torch.nn.Module, MapperModelConfig, Dict[str, Any]]:
     """Strictly load the one fixed-heuristic mapper surrogate."""
     artifact = torch.load(path, map_location=device, weights_only=False)
-    if not isinstance(artifact, Mapping) or artifact.get("schema") != (
-        CHECKPOINT_SCHEMA
-    ):
+    if not isinstance(artifact, Mapping) or artifact.get("schema") not in {
+        CHECKPOINT_SCHEMA, CATEGORICAL_CHECKPOINT_SCHEMA,
+        RIDGE_CHECKPOINT_SCHEMA, ENSEMBLE_CHECKPOINT_SCHEMA,
+    }:
         raise ValueError("mapper checkpoint has an unsupported schema")
-    if artifact.get("feature_names") != list(MAPPER_FEATURE_NAMES):
-        raise ValueError("mapper checkpoint feature contract mismatch")
+    checkpoint_features = artifact.get("feature_names")
     raw_config = _object(artifact.get("config"), "mapper model config")
+    feature_names = mapper_feature_names(
+        raw_config.get("shape_protocol", SHAPE_PROTOCOL_ID)
+    )
+    ridge = artifact["schema"] == RIDGE_CHECKPOINT_SCHEMA
+    ensemble = artifact["schema"] == ENSEMBLE_CHECKPOINT_SCHEMA
+    legacy_features = checkpoint_features != list(feature_names)
+    if legacy_features:
+        if (ridge or ensemble or
+                raw_config.get("shape_protocol", SHAPE_PROTOCOL_ID) != SHAPE_PROTOCOL_ID):
+            raise ValueError(
+                "ridge and ensemble checkpoints require the current feature contract"
+            )
+        # The deployed 112-feature checkpoint predates the current 156-feature
+        # training contract. Embed its original normalization and input layer
+        # without changing any learned weight or allowing arbitrary reordering.
+        if (not isinstance(checkpoint_features, list) or
+                len(checkpoint_features) != 112 or
+                len(set(checkpoint_features)) != 112 or
+                checkpoint_features != [name for name in MAPPER_FEATURE_NAMES
+                                        if name in checkpoint_features]):
+            raise ValueError("mapper checkpoint feature contract mismatch")
+    if legacy_features:
+        if "enabled_feature_names" in raw_config:
+            raise ValueError("legacy checkpoint has an unexpected feature mask")
+        raw_config = {**raw_config, "enabled_feature_names": checkpoint_features}
     config = MapperModelConfig(**raw_config).validate()
-    model = DirectMapperIIModel(config).to(device)
-    model.load_state_dict(artifact["state_dict"], strict=True)
+    categorical = artifact["schema"] == CATEGORICAL_CHECKPOINT_SCHEMA
+    expected_output_mode = "categorical" if categorical else "continuous"
+    if artifact.get("output_mode", expected_output_mode) != expected_output_mode:
+        raise ValueError("mapper checkpoint output mode is inconsistent")
+    if ensemble:
+        member_count = _positive_integer(
+            artifact.get("ensemble_member_count"), "ensemble member count",
+        )
+        if member_count < 2:
+            raise ValueError("ensemble requires at least two members")
+        if artifact.get("ensemble_reduction") != "arithmetic_mean":
+            raise ValueError("ensemble reduction must be arithmetic_mean")
+    model = (
+        RidgeMapperIIModel(config) if ridge else
+        CategoricalMapperIIModel(config) if categorical else
+        DirectMapperIIEnsemble(member_count, config) if ensemble else
+        DirectMapperIIModel(config)
+    ).to(device)
+    state_dict = artifact["state_dict"]
+    if ridge:
+        required = model.state_dict()
+        if (not isinstance(state_dict, Mapping) or
+                set(state_dict) != set(required)):
+            raise ValueError("ridge checkpoint state keys are invalid")
+        for key, expected in required.items():
+            value = state_dict[key]
+            if (not isinstance(value, torch.Tensor) or
+                    value.shape != expected.shape or
+                    value.dtype != torch.float64 or
+                    not torch.isfinite(value).all()):
+                raise ValueError(f"ridge checkpoint {key} is invalid")
+        if not torch.all(state_dict["feature_scale"] > 0):
+            raise ValueError("ridge checkpoint feature scales must be positive")
+    if ensemble:
+        required = model.state_dict()
+        if (not isinstance(state_dict, Mapping) or
+                set(state_dict) != set(required)):
+            raise ValueError("ensemble checkpoint state keys are invalid")
+        for key, expected in required.items():
+            value = state_dict[key]
+            if (not isinstance(value, torch.Tensor) or
+                    value.shape != expected.shape or
+                    value.dtype != expected.dtype or
+                    not torch.isfinite(value).all()):
+                raise ValueError(f"ensemble checkpoint {key} is invalid")
+        for index in range(member_count):
+            if not torch.all(state_dict[f"members.{index}.feature_scale"] > 0):
+                raise ValueError("ensemble feature scales must be positive")
+    if legacy_features:
+        state_dict = dict(state_dict)
+        for key, fill in (("feature_mean", 0.0), ("feature_scale", 1.0)):
+            original = state_dict[key]
+            if original.shape != (112,):
+                raise ValueError("legacy checkpoint normalization width mismatch")
+            expanded = torch.full((len(MAPPER_FEATURE_NAMES),), fill,
+                                  dtype=original.dtype, device=original.device)
+            positions = {name: index for index, name in enumerate(MAPPER_FEATURE_NAMES)}
+            for index, name in enumerate(checkpoint_features):
+                expanded[positions[name]] = original[index]
+            state_dict[key] = expanded
+    model.load_state_dict(state_dict, strict=True)
     model.eval()
     architecture = _sha256_string(
         artifact.get("architecture_sha256"), "training architecture SHA-256",
     )
+    raw_supported = artifact.get("supported_architecture_sha256", [architecture])
+    if not isinstance(raw_supported, list) or not raw_supported:
+        raise ValueError("mapper checkpoint architecture allowlist is invalid")
+    supported = [
+        _sha256_string(value, "supported architecture SHA-256")
+        for value in raw_supported
+    ]
+    if architecture not in supported or len(set(supported)) != len(supported):
+        raise ValueError("mapper checkpoint architecture allowlist is inconsistent")
+    compatibility_rule = artifact.get(
+        "architecture_compatibility_rule", "exact_architecture_sha256",
+    )
+    if not isinstance(compatibility_rule, str) or not compatibility_rule:
+        raise ValueError("mapper checkpoint compatibility rule is invalid")
+    architecture_contract = {
+        "training_architecture_sha256": architecture,
+        "supported_architecture_sha256": supported,
+        "compatibility_rule": compatibility_rule,
+    }
+    raw_shapes = artifact.get("supported_mapper_shapes")
+    if raw_shapes is None:
+        supported_shapes = list(get_shape_protocol(
+            config.shape_protocol).mapper_shapes)
+        if legacy_features:
+            # The original checkpoint only observed its eight shape features.
+            supported_shapes = [
+                shape for shape in supported_shapes
+                if f"shape_{shape[0]}x{shape[1]}" in checkpoint_features
+            ]
+    else:
+        if not isinstance(raw_shapes, list) or not raw_shapes:
+            raise ValueError("supported mapper shapes must be a nonempty list")
+        supported_shapes = []
+        protocol_shapes = set(get_shape_protocol(config.shape_protocol).mapper_shapes)
+        for raw_shape in raw_shapes:
+            if (not isinstance(raw_shape, (list, tuple)) or len(raw_shape) != 2):
+                raise ValueError("supported mapper shape must contain rows and cols")
+            shape = (
+                _positive_integer(raw_shape[0], "supported mapper rows"),
+                _positive_integer(raw_shape[1], "supported mapper cols"),
+            )
+            if shape not in protocol_shapes or shape in supported_shapes:
+                raise ValueError("supported mapper shape is invalid or duplicated")
+            supported_shapes.append(shape)
     return model, config, {
+        "contract_id": (
+            "cgra-ii-architecture-" +
+            canonical_json_sha256(architecture_contract)[:24]
+        ),
         "sha256": sha256_file(path),
         "training_manifest_sha256": _sha256_string(
             artifact.get("training_manifest_sha256"),
             "training manifest SHA-256",
         ),
         "training_architecture_sha256": architecture,
-        "supported_architecture_sha256": [architecture],
-        "compatibility_rule": "exact_architecture_sha256",
+        "supported_architecture_sha256": supported,
+        "compatibility_rule": compatibility_rule,
         "config_sha256": canonical_json_sha256(config.to_dict()),
+        "output_mode": expected_output_mode,
+        "deployment_readout": artifact.get(
+            "deployment_readout",
+            "argmax_integer_residual_class" if categorical
+            else "bounded_continuous_regression",
+        ),
+        "ranking_readout": artifact.get(
+            "ranking_readout",
+            "probability_weighted_expected_ii" if categorical
+            else "bounded_continuous_regression",
+        ),
+        "supported_mapper_shapes": [list(shape) for shape in supported_shapes],
     }
+
+
+def predict_mapper_ii(
+    model: torch.nn.Module, features: torch.Tensor,
+    lower_bounds: torch.Tensor, readout: str = "auto",
+) -> Tuple[torch.Tensor, str]:
+    """Apply a checkpoint's continuous or categorical deployment readout."""
+    if readout not in {"auto", "expected", "label"}:
+        raise ValueError("mapper II readout must be auto, expected, or label")
+    if isinstance(model, CategoricalMapperIIModel):
+        effective = "label" if readout == "auto" else readout
+        values = (
+            model.predict_label(features, lower_bounds)
+            if effective == "label" else model(features, lower_bounds)
+        )
+        return values, effective
+    if readout == "label":
+        raise ValueError(
+            "integer label readout requires a categorical mapper checkpoint"
+        )
+    return model(features, lower_bounds), "continuous"
 
 
 def validate_model_architecture(
@@ -517,6 +689,7 @@ def validate_model_architecture(
 def generate_catalog(
     candidate_manifest: Path, analytical_input: Path,
     task_paths: Mapping[str, Path], model_path: Path, device: torch.device,
+    ii_readout: str = "auto",
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     total_started = time.perf_counter()
     manifest = load_candidate_manifest(candidate_manifest)
@@ -555,7 +728,7 @@ def generate_catalog(
             raise ValueError(
                 f"task DFG source body hash mismatch for {task}"
             )
-        graphs[task] = parse_neura_route_expanded_dfg(dfg_text)
+        graphs[task] = require_neura_route_expanded_dfg(dfg_text)
     provenance_task_hashes = _object(
         analytical_provenance.get("task_dfg_sha256"),
         "analytical provenance task DFG hashes",
@@ -578,9 +751,12 @@ def generate_catalog(
             raise ValueError(f"analytical input provenance lacks {field}")
     dfg_parse_ms = (time.perf_counter() - parse_started) * 1000.0
 
+    model_shapes = {
+        tuple(shape) for shape in model_metadata["supported_mapper_shapes"]
+    }
     supported_queries = [
         key for key in manifest["queries"]
-        if (key[1], key[2]) in SHAPE_PROTOCOL.mapper_shapes
+        if (key[1], key[2]) in model_shapes
     ]
     unsupported_queries = {
         key for key in manifest["queries"] if key not in supported_queries
@@ -594,6 +770,13 @@ def generate_catalog(
 
     inference_started = time.perf_counter()
     predictions: Dict[QueryKey, float] = {}
+    categorical_labels: Dict[QueryKey, int] = {}
+    categorical_expectations: Dict[QueryKey, float] = {}
+    effective_readout = "continuous"
+    inference_dtype = (
+        torch.float64 if isinstance(model, RidgeMapperIIModel)
+        else torch.float32
+    )
     with torch.inference_mode():
         for offset in range(0, len(supported_queries), 4096):
             keys = supported_queries[offset:offset + 4096]
@@ -607,11 +790,31 @@ def generate_catalog(
                     shape_protocol=config.shape_protocol,
                 )
                 for key in keys for task, rows, cols in (key,)
-            ], dtype=torch.float32, device=device)
+            ], dtype=inference_dtype, device=device)
             lower_bounds = torch.tensor([
                 analytical[key]["lower_bound"] for key in keys
-            ], dtype=torch.float32, device=device)
-            values = model(features, lower_bounds).detach().cpu().tolist()
+            ], dtype=inference_dtype, device=device)
+            if isinstance(model, CategoricalMapperIIModel):
+                logits = model.class_logits(features, lower_bounds)
+                expected = model.expected_ii_from_logits(logits, lower_bounds)
+                labels = torch.round(lower_bounds).to(dtype=torch.int64) + (
+                    torch.argmax(logits, dim=1)
+                )
+                effective_readout = (
+                    "label" if ii_readout == "auto" else ii_readout
+                )
+                values = labels if effective_readout == "label" else expected
+                categorical_labels.update(zip(
+                    keys, map(int, labels.detach().cpu().tolist()),
+                ))
+                categorical_expectations.update(zip(
+                    keys, map(float, expected.detach().cpu().tolist()),
+                ))
+            else:
+                values, effective_readout = predict_mapper_ii(
+                    model, features, lower_bounds, ii_readout,
+                )
+            values = values.detach().cpu().tolist()
             predictions.update(zip(keys, map(float, values)))
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -636,14 +839,25 @@ def generate_catalog(
                 "predicted_ii": predictions[key],
                 "startup_cycles": analytical[key]["startup_cycles"],
                 "analytical_lower_bound": analytical[key]["lower_bound"],
-                "ii_mean_source": "direct_mapper_surrogate",
+                "ii_mean_source": (
+                    "categorical_mapper_surrogate_argmax"
+                    if effective_readout == "label"
+                    else "ridge_mapper_surrogate"
+                    if isinstance(model, RidgeMapperIIModel)
+                    else "direct_mapper_surrogate"
+                ),
             })
+            if key in categorical_labels:
+                entry.update({
+                    "predicted_ii_label": categorical_labels[key],
+                    "predicted_ii_expected": categorical_expectations[key],
+                })
         entries.append(entry)
 
     namespace_contract = {
         "feature_schema": ADAPTER_FEATURE_SCHEMA,
         "shape_protocol": get_shape_protocol(
-            SHAPE_PROTOCOL_ID
+            config.shape_protocol
         ).to_dict(),
         "candidate_manifest_sha256": manifest["manifest_sha256"],
         "analytical_input_sha256": sha256_file(analytical_input),
@@ -661,6 +875,7 @@ def generate_catalog(
         },
         "model": model_metadata,
         "architecture_contract": model_metadata,
+        "ii_readout": effective_readout,
         "ranking_policy": {
             "objective": "predicted_compute_bottleneck",
             "mapper_success_probability": "not_predicted",
@@ -707,6 +922,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timing-output", type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument(
+        "--ii-readout", choices=("auto", "expected", "label"),
+        default="auto",
+        help="Categorical checkpoints default to integer argmax labels; use "
+             "expected to retain probability-weighted ranking scores.",
+    )
     return parser.parse_args()
 
 
@@ -716,6 +937,7 @@ def main() -> int:
     catalog, timing = generate_catalog(
         args.manifest.resolve(), args.analytical_input.resolve(),
         task_paths, args.model.resolve(), torch.device(args.device),
+        args.ii_readout,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

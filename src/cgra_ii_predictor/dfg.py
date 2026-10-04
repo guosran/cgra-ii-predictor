@@ -18,18 +18,23 @@ OPERATION_TYPES = (
 OPERATION_TO_ID = {name: index for index, name in enumerate(OPERATION_TYPES)}
 ROUTE_EXPANDED_OPERATION_TYPES = OPERATION_TYPES + (
     "data_mov", "ctrl_mov", "reserve", "yield", "return",
+    "counter", "fneg", "fmax", "fmin", "gather", "br", "return_void",
+    "return_value", "vmul", "vadd", "vfadd", "vector_reduce_add",
+    "mul_add", "extract_predicate", "true_steer", "false_steer", "carry",
+    "merge", "invariant", "fused_op",
 )
 ROUTE_EXPANDED_OPERATION_TO_ID = {
     name: index for index, name in enumerate(ROUTE_EXPANDED_OPERATION_TYPES)
 }
 TRANSPARENT_OPERATIONS = frozenset({"data_mov", "ctrl_mov", "reserve", "yield"})
 MEMORY_OPERATIONS = frozenset({
-    "load", "store", "memset", "load_indexed", "store_indexed",
+    "load", "store", "memset", "load_indexed", "store_indexed", "gather",
 })
 POINTER_OPERATIONS = frozenset({"alloca", "gep"})
 CONTROL_OPERATIONS = frozenset({
     "grant_predicate", "loop_control", "phi", "phi_start", "not", "icmp",
-    "fcmp", "sel",
+    "fcmp", "sel", "counter", "extract_predicate", "true_steer",
+    "false_steer", "carry", "merge", "invariant",
 })
 DFG_NODE_FEATURE_NAMES = (
     "normalized_indegree", "normalized_outdegree", "normalized_asap",
@@ -173,15 +178,18 @@ def parse_neura_route_expanded_dfg(text: str) -> GraphData:
     kinds: Dict[str, str] = {}
     operands: Dict[str, List[str]] = {}
     control_moves: List[Tuple[str, str]] = []
-    return_index = 0
+    effect_index = 0
+    has_kernel_region = bool(re.search(r'\bneura\.kernel\b', text))
     for line in text.splitlines():
         match = re.match(r"\s*(%[A-Za-z0-9_]+)\s*=\s*(.*)", line)
         if match:
             value, expression = match.groups()
-            kind_match = re.search(r'"?neura\.([a-z_]+)', expression)
+            kind_match = re.search(
+                r'"?neura\.([a-z_][a-z0-9_.]*)', expression,
+            )
             if kind_match is None:
                 continue
-            kind = kind_match.group(1)
+            kind = kind_match.group(1).replace(".", "_")
             kinds[value] = kind
             operands[value] = re.findall(r"%[A-Za-z0-9_]+", expression)
             order.append(value)
@@ -193,11 +201,29 @@ def parse_neura_route_expanded_dfg(text: str) -> GraphData:
         )
         if control_match is not None:
             control_moves.append(control_match.groups())
+        # MLIR operations such as store_indexed, ctrl_mov, and yield have no
+        # SSA result, but they still participate in the mapper's topological
+        # ordering.  Stores are materialized and their high fan-in is often a
+        # decisive heuristic-mapper constraint, so dropping them changes the
+        # prediction problem rather than merely simplifying the graph.
+        effect_match = re.match(
+            r'\s*"?neura\.([a-z_][a-z0-9_.]*)"?(?:\s|\()(.*)', line,
+        )
+        if effect_match is not None and effect_match.group(1) != "kernel":
+            value = f"%__graph_effect_{effect_index}"
+            effect_index += 1
+            kinds[value] = effect_match.group(1).replace(".", "_")
+            operands[value] = re.findall(r"%[A-Za-z0-9_]+", line)
+            order.append(value)
             continue
+        # Legacy generated mapper corpora map the function body directly and
+        # therefore include func.return.  Static-DL DFGs map only the nested
+        # neura.kernel region; the outer function return must not be invented
+        # as a mapper node in that representation.
         return_match = re.match(r"\s*(?:func\.)?return\b(.*)", line)
-        if return_match is not None:
-            value = f"%__graph_return_{return_index}"
-            return_index += 1
+        if return_match is not None and not has_kernel_region:
+            value = f"%__graph_effect_{effect_index}"
+            effect_index += 1
             kinds[value] = "return"
             operands[value] = re.findall(
                 r"%[A-Za-z0-9_]+", return_match.group(1),
@@ -320,6 +346,29 @@ def parse_neura_route_expanded_dfg(text: str) -> GraphData:
     return graph.validate(len(ROUTE_EXPANDED_DFG_NODE_FEATURE_NAMES))
 
 
+def require_neura_route_expanded_dfg(text: str) -> GraphData:
+    """Parse a DFG and reject semantic edges that bypass ``data_mov``.
+
+    Neura's mapper consumes the result of ``--insert-data-mov``.  Merely
+    parsing an unexpanded DFG with the richer graph parser is legal, but it
+    silently changes the feature distribution seen by the mapper surrogate.
+    This stricter entry point is used at training and deployment boundaries so
+    both sides observe the exact same deterministic pre-mapper representation.
+    """
+    graph = parse_neura_route_expanded_dfg(text)
+    semantic_edges = set(graph.semantic_edges or ())
+    if not semantic_edges:
+        return graph
+    movement_count = sum(row[12] > 0.5 for row in graph.node_features)
+    direct_semantic_edges = semantic_edges.intersection(graph.edges)
+    if movement_count == 0 or direct_semantic_edges:
+        raise ValueError(
+            "Neura DFG is not route-expanded; run --insert-data-mov exactly "
+            "once before mapper feature extraction"
+        )
+    return graph
+
+
 def parse_neura_dfg_representation(
     text: str, representation: str = "route_expanded",
 ) -> GraphData:
@@ -339,4 +388,5 @@ __all__ = [
     "parse_neura_dfg",
     "parse_neura_dfg_representation",
     "parse_neura_route_expanded_dfg",
+    "require_neura_route_expanded_dfg",
 ]

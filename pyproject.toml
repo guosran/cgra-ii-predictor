@@ -7,7 +7,7 @@ name = "cgra-ii-predictor"
 version = "0.1.0"
 description = "CGRA compiled-II prediction and static-shape ranking"
 requires-python = ">=3.8"
-dependencies = ["torch>=2.0"]
+dependencies = ["torch>=2.0", "PyYAML>=6.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,869 @@
+{
+  "schema": "cgra-ii-per-cgra-2x2-training-exclusions-v1",
+  "source_manifest_sha256": "9c5b4bb1d52969b70dcad9dd7b4946a7631d23d6463051bbc5039fa5e0bf6991",
+  "source_groups_sha256": "369e4c289dc3db7043e76031936896f0f2e2455ba9f320b7e91e8f5ec9101a83",
+  "excluded_source_sha256": [
+    "0016e48d8b21d2bb55267fff819aa32b1824ac4d11a641c882c2ac064441d408",
+    "077a70978771cd09a2b7897e9d1d856544f53c10e7b15ab3b650af9c223ef66e",
+    "087100ecd36cd26c0ba528255d51f4735a1e569fb07bd291b1e66b38c6cd9916",
+    "08c8973fa6706ebf334682702115e6a3f9e49158faa57a646db88b2bdd454282",
+    "0b40952d15b4c4f4e5acd6af31701ffff95f82716fc14cd280ef878acb518d3d",
+    "13a8c6adf4ced83f8985a85b07a345c2dca1b717f0d0bfb80e930b1261209369",
+    "2505e05e4aa3fe486a84b7652a2767abc7d3aea34e5f604ab5240afc33d3711a",
+    "26d77fb6e510a3813179e0fbfbdd7a9d89b9dca540f65018ff94c23a6c617fc4",
+    "29207c497eeb6c4951ca75bab8a33dbb1df3751fc26d2e5c84c06e146ec98778",
+    "2921e4314f764e5824e2e87e2901e57836f878ede4716e23b59d8611b49cf126",
+    "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+    "2b867baebef9484cbeffa1740b5e122b9b4d7496cff4411fe2cbc739e91bdbd9",
+    "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+    "2f2126a1e671fbfb6d6332fe4bb419773e92434c603bde65bbaf05349f90fcfd",
+    "304603284e2d74195040519112206a1ee6df573403ebe581b95f72d02e82510a",
+    "3688b324d8d2bafb79dbe0e15b64e293917fa4985a09c97a0708686b32a93946",
+    "3c6c91920a0a301edd7a4ba58a2662986bd4434dc75ee12211efe26e51080961",
+    "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+    "4a87326af60480276b15d9c7a361a7fea19b27989819ea712f8a11c72be0801d",
+    "4ae263b51227ea98787edeb7ed07d62c485cd6a7dcc54e6d5cdeb5929d23c4a6",
+    "4bebe72bdf2f497cbadd980fe34491a338ee84fff9d8370737b1799849c8fb4f",
+    "4c12284893ef822db786dd74bc7104e43acd02a0cde1743bfaf8bff9c0f7823e",
+    "4c386fe0dbe81bfe47fd18e4a1568926dc42d234ab0bf8758ca83217e983e5e9",
+    "4db650333fbd38e43ee30405b8987d8c73735dd50b3753894b5ae4158ab35990",
+    "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+    "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+    "630f8c478807861e82bcb0bc674a68d4f8ad716e9e9957d73c762abbd17caf96",
+    "6a04cb2b6670d829fdaf2720440364a2db74435631f88dbbf6e33494d36a0675",
+    "6f2b67f4c0c1541252ef06a9e5d5b905dee595dcbd0b824f747025b96abbfa09",
+    "7118de3aa4d1bd465da63cc66ef30bce5cc663a3841d9767a2ed1260ea0c06ab",
+    "790751f21d2df44b05c6c397a2ed74440233a1e3f5226e3e88795185d6a0bb6a",
+    "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+    "7ddbc384e2150da03642e0861e0caa63b6e2fe088416a8ca255415d24e0af96b",
+    "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3",
+    "80dba4e9c1f7d0c598b0e163e46d1a68670a22c335f317a548d4369fdc23b9e2",
+    "82a2771c94409e99cf273fff52e9b46d5b05016c1e2161c0d7418a28340b37a6",
+    "8dfa08fa753602484bad72d13b058c2457b680e5f0a021d82d14e5093dd25db9",
+    "94b596494ce67658d4bc957195d3caa46e2a82eaa94d27474a658c2a967c72a2",
+    "9b59c78aa3b825a8073d980766a078e0a70c08d2de1b0aacf693b9683e148780",
+    "9cecc981be924a00930c1030554c1956a9ad975a0d819c5540ab2904f674898e",
+    "a0e10a17399741d9a9aa91cd3d17b1e0741bd3d383b9d268b017496910daec6f",
+    "a14120073a23ba93c8dc3d20b8d610585196a5899877aa7caf1e828269557616",
+    "ac1418ff39401a1821a520caebe5ca9ff65073214e9b9ee1e61544656b083303",
+    "af98d0c92f6e24a34c891d3d3280977a87cc757ef9eb74b955578082f92e7097",
+    "b6f5d0168a56731a46e51794528606aa6f864eac4e88e2c6bdf33b58866cbae6",
+    "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05",
+    "b8f96c0937683b1c2034f364273b4e85b938b52f1820b4731b42eb01bb8f0ccd",
+    "c0fcc1f3a13c04bd3cd33afcda71cc75f9d59c1e39a50e9e3866a7f63f7ce4d3",
+    "c7f0634ae2e15a0dd7d1df37d4f1397e7704e6f70361a73b7ce313979dd5aa59",
+    "cff79cab9ebca188f1a60f9d8235351608f1eefdd2739d07cd41b818811c1829",
+    "d0898a22b327624564a854efc5b4a34aa7c6a4c8f92a43614b8f2d25b63692c3",
+    "d16fba06a5d691a5cdbc7768f66c76148263d25326705b7400f1398ffb8de696",
+    "e105638f2c588c9018ff720c980166b2a2aed06ea2303537e1bd5d776651a967",
+    "e2688f6a7bac469a4d54c00ef998dd227461f62c17bf93f92fe31d2918ba0bd6",
+    "e5275d2a94ffd406b8a4d8a3910ca904a790acf4fc727161fa16b3f57b843b60",
+    "e7a5dfe70ed5530485a6c7bb39de18c28fc4da291a15c2157141c953a0f5ca32",
+    "f5857f0af88243d9454907eb05dd77a1994d18ffceab2fe00738213f1b7f88d5",
+    "f7dee58f6c6e8b3b531b7fc33a2552bccfdf53244bb47ead846ce65705b2c275",
+    "fa03d42e7ccd46f4306d0bdb483593cf5945f7e9214cbe00ad4dc5427d04d9e2",
+    "fc7d6787e833d362a22cef87d6b401a1435075561a5ec83e997dd86a7b94b21a",
+    "fd146caa7277879f025387d53baa4b579127f2c39266c869b4376e02da54c0b8"
+  ],
+  "excluded_mapper_input_identities": [
+    "00666a90f8ad5c405a3cd87af1309abe77eefae8bcfec44dae0beb65735750be",
+    "00d353bdd8a50e86264fe25c2afb18453513ef4907b7cf68d95c581d1709543b",
+    "0100c42c52343494113baa97d65e1f56f20eecb94dc47e640085f957ffcb7165",
+    "03c60e5de6dbaa7caaa4483d35e82c08004d95a36d431e259c853fc73d8ddf64",
+    "065ab86c040820752a0afe1f3694d08f5238734b003fd3a53ab4b88cd5d90c6b",
+    "087606f342685552a2bc69e3192d607781d83e662da2272b32461fb7015515f6",
+    "15dccc1c6f100dfd34ff83bb63199d294d2cf89980082a2aec33f8d8eb3e6942",
+    "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+    "2631a899f19dcbfdee6bf31d2dec1937e8c4f798ea5bef39699a0da22e6f8913",
+    "26f4df9d27660b8066a55e20d15e58e51b991fb54b6778fe4a00d8e88d2b0f81",
+    "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+    "2a3ba96de30d1dd525d0826e2daaba954a266b2ef94b5160e69c3c123ddd5f15",
+    "2a6d33c1ab2ba6f2d3794080dfe16e317b402307b3da734667b07e3cac75a3d2",
+    "2cfc7b1c91a26635a95202d56a155c71620cdb51e920d7c43a5b64953d348a90",
+    "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+    "2e9e4dacdccc3e10ccade39c78d3f0572a56742b7346429b7685e9ed81941c2b",
+    "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+    "30dabe3383021ae8b2d15f914798284b763d60acb57c881a0b33009c9bdb3e6e",
+    "34d5cdf1a1154047d27f8866bc5dcb285235ef255ff0a0210cf9359642f01a10",
+    "39554d92e8fe7058154b267b22160cba785746c6dbd4df646ec7344217442e68",
+    "3a49f363ce72dd3b21ae3456c650de2d9b83be0733ddfc3dd890683271cb6866",
+    "3bf4135ed36b1ba85700e7549dff1e23525055decb7e620fd589dd164086058c",
+    "3cc2c0804991b93573d0759c32e0b11532d5a3c54a04a5bebd4f5c0f734fdf1c",
+    "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+    "3f924a7fe81b4b8d5c8d7a16fe4d09b4a969d5f6393f0a798f84a88010bbedfa",
+    "481b94de07ffb09e33ea2f62decd7f990e00982600ec1065c508251dabfc7efc",
+    "4c1aaf17347d02a80ae46e2ff88e626131c8f16182d658c9fe2b8f6b0cba62ab",
+    "54aa031aa939fb828ffcb8579fb8e70be962b5f34628005961d2dd6f41857ff8",
+    "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+    "5c8397db314d3c5bb83611041df0bb0dacb916d9a9cb9bafb2700d5cfa43ffcc",
+    "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+    "651f848bf425b483326ece2768258b9ef785bc0f44020d547c69741c13292650",
+    "7bcd0e0ce5f7c2e421d500392a0383f425b6cf74e420a34a43bb53c6b658e90a",
+    "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+    "7fce3c2d74767aab60eb193cca30e159283da54e45996b8373c4494678a0569e",
+    "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3",
+    "89fe972efefba30e76291f4fce3a5cb46d1b6b768d46f22492a30d3a9c49a2e8",
+    "8f721b023bb835260a23ad7ba2bc5c908f08d8b79a60b8c320312601384520a1",
+    "945a9fa699f04211b10fe742e872fb2a2bcfee7ece1375d14948a4cdde6060ce",
+    "950e5cc80e0f5dc6928148a614b8326bd7aa9ffcf9ddb6ce5a3c5676a82df815",
+    "992d7d4bfaef5b18c2e036a9e1f6cba884bee172a1c8d8cd1d94a41edd32a315",
+    "a2665e85e52c49f929f79cfa0ced2012c2fabe507d952bff3627aed8e0089840",
+    "b6a83424f7f233f0619d1f90ffd0a6fbe9734d1fef4f17d4090455b4bcb67839",
+    "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05",
+    "b88dd3a468e245de43dd0e447a1b22dcf673f906628e23a63f6d32cdef1bf162",
+    "bd14abd661facd343ff86b156dc3b2588ca6005ce678509030e8a2f3d62d1653",
+    "c076b653f854d0b66778b44b3520380122df569c55055ff8d6e40dd14d491b89",
+    "c397700cd5dede2c5a6a72eda2b12daf3ecddfb05618d4eaa54b996b5728eb8f",
+    "cf5dc2155975bdda9a86f50609d4d4a3781e02848454ef0fa8837d4181dacd92",
+    "d05b76ab2fe76b6101c7d251ccc13c394e04f9bde7cd1d04ff9ce05ced0f5131",
+    "d0962693245e36be1b71811782e452d99cfbd1f5b80457862d3b86e02887391d",
+    "d48488a7070a72cba3d305f503e6e196873f7fd9ddc0db6056f92da9f83a5008",
+    "d570c998921e8a5480bc922a87ee073d41c391653c04c96324beea4ca15825b2",
+    "d653fd654af44e04e4fd77f21d9a653b0a0246a24f927b9bf4c4a724470cbd39",
+    "e22ec4b9c34c30b50fc8fba763e20e56813a6d8d14573f64b01dccfbf3fa41d9",
+    "e32ae7f2b58c9f27d5a5cfad64df6a99d93bdb7a6d93bef26cc05313051f3e68",
+    "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+    "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b",
+    "f5eda55cde91f34fb145c6d02fc2de70946a1098a64b29a34ad7cec5284fcf93",
+    "f7b2ffafb301ec9fa5f359b7aee4d80fbe92cec1f6a3477c23b6db0f1f140e0e",
+    "fccd621dd5fe2bc5273fa720b29b211eee058d14d7916f40d91bb2f8a4bc429a"
+  ],
+  "reasons_by_dfg": {
+    "9b59c78aa3b825a8073d980766a078e0a70c08d2de1b0aacf693b9683e148780": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "cff79cab9ebca188f1a60f9d8235351608f1eefdd2739d07cd41b818811c1829": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "a0e10a17399741d9a9aa91cd3d17b1e0741bd3d383b9d268b017496910daec6f": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "a14120073a23ba93c8dc3d20b8d610585196a5899877aa7caf1e828269557616": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "0b40952d15b4c4f4e5acd6af31701ffff95f82716fc14cd280ef878acb518d3d": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "6f2b67f4c0c1541252ef06a9e5d5b905dee595dcbd0b824f747025b96abbfa09": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2921e4314f764e5824e2e87e2901e57836f878ede4716e23b59d8611b49cf126": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "e105638f2c588c9018ff720c980166b2a2aed06ea2303537e1bd5d776651a967": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "94b596494ce67658d4bc957195d3caa46e2a82eaa94d27474a658c2a967c72a2": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2b867baebef9484cbeffa1740b5e122b9b4d7496cff4411fe2cbc739e91bdbd9": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530": {
+      "group_id": "be3405505da53b74e1c3a6320b653a1904f82651663fa6ba9a4df9be762e1d0e",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+        "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+        "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3"
+      ]
+    },
+    "7ddbc384e2150da03642e0861e0caa63b6e2fe088416a8ca255415d24e0af96b": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "e7a5dfe70ed5530485a6c7bb39de18c28fc4da291a15c2157141c953a0f5ca32": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "087100ecd36cd26c0ba528255d51f4735a1e569fb07bd291b1e66b38c6cd9916": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "4c386fe0dbe81bfe47fd18e4a1568926dc42d234ab0bf8758ca83217e983e5e9": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2f2126a1e671fbfb6d6332fe4bb419773e92434c603bde65bbaf05349f90fcfd": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c": {
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ]
+    },
+    "08c8973fa6706ebf334682702115e6a3f9e49158faa57a646db88b2bdd454282": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "fa03d42e7ccd46f4306d0bdb483593cf5945f7e9214cbe00ad4dc5427d04d9e2": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "f5857f0af88243d9454907eb05dd77a1994d18ffceab2fe00738213f1b7f88d5": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "26d77fb6e510a3813179e0fbfbdd7a9d89b9dca540f65018ff94c23a6c617fc4": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "ac1418ff39401a1821a520caebe5ca9ff65073214e9b9ee1e61544656b083303": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "29207c497eeb6c4951ca75bab8a33dbb1df3751fc26d2e5c84c06e146ec98778": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0": {
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ]
+    },
+    "4a87326af60480276b15d9c7a361a7fea19b27989819ea712f8a11c72be0801d": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "630f8c478807861e82bcb0bc674a68d4f8ad716e9e9957d73c762abbd17caf96": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "2505e05e4aa3fe486a84b7652a2767abc7d3aea34e5f604ab5240afc33d3711a": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "b8f96c0937683b1c2034f364273b4e85b938b52f1820b4731b42eb01bb8f0ccd": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29": {
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ]
+    },
+    "4bebe72bdf2f497cbadd980fe34491a338ee84fff9d8370737b1799849c8fb4f": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8": {
+      "group_id": "be3405505da53b74e1c3a6320b653a1904f82651663fa6ba9a4df9be762e1d0e",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+        "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+        "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3"
+      ]
+    },
+    "e5275d2a94ffd406b8a4d8a3910ca904a790acf4fc727161fa16b3f57b843b60": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "af98d0c92f6e24a34c891d3d3280977a87cc757ef9eb74b955578082f92e7097": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc": {
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ]
+    },
+    "80dba4e9c1f7d0c598b0e163e46d1a68670a22c335f317a548d4369fdc23b9e2": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3": {
+      "group_id": "be3405505da53b74e1c3a6320b653a1904f82651663fa6ba9a4df9be762e1d0e",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2a0a3c654c1ef6f0aef95ab8c0aff12861dde9ff0b2095257c181c23c83d9530",
+        "628429d4a5fca05d0a83de7073df47ce8893ef0ce731b6d0c06b88dbe30a2bd8",
+        "80672775c48954b0242cc1623d9b4d76c66f59f7fb9b0da1aa7f5fa0f29277b3"
+      ]
+    },
+    "13a8c6adf4ced83f8985a85b07a345c2dca1b717f0d0bfb80e930b1261209369": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "7118de3aa4d1bd465da63cc66ef30bce5cc663a3841d9767a2ed1260ea0c06ab": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "d0898a22b327624564a854efc5b4a34aa7c6a4c8f92a43614b8f2d25b63692c3": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "c0fcc1f3a13c04bd3cd33afcda71cc75f9d59c1e39a50e9e3866a7f63f7ce4d3": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "304603284e2d74195040519112206a1ee6df573403ebe581b95f72d02e82510a": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "790751f21d2df44b05c6c397a2ed74440233a1e3f5226e3e88795185d6a0bb6a": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "6a04cb2b6670d829fdaf2720440364a2db74435631f88dbbf6e33494d36a0675": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05": {
+      "group_id": "421f87125577def3743218b7e8703446f3be66958d31889d21ce948624743257",
+      "reasons": [
+        "Amoeba evaluation workload source family"
+      ],
+      "matched_queries": [
+        "2ea0fd80218e496297557083b83fe883117cadae731ef7965be987432ee16e0c",
+        "3f6cf5653b804e89399280a7ab4e27b822ad5d24071437a21faef2d481a674b0",
+        "5a1fae365136db298815bf7aa57f3ab9847aac6f44b03c7cf37254970ecddf29",
+        "7d950b8066edaadfd75bc9c2b5f48b86110d21a6e6e4d8bd2cd3e93cb5f56cbc",
+        "b7cb0df012e0cecac34afebdff9cf27b3f5dc63de5fee0527f7d8c714767ee05"
+      ]
+    },
+    "82a2771c94409e99cf273fff52e9b46d5b05016c1e2161c0d7418a28340b37a6": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "d16fba06a5d691a5cdbc7768f66c76148263d25326705b7400f1398ffb8de696": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "3688b324d8d2bafb79dbe0e15b64e293917fa4985a09c97a0708686b32a93946": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "4c12284893ef822db786dd74bc7104e43acd02a0cde1743bfaf8bff9c0f7823e": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "4db650333fbd38e43ee30405b8987d8c73735dd50b3753894b5ae4158ab35990": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "4ae263b51227ea98787edeb7ed07d62c485cd6a7dcc54e6d5cdeb5929d23c4a6": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "fd146caa7277879f025387d53baa4b579127f2c39266c869b4376e02da54c0b8": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "b6f5d0168a56731a46e51794528606aa6f864eac4e88e2c6bdf33b58866cbae6": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "fc7d6787e833d362a22cef87d6b401a1435075561a5ec83e997dd86a7b94b21a": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "077a70978771cd09a2b7897e9d1d856544f53c10e7b15ab3b650af9c223ef66e": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "3c6c91920a0a301edd7a4ba58a2662986bd4434dc75ee12211efe26e51080961": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "e2688f6a7bac469a4d54c00ef998dd227461f62c17bf93f92fe31d2918ba0bd6": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "8dfa08fa753602484bad72d13b058c2457b680e5f0a021d82d14e5093dd25db9": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "c7f0634ae2e15a0dd7d1df37d4f1397e7704e6f70361a73b7ce313979dd5aa59": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "f7dee58f6c6e8b3b531b7fc33a2552bccfdf53244bb47ead846ce65705b2c275": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "9cecc981be924a00930c1030554c1956a9ad975a0d819c5540ab2904f674898e": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    },
+    "0016e48d8b21d2bb55267fff819aa32b1824ac4d11a641c882c2ac064441d408": {
+      "group_id": "cc439cf459779d0367a23554d8deea17b4234079aee0bdf081eba49b6bd9c5ab",
+      "reasons": [
+        "prior Qwen/ResNet evaluation overlap"
+      ],
+      "matched_queries": [
+        "18e120a609b0e927e6649e2e4096e2baad8f6ae97ba75d65910f5cede5151ae3",
+        "2d5875fde4321aae15983798a4d5f94e04c569b32a0b8a81881844c4624b89ab",
+        "e3e73053551d77328d4150907721320bb339f936557437ae45c274ccc7c711a0",
+        "ebcc86cd3e204ed71cd70f9a07eba1f8414ca8f886e069e7a6fe4734773d748b"
+      ]
+    }
+  },
+  "policy": "Exclude entire connected groups containing prior Qwen/ResNet overlaps or known Amoeba GCN/LU source families; freeze before new labels.",
+  "amoeba_benchmark_overlap_audit_complete": false
+}
