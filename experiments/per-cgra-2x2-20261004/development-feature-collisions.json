@@ -1,0 +1,932 @@
+{
+  "buckets_distinguished_by_full148": 15,
+  "buckets_still_identical_with_full148": 4,
+  "collision_buckets": 19,
+  "collisions": [
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            2,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            2,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            2,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            2,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 6
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 4
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 3
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 3
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 2
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 6
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 5
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "a38647df06356427eabb823b533bae369cab61e0f654f6ab3ad831ce23dcc31e",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "46bd6acb0db46813ea492587cde59b92ee0fe060f691d267b44dc3c002d850be",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0033-rp20260911"
+          ],
+          "source_group": "2b844d3554ee7e8bd1dd5e2201416bff0a6af89dd0089efce9d75705939a35a1",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "5e22db52402373afb027e4a192651de08a85baaac5fe8e0ed3bdb15fd1839417",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0183-rp20260911"
+          ],
+          "source_group": "f41bea74ec1ab41302132bc39872f09a77957252038441e96cb76aa9c886cc87",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "49e8887acbd54039e8aaee2d574c167e79d588aae5d55550a232262c7e1e308d",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0021-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/compute/base-0120-rp20260911"
+          ],
+          "source_group": "822965a0abf6e933a69f77f85edc2993568e26d25377dbadbb869ad4d439332b",
+          "split": "train",
+          "true_ii": 4
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 2,
+      "rows": [
+        {
+          "identity": "f709528b325fa556a2745e192cfdd02963c52eeac079d8f77e724355ce8301c6",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0126-rp20260911"
+          ],
+          "source_group": "c3d0b3cba8b2c11912162f5861216cdbe0df55244e1b4792ec8befd4a05c26d4",
+          "split": "train",
+          "true_ii": 2
+        },
+        {
+          "identity": "d11cb7cfd1c95d07de27f1cf828bab9ec1258c31261dd20ff35cc8474b29c15e",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0138-rp20260911"
+          ],
+          "source_group": "b2816e4904a7f8a7cdf95923af794ed30ca903b92795de525bfd768a417bae74",
+          "split": "validation",
+          "true_ii": 3
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 2,
+      "rows": [
+        {
+          "identity": "f709528b325fa556a2745e192cfdd02963c52eeac079d8f77e724355ce8301c6",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0126-rp20260911"
+          ],
+          "source_group": "c3d0b3cba8b2c11912162f5861216cdbe0df55244e1b4792ec8befd4a05c26d4",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "d11cb7cfd1c95d07de27f1cf828bab9ec1258c31261dd20ff35cc8474b29c15e",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0138-rp20260911"
+          ],
+          "source_group": "b2816e4904a7f8a7cdf95923af794ed30ca903b92795de525bfd768a417bae74",
+          "split": "validation",
+          "true_ii": 4
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 2,
+      "rows": [
+        {
+          "identity": "f709528b325fa556a2745e192cfdd02963c52eeac079d8f77e724355ce8301c6",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0126-rp20260911"
+          ],
+          "source_group": "c3d0b3cba8b2c11912162f5861216cdbe0df55244e1b4792ec8befd4a05c26d4",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "d11cb7cfd1c95d07de27f1cf828bab9ec1258c31261dd20ff35cc8474b29c15e",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0138-rp20260911"
+          ],
+          "source_group": "b2816e4904a7f8a7cdf95923af794ed30ca903b92795de525bfd768a417bae74",
+          "split": "validation",
+          "true_ii": 2
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+          ],
+          "source_group": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+          ],
+          "source_group": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf",
+          "shape": [
+            4,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+          ],
+          "source_group": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+          "split": "train",
+          "true_ii": 6
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+          ],
+          "source_group": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+          ],
+          "source_group": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+          ],
+          "source_group": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+          "split": "train",
+          "true_ii": 5
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+          ],
+          "source_group": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+          ],
+          "source_group": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf",
+          "shape": [
+            6,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+          ],
+          "source_group": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+          "split": "train",
+          "true_ii": 6
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+          ],
+          "source_group": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+          "split": "train",
+          "true_ii": 3
+        },
+        {
+          "identity": "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+          ],
+          "source_group": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf",
+          "shape": [
+            2,
+            8
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+          ],
+          "source_group": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+          "split": "train",
+          "true_ii": 5
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 3,
+      "rows": [
+        {
+          "identity": "8a7ae1576861ca0d2c0593ff8e090613df6ad6219fdc5c1df52493f6d7caba40",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0225-rp20260911"
+          ],
+          "source_group": "ddb47176f660ee126f7efcb6304ab4a34c2bb64ac9ed9900f64bc627587750af",
+          "split": "train",
+          "true_ii": 5
+        },
+        {
+          "identity": "bda794f04c6b9075ec698c40d00cf98f1dc6c8bce3561c60acafdc581b821577",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0177-rp20260911"
+          ],
+          "source_group": "2bad29bda0019bfab0f598186acbcf655d3dd686bc6930bd14474c956a0dab9c",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "c54aa39790a60ecc29674899a22042484c89686b30ecee831adc16b95cb6cfdf",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/compute/base-0150-rp20260911"
+          ],
+          "source_group": "a9ce71bf19544bd658d5584e0ef811562a91c8f62a7ad4c3e19bdeb30faca8e1",
+          "split": "train",
+          "true_ii": 4
+        }
+      ],
+      "varying_omitted_features": [
+        "log_count_add",
+        "log_count_mul"
+      ]
+    },
+    {
+      "different_full_feature_vectors": 1,
+      "rows": [
+        {
+          "identity": "16bb8b529fe4690ddb9103b55c5608bd3651812c3a16766217fc1c2e900a70ce",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 7
+        },
+        {
+          "identity": "9f12587f9299b7ef628543dccdfd0e1d7d4b375362cb9f0ba6c5903721f9a52c",
+          "shape": [
+            2,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 5
+        }
+      ],
+      "varying_omitted_features": []
+    },
+    {
+      "different_full_feature_vectors": 1,
+      "rows": [
+        {
+          "identity": "16bb8b529fe4690ddb9103b55c5608bd3651812c3a16766217fc1c2e900a70ce",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 4
+        },
+        {
+          "identity": "9f12587f9299b7ef628543dccdfd0e1d7d4b375362cb9f0ba6c5903721f9a52c",
+          "shape": [
+            2,
+            6
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 6
+        }
+      ],
+      "varying_omitted_features": []
+    },
+    {
+      "different_full_feature_vectors": 1,
+      "rows": [
+        {
+          "identity": "16bb8b529fe4690ddb9103b55c5608bd3651812c3a16766217fc1c2e900a70ce",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "9f12587f9299b7ef628543dccdfd0e1d7d4b375362cb9f0ba6c5903721f9a52c",
+          "shape": [
+            8,
+            2
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 8
+        }
+      ],
+      "varying_omitted_features": []
+    },
+    {
+      "different_full_feature_vectors": 1,
+      "rows": [
+        {
+          "identity": "16bb8b529fe4690ddb9103b55c5608bd3651812c3a16766217fc1c2e900a70ce",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 6
+        },
+        {
+          "identity": "9f12587f9299b7ef628543dccdfd0e1d7d4b375362cb9f0ba6c5903721f9a52c",
+          "shape": [
+            4,
+            4
+          ],
+          "source_families": [
+            "random-dfg/lineage/generated/motif-v8/memory/base-0052-rp20260911",
+            "random-dfg/lineage/generated/motif-v8/memory/base-0076-rp20260911"
+          ],
+          "source_group": "7cd8e1c539e4b19ba58193fdc5427305d84022a6146fa4213780fcd2dbeca3b8",
+          "split": "train",
+          "true_ii": 7
+        }
+      ],
+      "varying_omitted_features": []
+    }
+  ],
+  "comparison_precision": "float32 model inputs",
+  "development_only": true,
+  "identities_in_collisions": 11
+}

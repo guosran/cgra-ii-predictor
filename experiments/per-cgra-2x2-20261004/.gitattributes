@@ -1,0 +1,2 @@
+# Preserve the exact hashed CSV output from Python csv writers.
+*.csv -text whitespace=cr-at-eol

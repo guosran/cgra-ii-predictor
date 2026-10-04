@@ -1,0 +1,21 @@
+{
+  "command": [
+    "python3",
+    "/home/x/shiran/project/cgra-ii-predictor-2x2-real-source/adapters/prepare_real_per_cgra_2x2_sources.py",
+    "--lower-only",
+    "--source-root",
+    "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite",
+    "--importer",
+    "/home/x/shiran/project/cgra-ii-predictor/adapters/import_aux_c_kernels.py",
+    "--output-dir",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation",
+    "--architecture",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-20261004/native-collection-2x2-v1/inputs/architecture.yaml",
+    "--neura-opt",
+    "/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt",
+    "--stage-timeout",
+    "90"
+  ],
+  "max_concurrent_tool_processes": 1,
+  "native_mapping_invoked": false
+}

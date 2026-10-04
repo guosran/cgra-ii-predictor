@@ -981,7 +981,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "hidden_dimensions": list(HIDDEN_DIMENSIONS),
             "optimizer": "AdamW(lr=0.002, weight_decay=0.0001)",
             "loss": "weighted SmoothL1 + 0.1 pairwise hinge + 0.3 set top-1",
-            "group_weighting": "equal source-group mass; random-only groups receive half mass when both strata exist",
+            "group_weighting": "random and program strata each receive 50% total mass when both exist; equal groups within each stratum; equal successful rows within group",
             "native_query_count": len(manifest["queries"]),
             "native_status_counts": status_counts,
             "native_success_count_before_exclusions": status_counts["success"],

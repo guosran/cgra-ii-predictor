@@ -1,0 +1,107 @@
+{
+  "groups": [
+    {
+      "candidate_ids": [
+        "machsuite/spmv/crs/3bf5ee16c81b183a5b8dce1d829de1b6ff3912333d84d3a0ec25fda0da69ded2",
+        "machsuite/spmv/ellpack/f56577c786ebac72ed841ba9d5a24e2fbe92368e587b6520a10c3f6faae634ad"
+      ],
+      "group_id": "08a6eec2e319178ccdcee21aa7b1d8a3b9af6821db05876559ec62a091bba581",
+      "mapper_input_identities": [
+        "3bf5ee16c81b183a5b8dce1d829de1b6ff3912333d84d3a0ec25fda0da69ded2",
+        "f56577c786ebac72ed841ba9d5a24e2fbe92368e587b6520a10c3f6faae634ad"
+      ],
+      "source_program_families": [
+        "global/spmv"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/bfs/bulk/915a8e02404108e154d907f96423df03f622a5e1ed6076d289557df61cf7980a",
+        "machsuite/bfs/queue/9f2ee72bc899b74d7f690487c9d1e6a447786ffddf4d73091778f4a6bdb910cb"
+      ],
+      "group_id": "35da045a8d98dd9186ccf02f10955570525956646522914dade59496320e288e",
+      "mapper_input_identities": [
+        "915a8e02404108e154d907f96423df03f622a5e1ed6076d289557df61cf7980a",
+        "9f2ee72bc899b74d7f690487c9d1e6a447786ffddf4d73091778f4a6bdb910cb"
+      ],
+      "source_program_families": [
+        "global/bfs"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/md/knn/6b29eaaf4246a1fca50372fd2983acd52a79e1319d604c4cf76cc22d09b4c75e"
+      ],
+      "group_id": "6e8f4384d4c261840a1b4ef5747375f959b30c18c77a803afa030f68b10e1bf0",
+      "mapper_input_identities": [
+        "6b29eaaf4246a1fca50372fd2983acd52a79e1319d604c4cf76cc22d09b4c75e"
+      ],
+      "source_program_families": [
+        "global/md"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/viterbi/viterbi/ee3d6d2aee27ac587b4333785d32916610fe75698d970dd9deb8c1996a3212ee"
+      ],
+      "group_id": "788b40cf1723e5182d1c0b650c8a52cc0232dc95db1644e3b64075ba248242f4",
+      "mapper_input_identities": [
+        "ee3d6d2aee27ac587b4333785d32916610fe75698d970dd9deb8c1996a3212ee"
+      ],
+      "source_program_families": [
+        "global/viterbi"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/stencil/stencil2d/e12f45335b7204a792b6fc85d7c944de6cfc76c9a3cb859f6aff7c566b79f33a",
+        "machsuite/stencil/stencil3d/2d7c6f70e40942e933576c0710bddaf19045bd2240f3618ebe48376c2d3a8808"
+      ],
+      "group_id": "7977e0ffac56e75fdb29dcde79ff928d3d0a50458b6b2832ea0bc15ebe33ad05",
+      "mapper_input_identities": [
+        "2d7c6f70e40942e933576c0710bddaf19045bd2240f3618ebe48376c2d3a8808",
+        "e12f45335b7204a792b6fc85d7c944de6cfc76c9a3cb859f6aff7c566b79f33a"
+      ],
+      "source_program_families": [
+        "global/stencil"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/gemm/blocked/ca6b3b99dc43969bd2f3a24c359e037b06ee6bba26cd17bf6f2a86dfe7bf81b8",
+        "machsuite/gemm/ncubed/ef7db21a9f1770ae4084a4f279971c84eff475fd55af11d3cfdca4f4fce6f6e0"
+      ],
+      "group_id": "8cf2d740f1d314d2b3993f99109b4f62dfec60f673b3932e1ea52420000e169b",
+      "mapper_input_identities": [
+        "ca6b3b99dc43969bd2f3a24c359e037b06ee6bba26cd17bf6f2a86dfe7bf81b8",
+        "ef7db21a9f1770ae4084a4f279971c84eff475fd55af11d3cfdca4f4fce6f6e0"
+      ],
+      "source_program_families": [
+        "global/gemm"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "machsuite/kmp/kmp/a4d07538817a79aca6e20fefb91c1b1798fd0d430f8a5deae436df4f90a91509"
+      ],
+      "group_id": "c3edaf738c5de9c6853f1dbc691ac464e5665506743da1a12b7abe9575e3a9b4",
+      "mapper_input_identities": [
+        "a4d07538817a79aca6e20fefb91c1b1798fd0d430f8a5deae436df4f90a91509"
+      ],
+      "source_program_families": [
+        "global/kmp"
+      ],
+      "split": "test_only"
+    }
+  ],
+  "manifest_sha256": "3f5826a61658832629d42ddca7a8e5ee7cbeca32e1d0e522a3f0c957def971d0",
+  "schema": "cgra-ii-per-cgra-2x2-real-test-source-groups-v1",
+  "source_manifest_sha256": "8c653fdc1c7752f6de2d06d4d411f8d0329c476d0d53a780c21ff00b8b95ba4a",
+  "split_policy": "all_admitted_groups_test_only_before_native_mapping"
+}

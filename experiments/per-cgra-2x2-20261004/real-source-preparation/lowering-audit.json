@@ -1,0 +1,392 @@
+{
+  "case_audit": [
+    {
+      "case_id": "aes/aes",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_000/imported.mlir:41:11: error: 'llvm.xor' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i8, i1>'\n    %32 = llvm.xor %31, %30 : i8\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_000/imported.mlir:41:11: note: see current operation: %13 = \"llvm.xor\"(%12, %11) : (!neura.data<i8, i1>, !neura.data<i8, i1>) -> i8\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_000/imported.mlir:264:11: error: 'llvm.xor' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i8, i1>'\n    %47 = llvm.xor %46, %43 : i8\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_000/imported.mlir:264:11: note: see current operation: %74 = \"llvm.xor\"(%73, %70) : (!neura.data<i8, i1>, !neura.data<i8, i1>) -> i8\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/aes/aes/aes.c",
+      "source_program_families": [
+        "global/aes"
+      ],
+      "source_relative_path": "aes/aes/aes.c",
+      "source_sha256": "81d5252c0257e808b4d33668098f4e01db69a05951d7b70aa9608a8979673f00",
+      "status": "rejected",
+      "top": "aes256_encrypt_ecb"
+    },
+    {
+      "case_id": "backprop/backprop",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1:  will_return} : (f64) -> f64\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_001/imported.mlir:52:11: note: see current operation: %53 = \"llvm.call\"(%48) <{CConv = #llvm.cconv<ccc>, TailCallKind = #llvm.tailcallkind<tail>, callee = @sqrt, fastmathFlags = #llvm.fastmath<none>, memory_effects = #llvm.memory_effects<other = write, argMem = write, inaccessibleMem = write>, no_unwind, op_bundle_sizes = array<i32>, operandSegmentSizes = array<i32: 1, 0>, will_return}> : (!neura.data<f64, i1>) -> f64\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_001/imported.mlir:286:11: error: 'llvm.call' op operand #0 must be variadic of LLVM dialect-compatible type, but got '!neura.data<f64, i1>'\n    %63 = llvm.call tail @exp(%62) {memory_effects = #llvm.memory_effects<other = write, argMem = write, inaccessibleMem = write>, no_unwind, will_return} : (f64) -> f64\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_001/imported.mlir:286:11: note: see current operation: %314 = \"llvm.call\"(%313) <{CConv = #llvm.cconv<ccc>, TailCallKind = #llvm.tailcallkind<tail>, callee = @exp, fastmathFlags = #llvm.fastmath<none>, memory_effects = #llvm.memory_effects<other = write, argMem = write, inaccessibleMem = write>, no_unwind, op_bundle_sizes = array<i32>, operandSegmentSizes = array<i32: 1, 0>, will_return}> : (!neura.data<f64, i1>) -> f64\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/backprop/backprop/backprop.c",
+      "source_program_families": [
+        "global/backprop"
+      ],
+      "source_relative_path": "backprop/backprop/backprop.c",
+      "source_sha256": "70a2fd94cd50dedb0e5d8ae0203490e65cb4a97083190ca4622c1b934324bcfa",
+      "status": "rejected",
+      "top": "backprop"
+    },
+    {
+      "case_id": "bfs/bulk",
+      "dfg_relative_path": "lowering/case_002/route-expanded.mlir",
+      "dfg_sha256": "915a8e02404108e154d907f96423df03f622a5e1ed6076d289557df61cf7980a",
+      "leakage_lineage_id": "80124e226e4490c4e61b32863ed01eee8c8d2bca9b5576babbad2a4ab09f2d2d",
+      "mapper_input_identity": "915a8e02404108e154d907f96423df03f622a5e1ed6076d289557df61cf7980a",
+      "model_visible_graph_identity": "b52a8f76324c973387f256dcf96f02b4d163a1e05e0974f120c17e8f9fb811a8",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/bfs/bulk/bfs.c",
+      "source_program_families": [
+        "global/bfs"
+      ],
+      "source_relative_path": "bfs/bulk/bfs.c",
+      "source_sha256": "e5b7290ab8d52b30dfebb6cdcd2255d1a3aa4beae184d72fdecf10cac4421a12",
+      "status": "lowered",
+      "top": "bfs"
+    },
+    {
+      "case_id": "bfs/queue",
+      "dfg_relative_path": "lowering/case_003/route-expanded.mlir",
+      "dfg_sha256": "9f2ee72bc899b74d7f690487c9d1e6a447786ffddf4d73091778f4a6bdb910cb",
+      "leakage_lineage_id": "27279e6ed90f47d15a2aafc4aa8b07d550a490863bfaed4b34666ab6ba8df638",
+      "mapper_input_identity": "9f2ee72bc899b74d7f690487c9d1e6a447786ffddf4d73091778f4a6bdb910cb",
+      "model_visible_graph_identity": "23723d898d11a6238af5bfb9ee63a05b255565446ed809995d58d6ef37aaafea",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/bfs/queue/bfs.c",
+      "source_program_families": [
+        "global/bfs"
+      ],
+      "source_relative_path": "bfs/queue/bfs.c",
+      "source_sha256": "f0b8824ad3fb630bcf5f39232a74d994cee2e51f018d3567fe78dac1bce47155",
+      "status": "lowered",
+      "top": "bfs"
+    },
+    {
+      "case_id": "fft/strided",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_004/imported.mlir:19:10: error: 'llvm.xor' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i32, i1>'\n    %9 = llvm.xor %8, %6 : i32\n         ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_004/imported.mlir:19:10: note: see current operation: %11 = \"llvm.xor\"(%10, %7) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> i32\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/fft/strided/fft.c",
+      "source_program_families": [
+        "global/fft"
+      ],
+      "source_relative_path": "fft/strided/fft.c",
+      "source_sha256": "d1215c60a706ac45d5369681fdc29cf855862891095d29a367bc2daf45ce9cf0",
+      "status": "rejected",
+      "top": "fft"
+    },
+    {
+      "case_id": "fft/transpose",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_005/imported.mlir:207:12: error: 'llvm.sitofp' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i32, i1>'\n    %176 = llvm.sitofp %175 : i32 to f64\n           ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_005/imported.mlir:207:12: note: see current operation: %170 = \"llvm.sitofp\"(%169) : (!neura.data<i32, i1>) -> f64\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/fft/transpose/fft.c",
+      "source_program_families": [
+        "global/fft"
+      ],
+      "source_relative_path": "fft/transpose/fft.c",
+      "source_sha256": "df5e8741d281d4d63097357e4a5c941303150356b4b8adbdbd872fc643f8343f",
+      "status": "rejected",
+      "top": "fft1D_512"
+    },
+    {
+      "case_id": "gemm/blocked",
+      "dfg_relative_path": "lowering/case_006/route-expanded.mlir",
+      "dfg_sha256": "ca6b3b99dc43969bd2f3a24c359e037b06ee6bba26cd17bf6f2a86dfe7bf81b8",
+      "leakage_lineage_id": "cb0c20b4c2abcb835d983c9b88e39b6235d1c96930b8d1d896912b50c1a877d6",
+      "mapper_input_identity": "ca6b3b99dc43969bd2f3a24c359e037b06ee6bba26cd17bf6f2a86dfe7bf81b8",
+      "model_visible_graph_identity": "20972a07cd7977e6aeead94048ae951bad82399a0143d05006e20cfcfd578fb7",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/gemm/blocked/gemm.c",
+      "source_program_families": [
+        "global/gemm"
+      ],
+      "source_relative_path": "gemm/blocked/gemm.c",
+      "source_sha256": "918d91829a10fe844244b7b1df2fd7c2869b2b8bd5ba5651f7cf7b8281daae33",
+      "status": "lowered",
+      "top": "bbgemm"
+    },
+    {
+      "case_id": "gemm/ncubed",
+      "dfg_relative_path": "lowering/case_007/route-expanded.mlir",
+      "dfg_sha256": "ef7db21a9f1770ae4084a4f279971c84eff475fd55af11d3cfdca4f4fce6f6e0",
+      "leakage_lineage_id": "17268741a47f799ea613b5b7d0a4d6bd352d2723c209c7aaf7aa4b0438bf2410",
+      "mapper_input_identity": "ef7db21a9f1770ae4084a4f279971c84eff475fd55af11d3cfdca4f4fce6f6e0",
+      "model_visible_graph_identity": "fbb6bab758f0a460778a74c0eca6e6a0b7e11deac9628ea33736291e5391decc",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/gemm/ncubed/gemm.c",
+      "source_program_families": [
+        "global/gemm"
+      ],
+      "source_relative_path": "gemm/ncubed/gemm.c",
+      "source_sha256": "b2f38cadb82dde871d3b33a5b8a4e44df17e82cde231149446ffd389bdfb7309",
+      "status": "lowered",
+      "top": "gemm"
+    },
+    {
+      "case_id": "kmp/kmp",
+      "dfg_relative_path": "lowering/case_008/route-expanded.mlir",
+      "dfg_sha256": "a4d07538817a79aca6e20fefb91c1b1798fd0d430f8a5deae436df4f90a91509",
+      "leakage_lineage_id": "d0632bc4c91fb2fbf3a620833097920ded8d10ceb899f8b11a4762267920d88e",
+      "mapper_input_identity": "a4d07538817a79aca6e20fefb91c1b1798fd0d430f8a5deae436df4f90a91509",
+      "model_visible_graph_identity": "18114e312e6a7bdc9f390d6cd2caf7d9b9f63a44e3d361c8cdca13944aa02d74",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/kmp/kmp/kmp.c",
+      "source_program_families": [
+        "global/kmp"
+      ],
+      "source_relative_path": "kmp/kmp/kmp.c",
+      "source_sha256": "ca8e816a7aad80ba370492a66c8003a6c92f816eb9e6424097cbf102f8369647",
+      "status": "lowered",
+      "top": "kmp"
+    },
+    {
+      "case_id": "md/grid",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_009/imported.mlir:33:11: error: 'llvm.intr.umin' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i32, i1>'\n    %18 = llvm.intr.umin(%14, %3) : (i32, i32) -> i32\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_009/imported.mlir:33:11: note: see current operation: %18 = \"llvm.intr.umin\"(%13, %8) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> i32\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/md/grid/md.c",
+      "source_program_families": [
+        "global/md"
+      ],
+      "source_relative_path": "md/grid/md.c",
+      "source_sha256": "96f7ae0f9765b50c06888baaa6b368d0afd161deca4fdd1787f11d3c59b8d696",
+      "status": "rejected",
+      "top": "md"
+    },
+    {
+      "case_id": "md/knn",
+      "dfg_relative_path": "lowering/case_010/route-expanded.mlir",
+      "dfg_sha256": "6b29eaaf4246a1fca50372fd2983acd52a79e1319d604c4cf76cc22d09b4c75e",
+      "leakage_lineage_id": "bd5bbccc0421fa7ccae3288b38235b0030a7535c4bdeff8e1b7d0b326e7e796a",
+      "mapper_input_identity": "6b29eaaf4246a1fca50372fd2983acd52a79e1319d604c4cf76cc22d09b4c75e",
+      "model_visible_graph_identity": "856debd343f492d53b7be971eaf20116ba13284ded2dcc0e0157b3d6c7c4732a",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/md/knn/md.c",
+      "source_program_families": [
+        "global/md"
+      ],
+      "source_relative_path": "md/knn/md.c",
+      "source_sha256": "6cfd3208dfab629c478309946daac2982181be283a0762e9788ca6423ac5da39",
+      "status": "lowered",
+      "top": "md_kernel"
+    },
+    {
+      "case_id": "nw/nw",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=-6: >(long, std::unique_ptr<llvm::MemoryBuffer, std::default_delete<llvm::MemoryBuffer>>, llvm::raw_ostream&) MlirOptMain.cpp:0:0\n#26 0x000055fcfab0b8ce mlir::splitAndProcessBuffer(std::unique_ptr<llvm::MemoryBuffer, std::default_delete<llvm::MemoryBuffer>>, llvm::function_ref<llvm::LogicalResult (std::unique_ptr<llvm::MemoryBuffer, std::default_delete<llvm::MemoryBuffer>>, llvm::raw_ostream&)>, llvm::raw_ostream&, llvm::StringRef, llvm::StringRef) (/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt+0x2d2c8ce)\n#27 0x000055fcfa95b7e9 mlir::MlirOptMain(llvm::raw_ostream&, std::unique_ptr<llvm::MemoryBuffer, std::default_delete<llvm::MemoryBuffer>>, mlir::DialectRegistry&, mlir::MlirOptMainConfig const&) (/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt+0x2b7c7e9)\n#28 0x000055fcfa964e31 mlir::MlirOptMain(int, char**, llvm::StringRef, llvm::StringRef, mlir::DialectRegistry&) (/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt+0x2b85e31)\n#29 0x000055fcfa96536e mlir::MlirOptMain(int, char**, llvm::StringRef, mlir::DialectRegistry&) (/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt+0x2b8636e)\n#30 0x000055fcf81475bd main /home/x/shiran/project/neura/tools/mlir-neura-opt/mlir-neura-opt.cpp:135:0\n#31 0x00007f76d1dce083 __libc_start_main /build/glibc-LcI20x/glibc-2.31/csu/../csu/libc-start.c:342:3\n#32 0x000055fcf81354fe _start (/home/x/shiran/project/neura/build/tools/mlir-neura-opt/mlir-neura-opt+0x3564fe)\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/nw/nw/nw.c",
+      "source_program_families": [
+        "global/nw"
+      ],
+      "source_relative_path": "nw/nw/nw.c",
+      "source_sha256": "81136c5e70a05bf8f6f80475e1d9a4f4cebe60b530f816cd41b658b070d666d7",
+      "status": "rejected",
+      "top": "needwun"
+    },
+    {
+      "case_id": "sort/merge",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_012/imported.mlir:47:5: error: 'llvm.intr.lifetime.start' op operand #0 must be LLVM pointer type, but got '!neura.data<!llvm.ptr, i1>'\n    llvm.intr.lifetime.start 8192, %14 : !llvm.ptr\n    ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_012/imported.mlir:47:5: note: see current operation: \"llvm.intr.lifetime.start\"(%44) <{size = 8192 : i64}> : (!neura.data<!llvm.ptr, i1>) -> ()\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/sort/merge/sort.c",
+      "source_program_families": [
+        "global/sort"
+      ],
+      "source_relative_path": "sort/merge/sort.c",
+      "source_sha256": "2538e5f858b94e67ebf48bf49fa9c8b51ac6151044d8239bacef2432df739d1d",
+      "status": "rejected",
+      "top": "ms_mergesort"
+    },
+    {
+      "case_id": "sort/radix",
+      "failure_stage": "neura_lower",
+      "native_mapping_started": false,
+      "reject_reason": "RuntimeError: neura_lower exit=1: [mlir-neura-opt] No architecture specification file provided, using default configuration\n[ctrl2data] Processing neura.return operation...\n\"neura.return\"() : () -> ()\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_013/imported.mlir:40:11: error: 'llvm.ashr' op operand #0 must be signless integer or LLVM dialect-compatible vector of signless integer, but got '!neura.data<i32, i1>'\n    %28 = llvm.ashr %27, %18 : i32\n          ^\n/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/real-source-preparation/lowering/case_013/imported.mlir:40:11: note: see current operation: %46 = \"llvm.ashr\"(%45, %32) : (!neura.data<i32, i1>, !neura.data<i32, i1>) -> i32\n",
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/sort/radix/sort.c",
+      "source_program_families": [
+        "global/sort"
+      ],
+      "source_relative_path": "sort/radix/sort.c",
+      "source_sha256": "46c63841c01fe4c2ffb9ac4ef03677f12e84210c773bd0f13b3733ab7847ccc0",
+      "status": "rejected",
+      "top": "ss_sort"
+    },
+    {
+      "case_id": "spmv/crs",
+      "dfg_relative_path": "lowering/case_014/route-expanded.mlir",
+      "dfg_sha256": "3bf5ee16c81b183a5b8dce1d829de1b6ff3912333d84d3a0ec25fda0da69ded2",
+      "leakage_lineage_id": "0d55a2f27da6c84343aba24fded4842e8a3cee2612b699ced91f4a169cf80751",
+      "mapper_input_identity": "3bf5ee16c81b183a5b8dce1d829de1b6ff3912333d84d3a0ec25fda0da69ded2",
+      "model_visible_graph_identity": "346874fb4d1d6d95c70a9c219ec365c561c150acf73bf25adbcb4977e80257d4",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/spmv/crs/spmv.c",
+      "source_program_families": [
+        "global/spmv"
+      ],
+      "source_relative_path": "spmv/crs/spmv.c",
+      "source_sha256": "bf583a1cb50de90fea93d7d31a09bee034f0988cb6830ef97c0b089e2394c498",
+      "status": "lowered",
+      "top": "spmv"
+    },
+    {
+      "case_id": "spmv/ellpack",
+      "dfg_relative_path": "lowering/case_015/route-expanded.mlir",
+      "dfg_sha256": "f56577c786ebac72ed841ba9d5a24e2fbe92368e587b6520a10c3f6faae634ad",
+      "leakage_lineage_id": "ff7115ce45f4b3eb8ba932dd8c706441cd48ad36dfdfb63bcdeec645dd0add81",
+      "mapper_input_identity": "f56577c786ebac72ed841ba9d5a24e2fbe92368e587b6520a10c3f6faae634ad",
+      "model_visible_graph_identity": "2fd4f349c00c2d1f2939ea9d9a836c596816e2501e1665f1cb4a77135282b5a9",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/spmv/ellpack/spmv.c",
+      "source_program_families": [
+        "global/spmv"
+      ],
+      "source_relative_path": "spmv/ellpack/spmv.c",
+      "source_sha256": "5e2b8a46fb7c1c52461bfb862ae8420e976b8c9321d629d7d9b87eac7504754f",
+      "status": "lowered",
+      "top": "ellpack"
+    },
+    {
+      "case_id": "stencil/stencil2d",
+      "dfg_relative_path": "lowering/case_016/route-expanded.mlir",
+      "dfg_sha256": "e12f45335b7204a792b6fc85d7c944de6cfc76c9a3cb859f6aff7c566b79f33a",
+      "leakage_lineage_id": "b413c959cf5c1785c8b6716a8a54ee62f2147655f04d86fdb384ec7116f64fbe",
+      "mapper_input_identity": "e12f45335b7204a792b6fc85d7c944de6cfc76c9a3cb859f6aff7c566b79f33a",
+      "model_visible_graph_identity": "3ea9f33ed473ff4c37d8ac569be7588c989d5c0aae8853bc9202d76ea46781fa",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/stencil/stencil2d/stencil.c",
+      "source_program_families": [
+        "global/stencil"
+      ],
+      "source_relative_path": "stencil/stencil2d/stencil.c",
+      "source_sha256": "1834776b299ac94ba70bf6f8394f50f44d9733ff8c943072eae7867a7e0dd12e",
+      "status": "lowered",
+      "top": "stencil"
+    },
+    {
+      "case_id": "stencil/stencil3d",
+      "dfg_relative_path": "lowering/case_017/route-expanded.mlir",
+      "dfg_sha256": "2d7c6f70e40942e933576c0710bddaf19045bd2240f3618ebe48376c2d3a8808",
+      "leakage_lineage_id": "39f88b82c04f146bec180895c46eda7edfef2c9eeee598a2fa42321fca602161",
+      "mapper_input_identity": "2d7c6f70e40942e933576c0710bddaf19045bd2240f3618ebe48376c2d3a8808",
+      "model_visible_graph_identity": "714a44f0f0034c1acfe55c2ee3e4b330d50df785848c5e2a98e7a04d342b2c14",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/stencil/stencil3d/stencil.c",
+      "source_program_families": [
+        "global/stencil"
+      ],
+      "source_relative_path": "stencil/stencil3d/stencil.c",
+      "source_sha256": "f5624ce617481d788f89230241c711bf95186fa5ce527f3fcb5b723026bafbc6",
+      "status": "lowered",
+      "top": "stencil3d"
+    },
+    {
+      "case_id": "viterbi/viterbi",
+      "dfg_relative_path": "lowering/case_018/route-expanded.mlir",
+      "dfg_sha256": "ee3d6d2aee27ac587b4333785d32916610fe75698d970dd9deb8c1996a3212ee",
+      "leakage_lineage_id": "3c867513c16317919a5dcf99a13d8fc7774c7f751ae704efe4761635f3cc4471",
+      "mapper_input_identity": "ee3d6d2aee27ac587b4333785d32916610fe75698d970dd9deb8c1996a3212ee",
+      "model_visible_graph_identity": "7a5b746d079a2b5d996cca11360d27f6f58ee230f1c7958d56cedca08d20d4d2",
+      "native_mapping_invoked": false,
+      "native_mapping_started": false,
+      "semantic_equivalence_verified": false,
+      "source_path": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite/viterbi/viterbi/viterbi.c",
+      "source_program_families": [
+        "global/viterbi"
+      ],
+      "source_relative_path": "viterbi/viterbi/viterbi.c",
+      "source_sha256": "9864b6c75c127650318d658066e24bd003a9b5ad3923696e824543db12cf16ce",
+      "status": "lowered",
+      "top": "viterbi"
+    }
+  ],
+  "lowered_source_case_count": 11,
+  "manifest_sha256": "10af8f9bb41a4a9ff94a746bbc52c8074886e7fcb46284ec7ea9fb852c281d89",
+  "mapping_labels_created": false,
+  "max_concurrent_tool_processes": 1,
+  "native_mapping_invoked": false,
+  "phase": "lowering_only_admission_not_frozen",
+  "pinned_importer_path": "/home/x/shiran/project/cgra-ii-predictor/adapters/import_aux_c_kernels.py",
+  "pinned_importer_sha256": "e966d03a1a14a6e1d602c6331d10684aa4904ef27432f666e7beb064784c7995",
+  "projected_2x2_query_count_before_admission": 88,
+  "reduction_case_available_in_pinned_machsuite_roster": false,
+  "rejected_source_case_count": 8,
+  "required_cases": [
+    "gemm/blocked",
+    "gemm/ncubed",
+    "spmv/crs",
+    "spmv/ellpack",
+    "stencil/stencil2d",
+    "stencil/stencil3d"
+  ],
+  "schema": "cgra-ii-per-cgra-2x2-real-source-preparation-v1",
+  "shape_roster": [
+    [
+      2,
+      2
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      4,
+      2
+    ],
+    [
+      2,
+      6
+    ],
+    [
+      6,
+      2
+    ],
+    [
+      2,
+      8
+    ],
+    [
+      8,
+      2
+    ],
+    [
+      4,
+      4
+    ]
+  ],
+  "source_root": "/home/x/shiran/project/cgra-ii-predictor/third_party/machsuite",
+  "source_roster_count": 19,
+  "unique_mapper_input_identity_count": 11,
+  "unique_visible_graph_identity_count": 11,
+  "upstream_commit": "6236e593012cb86b0d2f08d9fb9ba0411ff989b4"
+}

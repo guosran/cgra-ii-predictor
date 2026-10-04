@@ -1,0 +1,47 @@
+Review bundle for the per-CGRA 2x2 improvement study
+
+Read ../../docs/PER_CGRA_2X2_IMPROVEMENT_20261004.txt first.
+No new candidate passed the frozen gate; deployment weights remain unchanged.
+
+baseline-query-rows.{csv,jsonl}.gz: all original native query outcomes and
+  retained-model/member predictions; no numeric labels for censored queries.
+baseline-evaluation.json.gz: all baselines, source/motif/shape strata,
+  source-group intervals, oracle query budgets and incomplete-label coverage.
+feature-audit.json, residual-audit.json, ranking-output-audit.json,
+  development-feature-collisions.json: input/output/weighting audits.
+experiment-plan.json: exact executed configurations, groups and selection gate.
+development-summary.csv/json.gz: each seed, partition and ensemble result.
+development-oof-predictions.jsonl.gz: held-out-development predictions for all
+  six configurations; no rejected-model final-test predictions are included.
+development-oof-evaluation.json.gz, development-paired-group-intervals.json:
+  all OOF metrics and paired group-resampling confidence intervals.
+fit-curves-predictions.tar.gz: all96 fits' per-epoch point/pairwise/top1 loss and
+  validation curves, per-seed selected-checkpoint predictions and result records.
+*.png/*.pdf: loss, validation and outer-fold comparison figures.
+frozen-selection.json, holdout-evaluation.json.gz: immutable decision and one
+  final test evaluation of the retained reference only.
+real-source-preparation/, orbit-variant-source-preparation/: admission and
+  source grouping before native labels, collector provenance and outcomes.
+real-source-evaluation/, orbit-variant-evaluation/: fresh test-only query
+  predictions, native failure/timeout coverage and complete-label ranking.
+orbit-benchmark-identity-map.json.gz: canonical task extraction plus exact
+  route-expansion identity audit; saved transform space is not exhaustive.
+orbit-offline-audit/: explicit-model integration probe and reused native-body
+  parity/cost diagnostics; these are not whole-program native speedups.
+executed-source.tar.gz: exact training-time Python sources and the pinned local
+  auxiliary C importer. The final CLI adds plan/cache/test seals after the fits;
+  those guards do not retroactively describe the historical invocation.
+protected-files.json, protected-verification.json: before/after SHA256 checks.
+artifact-manifest.json: byte counts and hashes for this bundle and the full
+  local study, including every epoch's parameter checkpoint and native artifact.
+
+Full local study:
+  /home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004
+It is intentionally external to Git. epoch-checkpoints.npz retains all epochs'
+parameters/normalization, not optimizer states; optimizer replay starts from seed.
+Raw source corpus, external compilers and native binaries are not redistributed.
+Admission records point to the local pinned sources/toolchain and hashes.
+
+To inspect compressed text, use e.g. gzip -dc baseline-query-rows.csv.gz.
+To inspect all fit records, use tar -tzf fit-curves-predictions.tar.gz.
+Reproduction entry points and new-study commands are in adapters/README.md.

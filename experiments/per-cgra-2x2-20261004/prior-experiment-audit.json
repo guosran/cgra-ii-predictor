@@ -1,0 +1,45 @@
+[
+  {
+    "topic": "output/normalization",
+    "architecture": "per-CGRA4x4 only",
+    "document": "/home/x/shiran/project/cgra-ii-predictor/docs/ORBIT_MAX4_OUTPUT_NORM_AUDIT_20260926.md",
+    "report": "/home/x/shiran/data/cgra-general-target-20260924/orbit-max4-output-norm-audit-20260926/report.json",
+    "finding": "Direct numeric II output and weighted normalization had mixed group ranking changes; no stable prior win. Labels not reused.",
+    "document_exists": true,
+    "document_sha256": "7a9bb286e863a4a2f637cdc8c9e960044fa7fc1fabe08ca50e09f405038e3e94",
+    "report_exists": true,
+    "report_sha256": "f1a7c1a07a8183297939c62532bb3fdecbbea61cf482cdb152dc1442b452709e"
+  },
+  {
+    "topic": "feature/capacity",
+    "architecture": "per-CGRA4x4 only",
+    "document": "/home/x/shiran/project/cgra-ii-predictor/docs/ORBIT_MAX4_MODEL_SPEC_CAPACITY_AUDIT_20260926.md",
+    "report": "/home/x/shiran/data/cgra-general-target-20260924/orbit-max4-feature-ablation-v2-resumed-20260925/report.json",
+    "finding": "Small opcode restoration modest/mixed; no justification to increase network width.",
+    "document_exists": true,
+    "document_sha256": "53e111626df20d173ac7e684278bdfd84cb9beabdf1e0f0a37a8fe7ad5aabea8",
+    "report_exists": true,
+    "report_sha256": "81d006342637f7848988d8cea52333012a3d47549f3873bd89e514434c34e46a"
+  },
+  {
+    "topic": "selection",
+    "architecture": "per-CGRA4x4 only",
+    "document": "/home/x/shiran/project/cgra-ii-predictor/docs/COMPLETE16_MODEL_METHODS_20260914.md",
+    "finding": "Prior compact61 fixed80 did not pass6/9groups; current2x2 validation-selected400 is new experiment.",
+    "document_exists": true,
+    "document_sha256": "93b1f2713ce8307955c47c352f96e86870ebb89456ea70d9ffdecaf48bf9170b"
+  },
+  {
+    "topic": "disagreement",
+    "architecture": "per-CGRA4x4 only",
+    "document": "/home/x/shiran/project/cgra-ii-predictor/docs/ORBIT_MAX4_SAFETY_20260924.md",
+    "finding": "Low disagreement can coexist with wrong ranking; no calibrated failure or safe-pruning claim.",
+    "document_exists": true,
+    "document_sha256": "8fa76f2354b598cea73a10ace37e91d618f1b46f8b9763815362fac18f91addb"
+  },
+  {
+    "topic": "other2x2labels",
+    "collection": "/home/x/shiran/data/cgra-per-cgra-2x2-20261004/native-collection-2x2-smoke-v0",
+    "finding": "Only one repeated existing query; no new independent coverage; not duplicated."
+  }
+]

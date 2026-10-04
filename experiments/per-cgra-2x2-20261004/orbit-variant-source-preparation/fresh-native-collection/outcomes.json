@@ -1,0 +1,780 @@
+{
+  "censored_count": 6,
+  "collection_provenance_sha256": "fd71303801ddd51308767d961d8226ef9a1dfc88cfbf517aa3727d827bb34eef",
+  "manifest_sha256": "0e687b9b9582174259aeac12f747e3d97cf4b1aa99380c0129d0e5542d9cd5c2",
+  "queries": [
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 8,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 1,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x2",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x2/result.json",
+      "result_sha256": "362e063d4f77e9f06d0d26f18962bff0584f92265b7fe9ec1befbd8a94396c22",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 6,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 1,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x4",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x4/result.json",
+      "result_sha256": "cc5b1c04b74c6f8b7da6879fc68fa5b1e18d6ed7aa5a53a0e4e5cc5561df1783",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 5,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 2,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/4x2",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/4x2/result.json",
+      "result_sha256": "18a82b9827bca3f1e33194c108ae0de8261bf756646b16629132f603a0dc5d8e",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 6,
+      "compiled_ii": 4,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 3,
+      "physical_cgra_rows": 1,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x6",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x6/result.json",
+      "result_sha256": "220976737305306370796e571f7499743e1e38689ab3687035de2e7772f60efb",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 4,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 3,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/6x2",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/6x2/result.json",
+      "result_sha256": "ec2f7c7d0772ab6688296f1e5783bad2a1dba603871e00660c2c3d14dc6a5f8a",
+      "rows": 6,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 8,
+      "compiled_ii": 4,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 4,
+      "physical_cgra_rows": 1,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x8",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/2x8/result.json",
+      "result_sha256": "2a7d49bd4d3ff2357c4f7347aa823f3b0342f57fd6d94acfa3b998f51e5c2965",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 4,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 4,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/8x2",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/8x2/result.json",
+      "result_sha256": "cf085e739c53e571d6b2bf8331df075de989cb06af38dda64ecc9f6d7c9037d2",
+      "rows": 8,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 3,
+      "dfg_path": "inputs/dfg/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa.mlir",
+      "dfg_sha256": "d6db48e3b7108c368717abd1fdc2638d3b91454d76da52a29a7ae396b9ddb169",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/harris"
+      ],
+      "mapper_input_identity": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa",
+      "model_visible_graph_identity": "3b7c248818dffb451bdd2f5e27a1240f826a61b0a0de29cb58ee988ef03bbda2",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 2,
+      "query_id": "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/4x4",
+      "result_path": "artifacts/ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa/4x4/result.json",
+      "result_sha256": "d4a54fd8d8af245f17f3a4e454601ac6ec193924988bbfe8b265ca11843718f2",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_names": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": "mapper_native_search_failed",
+      "cols": 2,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 1,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x2",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x2/result.json",
+      "result_sha256": "6fd7fb14229ede52521b9df953afe7b08915cb97abcdfaeacbd1892ae07aa484",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 15,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 1,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x4",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x4/result.json",
+      "result_sha256": "0e3fbd42f3cc4ef8b67fab7965c7e6a31d7497b775525b503703460f7fee0826",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 15,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 2,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/4x2",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/4x2/result.json",
+      "result_sha256": "9cac6475a5d28c6cf62de05aef5ac67e9c68cd81266433dc57dc1551ea63b002",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 6,
+      "compiled_ii": 10,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 3,
+      "physical_cgra_rows": 1,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x6",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x6/result.json",
+      "result_sha256": "a82fc3734fe035e48f28bd7148c447bfe321bf1c49ec0c3d426638a9b7e09250",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 12,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 3,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/6x2",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/6x2/result.json",
+      "result_sha256": "91d3be6b8564069ca981db1a0acc9f1ddd2c600b6a419fa7fd83435289bd27b5",
+      "rows": 6,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": "mapper_resource_timeout",
+      "cols": 8,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 4,
+      "physical_cgra_rows": 1,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x8",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/2x8/result.json",
+      "result_sha256": "82256f2ddea5ee8fedaf6f99b05de8df2ec9fa7a473895de340a649c8b1796ec",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": "mapper_resource_timeout",
+      "cols": 2,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 4,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/8x2",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/8x2/result.json",
+      "result_sha256": "2713ed916dc885bade16cc351e9253fa98c1325cf3970e8bba02382445d20ff5",
+      "rows": 8,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 9,
+      "dfg_path": "inputs/dfg/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba.mlir",
+      "dfg_sha256": "3d161768d146a1e3fac6a2ecbd3c526a3f95de2862d000e597424734d3a29907",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba",
+      "model_visible_graph_identity": "9b50ab54b2b2a020f33bf9712cf5ed9d2f03f2f00d2ec3b69a7f89bd94d0b50c",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 2,
+      "query_id": "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/4x4",
+      "result_path": "artifacts/a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba/4x4/result.json",
+      "result_sha256": "9cefd5340840ac9ec6554810bdbcb00f4c510f6cedeb3aaf5184a9616860ba87",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": "mapper_native_search_failed",
+      "cols": 2,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 1,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x2",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x2/result.json",
+      "result_sha256": "d06241df3271d172241067d5f865e8657ecfcf9247f6cfef60f43b095e8974b9",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 16,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 1,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x4",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x4/result.json",
+      "result_sha256": "073170bd97f93293be5d587e599e29268f6e3f7a2443f6b96492f2bc1b687a20",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 2,
+      "compiled_ii": 16,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 2,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/4x2",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/4x2/result.json",
+      "result_sha256": "fd284719da845135de75b3ab711f37e388dfdbed3af234ac3a1777f8c11a1984",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": null,
+      "cols": 6,
+      "compiled_ii": 12,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 3,
+      "physical_cgra_rows": 1,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x6",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x6/result.json",
+      "result_sha256": "17277e1089119f5abeaa366ffd5a97447f956045928b577daf893097186fc8ce",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": "mapper_resource_timeout",
+      "cols": 2,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 3,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/6x2",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/6x2/result.json",
+      "result_sha256": "dd5c122b6a0f32588083dc20de20094af49ce15fc1e65192ce9ac6845b85053d",
+      "rows": 6,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": null,
+      "cols": 8,
+      "compiled_ii": 11,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 4,
+      "physical_cgra_rows": 1,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x8",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/2x8/result.json",
+      "result_sha256": "fcfd1e019dc0a9961fb6cec14491fcf2c4bea13b0578b3c7ea8084f1d7d4e8e4",
+      "rows": 2,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    },
+    {
+      "censor_reason": "mapper_resource_timeout",
+      "cols": 2,
+      "compiled_ii": null,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 1,
+      "physical_cgra_rows": 4,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/8x2",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/8x2/result.json",
+      "result_sha256": "d4d552fc5309579dda9641a41fb8d14b1fceb292246f02e3b1ed885cfb349db6",
+      "rows": 8,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "censored"
+    },
+    {
+      "censor_reason": null,
+      "cols": 4,
+      "compiled_ii": 9,
+      "dfg_path": "inputs/dfg/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66.mlir",
+      "dfg_sha256": "ce2519e00c42550e6df2918cc08af01d098c6c5da2e063c8d24e3a0d24158afb",
+      "domains": [
+        "real_program"
+      ],
+      "leakage_lineage_ids": [
+        "orbit-final/raytracing"
+      ],
+      "mapper_input_identity": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+      "model_visible_graph_identity": "f91e7cae609fd0808b42ff5edd82e1fef049ae344c70e915767b26a8dfde929b",
+      "physical_cgra_columns": 2,
+      "physical_cgra_rows": 2,
+      "query_id": "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/4x4",
+      "result_path": "artifacts/9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66/4x4/result.json",
+      "result_sha256": "205e76f9bfcf6b575c1c1281f89cb51065d00b5f16dfd75504829f6aac540aee",
+      "rows": 4,
+      "shape_protocol_id": "amoeba-static-rectangles-2x2-per-cgra-max4",
+      "source_candidate_ids": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_names": [
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "status": "success"
+    }
+  ],
+  "query_count": 24,
+  "query_manifest_sha256": "363fd5243a5942b47b59bd52a5bdaf3a1d3689e2ffe983ed78102ba2636b3bd2",
+  "schema": "cgra-ii-per-cgra-2x2-outcomes-v1",
+  "success_count": 18,
+  "terminal_count": 24
+}

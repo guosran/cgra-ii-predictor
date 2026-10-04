@@ -1,0 +1,2368 @@
+{
+  "activity": "read-only artifact/source audit completed; one bounded explicit-model C++ cost-catalog loader/scorer probe passed; no native mapper query, candidate scheduler, compilation build, or training was run.",
+  "architecture": {
+    "matches_requested": true,
+    "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+    "requested_sha256": "6f4a9a1815dcc0d97c00fd6ee20424fa9420ace90654da29e70d283cba7a611f",
+    "sha256": "6f4a9a1815dcc0d97c00fd6ee20424fa9420ace90654da29e70d283cba7a611f"
+  },
+  "audit_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit",
+  "candidate": {
+    "branch": "orbit-2x2-predictor",
+    "checkpoint_sha256": "bb7196d5b37d54b1e5245a5e47cb6323cebfb10deea6d902e2ac6425f74c155e",
+    "checkpoint_sha256_matches_source_candidate": true,
+    "commit": "3ade31806cb4c92e31888109f7c42b8a77e4cbce",
+    "export_adapter": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/export_orbit_2x2_predictor.py",
+    "package_metadata_sha256": "afe8db4ed7b2a386a11f423157eb9b940777d8146a36a934d62b2114d67a9fa7",
+    "runtime_bundle_schema": "orbit-cgra-ii-per-cgra-2x2-direct-ensemble-cpp-v1",
+    "runtime_bundle_sha256": "54dd347aaa9c1ee902f74b5457d74db0fe1d6857b6abde02e2d261151b0f5952",
+    "source_checkpoint_path": "/home/x/shiran/project/cgra-ii-predictor-2x2-publish/models/candidates/per-cgra-2x2/mapper.pt",
+    "source_model_json_sha256": "afe8db4ed7b2a386a11f423157eb9b940777d8146a36a934d62b2114d67a9fa7",
+    "source_model_metadata_byte_identical": true
+  },
+  "frozen_v34_failure": {
+    "binary_blake2b_160": "559541f2442df4750a6580be9067c2e6c08c1145",
+    "binary_bytes": 495422040,
+    "binary_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/tooling/mlir-amoeba-opt-v34",
+    "command_record": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/load.command.json",
+    "consumption": {
+      "actual_shortlist_new_candidates": 0,
+      "preparation_new_actual_candidates": 0,
+      "search_A_calls": 0,
+      "search_B_calls": 0
+    },
+    "elapsed_seconds": 0.06464767456054688,
+    "exit_code": 1,
+    "first_error": "field \"schema\" does not match \"cgra-ii-formal-max4-ensemble-v2-nohash\"",
+    "integrated_scorer": "blocked_schema_entrypoint",
+    "mapper_passes": 0,
+    "phase": "runtime-contract",
+    "scheduler_attempts": 0,
+    "status": "blocked_integrated_v34_2x2_scorer",
+    "stderr_log": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/load.stderr.log"
+  },
+  "generated_artifact_sha256": [
+    {
+      "bytes": 129478,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "sha256": "8bb673c620c85e212d4ba97fef7ae64fb06bce206335eaae606aa27ddc61079a"
+    },
+    {
+      "bytes": 1129655,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+      "sha256": "d0cdb8959ccc24687895c619f184a6ecc7f3ac8319aa90e604ccb1ac428812be"
+    },
+    {
+      "bytes": 1523052,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+      "sha256": "6165fc408d16c35260c17026104959233c8c4ca6026c578664ca353263416efb"
+    },
+    {
+      "bytes": 445867,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir",
+      "sha256": "4012b597544f56d37626ed84031972782c1b5e73bd0160450d2fa7cae50913f9"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 10522,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+      "sha256": "440fcd371b97a5a5c5ca32d05bffdb704e103ac54ee420a1cdca488b3638e04e"
+    }
+  ],
+  "integrated_catalog_probe": {
+    "all_candidate_only": true,
+    "all_candidate_pending": true,
+    "all_production_ready_false": true,
+    "candidate_count_metadata": "4722366482869645213696",
+    "communication_latency": "scored_by_scheduler",
+    "cost_catalog_schema": "amoeba-task-shape-cost",
+    "distinct_shapes": 8,
+    "distinct_tasks": 24,
+    "entries": 192,
+    "feature_queries": 192,
+    "integration_vs_saved_standalone_2x2_comparison": {
+      "changed_feature_count_distribution": {
+        "25": 24
+      },
+      "explanation_limit": "Exact normalized kernel-body signatures match for all 24 canonical task bodies, baseline candidate bodies, and saved mapper-cache bodies (linked by the documented cache IDs and verified operation/attribute/type text). This is not a changed source snapshot. The current integrated frontend nevertheless produces different feature vectors (25 coordinates per row), including log_count_return; the cause of the other changed coordinates is not established.",
+      "feature_44_name": "log_count_return",
+      "feature_44_values": [
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_0"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_1"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_2"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_3"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_4"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_5"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_6"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_7"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_8"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_9"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_10"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_11"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_12"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_13"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_14"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_15"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_16"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_17"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_18"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_19"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_20"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_21"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_22"
+        },
+        {
+          "new": 0.6931471805599453,
+          "saved_mapper_input": 0,
+          "task": "Task_23"
+        }
+      ],
+      "feature_indices_changed_all_pairs": [
+        44,
+        65,
+        66,
+        67,
+        68,
+        69,
+        71,
+        72,
+        73,
+        75,
+        76,
+        77,
+        79,
+        80,
+        83,
+        93,
+        96,
+        101,
+        102,
+        103,
+        106,
+        107,
+        126,
+        127,
+        147
+      ],
+      "feature_vectors_equal": false,
+      "feature_width": 148,
+      "missing_pairs": 0,
+      "pair_count": 24,
+      "task_predictions": {
+        "mae": 0.2748728593190511,
+        "max_abs": 0.38863658905029297,
+        "mean_integrated_minus_saved_ii": -0.2748728593190511
+      }
+    },
+    "ml_cache": {
+      "entries": 144,
+      "hits": 48,
+      "identity": "canonical-body-text-and-mapper-shape",
+      "misses": 144,
+      "trip_count_in_identity": false
+    },
+    "no_full_program_schedule_generated": true,
+    "no_native_mapper_calls": true,
+    "packing_comparison_status": "not available from these artifacts; task-shape catalog lacks ranked joint candidates, communication scheduling, successful native baseline, and admitted distinct new model",
+    "per_task_comparison_rows": [
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.6656155586242676,
+        "integrated_minus_saved_ii": -0.2539689540863037,
+        "saved_cache_entry": "task-0",
+        "saved_standalone_predicted_ii": 3.9195845127105713,
+        "task": "Task_0"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 7.482578277587891,
+        "integrated_minus_saved_ii": -0.04030036926269531,
+        "saved_cache_entry": "task-1",
+        "saved_standalone_predicted_ii": 7.522878646850586,
+        "task": "Task_1"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.657824754714966,
+        "integrated_minus_saved_ii": -0.25305819511413574,
+        "saved_cache_entry": "task-2",
+        "saved_standalone_predicted_ii": 3.9108829498291016,
+        "task": "Task_2"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.657824754714966,
+        "integrated_minus_saved_ii": -0.25305819511413574,
+        "saved_cache_entry": "task-3",
+        "saved_standalone_predicted_ii": 3.9108829498291016,
+        "task": "Task_3"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 7.262577056884766,
+        "integrated_minus_saved_ii": -0.3494882583618164,
+        "saved_cache_entry": "task-4",
+        "saved_standalone_predicted_ii": 7.612065315246582,
+        "task": "Task_4"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 7.319688320159912,
+        "integrated_minus_saved_ii": -0.3537578582763672,
+        "saved_cache_entry": "task-5",
+        "saved_standalone_predicted_ii": 7.673446178436279,
+        "task": "Task_5"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 10.662091255187988,
+        "integrated_minus_saved_ii": -0.15733814239501953,
+        "saved_cache_entry": "task-6",
+        "saved_standalone_predicted_ii": 10.819429397583008,
+        "task": "Task_6"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.4669294357299805,
+        "integrated_minus_saved_ii": -0.29959869384765625,
+        "saved_cache_entry": "task-7",
+        "saved_standalone_predicted_ii": 2.7665281295776367,
+        "task": "Task_7"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.4669294357299805,
+        "integrated_minus_saved_ii": -0.29959869384765625,
+        "saved_cache_entry": "task-7",
+        "saved_standalone_predicted_ii": 2.7665281295776367,
+        "task": "Task_8"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.5831003189086914,
+        "integrated_minus_saved_ii": -0.3048124313354492,
+        "saved_cache_entry": "task-8",
+        "saved_standalone_predicted_ii": 2.8879127502441406,
+        "task": "Task_9"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-9",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_10"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-9",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_11"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-9",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_12"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-10",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_13"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-10",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_14"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 3.7190589904785156,
+        "integrated_minus_saved_ii": -0.2930417060852051,
+        "saved_cache_entry": "task-10",
+        "saved_standalone_predicted_ii": 4.012100696563721,
+        "task": "Task_15"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 4.809870719909668,
+        "integrated_minus_saved_ii": -0.3012838363647461,
+        "saved_cache_entry": "task-11",
+        "saved_standalone_predicted_ii": 5.111154556274414,
+        "task": "Task_16"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.566884994506836,
+        "integrated_minus_saved_ii": -0.22913765907287598,
+        "saved_cache_entry": "task-12",
+        "saved_standalone_predicted_ii": 2.796022653579712,
+        "task": "Task_17"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.566884994506836,
+        "integrated_minus_saved_ii": -0.22913765907287598,
+        "saved_cache_entry": "task-13",
+        "saved_standalone_predicted_ii": 2.796022653579712,
+        "task": "Task_18"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 5.167134761810303,
+        "integrated_minus_saved_ii": -0.38863658905029297,
+        "saved_cache_entry": "task-14",
+        "saved_standalone_predicted_ii": 5.555771350860596,
+        "task": "Task_19"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 5.167134761810303,
+        "integrated_minus_saved_ii": -0.38863658905029297,
+        "saved_cache_entry": "task-15",
+        "saved_standalone_predicted_ii": 5.555771350860596,
+        "task": "Task_20"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 6.543919563293457,
+        "integrated_minus_saved_ii": -0.1350269317626953,
+        "saved_cache_entry": "task-16",
+        "saved_standalone_predicted_ii": 6.678946495056152,
+        "task": "Task_21"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.7170631885528564,
+        "integrated_minus_saved_ii": -0.3298022747039795,
+        "saved_cache_entry": "task-17",
+        "saved_standalone_predicted_ii": 3.046865463256836,
+        "task": "Task_22"
+      },
+      {
+        "changed_feature_indices": [
+          44,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          73,
+          75,
+          76,
+          77,
+          79,
+          80,
+          83,
+          93,
+          96,
+          101,
+          102,
+          103,
+          106,
+          107,
+          126,
+          127,
+          147
+        ],
+        "current_integrated_predicted_ii": 2.4456520080566406,
+        "integrated_minus_saved_ii": -0.27205705642700195,
+        "saved_cache_entry": "task-18",
+        "saved_standalone_predicted_ii": 2.7177090644836426,
+        "task": "Task_23"
+      }
+    ],
+    "prediction_vs_analytical_lower_bound": {
+      "by_shape": {
+        "2x2": {
+          "count": 24,
+          "max_gap": 1.319688320159912,
+          "mean_gap": 0.7301690876483917,
+          "min_gap": 0.4456520080566406
+        },
+        "2x4": {
+          "count": 24,
+          "max_gap": 2.119204521179199,
+          "mean_gap": 1.1630622843901317,
+          "min_gap": 0.7885050773620605
+        },
+        "2x6": {
+          "count": 24,
+          "max_gap": 2.94058895111084,
+          "mean_gap": 1.5807663599650066,
+          "min_gap": 0.8773825168609619
+        },
+        "2x8": {
+          "count": 24,
+          "max_gap": 3.186819076538086,
+          "mean_gap": 1.9190544088681538,
+          "min_gap": 1.0038917064666748
+        },
+        "4x2": {
+          "count": 24,
+          "max_gap": 2.153813362121582,
+          "mean_gap": 1.2118429789940517,
+          "min_gap": 0.8306342363357544
+        },
+        "4x4": {
+          "count": 24,
+          "max_gap": 2.646286964416504,
+          "mean_gap": 1.5278013000885646,
+          "min_gap": 0.9601249694824219
+        },
+        "6x2": {
+          "count": 24,
+          "max_gap": 2.9433674812316895,
+          "mean_gap": 1.653683106104533,
+          "min_gap": 0.947116494178772
+        },
+        "8x2": {
+          "count": 24,
+          "max_gap": 3.0882649421691895,
+          "mean_gap": 2.0287923912207284,
+          "min_gap": 1.0902738571166992
+        }
+      },
+      "max_gap": 3.186819076538086,
+      "mean_predicted_minus_lower_bound": 1.4768964896599452,
+      "metric": "candidate-model predicted_ii minus analytical_lower_bound per task/shape; analytical_lower_bound is max(RecMII,ResMII), not a full scheduler packing cost",
+      "min_gap": 0.4456520080566406,
+      "missing_prerequisites": [
+        "No complete joint-candidate rows were emitted; frozen factored space represents 4722366482869645213696 candidates.",
+        "Catalog contains only local task/mapper-shape costs; communication is marked scheduler-scored and no schedule is present.",
+        "Existing saved baseline makespan 988256 is explicitly not a successful mapping/native rerun.",
+        "No distinct new candidate model survives the promotion gate; candidate checkpoint remains bb7196d5\u2026c155e."
+      ],
+      "negative_gap_count": 0,
+      "packing_or_program_makespan_comparison_possible": false,
+      "row_count": 192
+    },
+    "shape_summary": {
+      "2x2": {
+        "count": 24,
+        "mean_analytical_lower_bound": 3.6666666666666665,
+        "mean_ensemble_std": 0.09378010465818751,
+        "mean_predicted_ii": 4.396835754315059
+      },
+      "2x4": {
+        "count": 24,
+        "mean_analytical_lower_bound": 2.0416666666666665,
+        "mean_ensemble_std": 0.135450654275153,
+        "mean_predicted_ii": 3.2047289510567984
+      },
+      "2x6": {
+        "count": 24,
+        "mean_analytical_lower_bound": 1.4583333333333333,
+        "mean_ensemble_std": 0.17243689099673243,
+        "mean_predicted_ii": 3.03909969329834
+      },
+      "2x8": {
+        "count": 24,
+        "mean_analytical_lower_bound": 1.25,
+        "mean_ensemble_std": 0.21143787601763167,
+        "mean_predicted_ii": 3.169054408868154
+      },
+      "4x2": {
+        "count": 24,
+        "mean_analytical_lower_bound": 2.0416666666666665,
+        "mean_ensemble_std": 0.13675703082572294,
+        "mean_predicted_ii": 3.2535096456607184
+      },
+      "4x4": {
+        "count": 24,
+        "mean_analytical_lower_bound": 1.25,
+        "mean_ensemble_std": 0.15477875792075513,
+        "mean_predicted_ii": 2.7778013000885644
+      },
+      "6x2": {
+        "count": 24,
+        "mean_analytical_lower_bound": 1.4583333333333333,
+        "mean_ensemble_std": 0.18851907187302072,
+        "mean_predicted_ii": 3.112016439437866
+      },
+      "8x2": {
+        "count": 24,
+        "mean_analytical_lower_bound": 1.25,
+        "mean_ensemble_std": 0.23210825733006224,
+        "mean_predicted_ii": 3.2787923912207284
+      }
+    },
+    "status": "pass",
+    "stderr_transform_lines": {
+      "insert_data_mov_processing_functions": 24,
+      "note": "In-process mapper-input materialization/data-movement insertion; not native mapping or a subprocess.",
+      "successfully_processed_lines": 24
+    }
+  },
+  "model_evidence": {
+    "baseline_makespan_provenance": "manifest baseline_reuse.makespan; successful_mapping_and_native_rerun=false, so do not use as validated replay",
+    "body_geometries": {
+      "tuples": [
+        [
+          1,
+          1,
+          2,
+          2
+        ]
+      ],
+      "unique_count": 1
+    },
+    "body_ii_error_by_actual_ii": {
+      "10": {
+        "actual_mean": 10.0,
+        "count": 1,
+        "mae": 0.8194293975830078,
+        "max_abs_error": 0.8194293975830078,
+        "mean_absolute_percentage_error": 0.08194293975830078,
+        "mean_signed_error": 0.8194293975830078,
+        "predicted_mean": 10.819429397583008,
+        "rmse": 0.8194293975830078
+      },
+      "2": {
+        "actual_mean": 2.0,
+        "count": 4,
+        "mae": 0.854753851890564,
+        "max_abs_error": 1.046865463256836,
+        "mean_absolute_percentage_error": 0.427376925945282,
+        "mean_signed_error": 0.854753851890564,
+        "predicted_mean": 2.854753851890564,
+        "rmse": 0.8641452460208641
+      },
+      "3": {
+        "actual_mean": 3.0,
+        "count": 6,
+        "mae": 0.7104372580846151,
+        "max_abs_error": 1.0121006965637207,
+        "mean_absolute_percentage_error": 0.23681241936153832,
+        "mean_signed_error": 0.5744523604710897,
+        "predicted_mean": 3.57445236047109,
+        "rmse": 0.7965815066040393
+      },
+      "4": {
+        "actual_mean": 4.0,
+        "count": 2,
+        "mae": 0.8224442005157471,
+        "max_abs_error": 1.5557713508605957,
+        "mean_absolute_percentage_error": 0.20561105012893677,
+        "mean_signed_error": 0.7333271503448486,
+        "predicted_mean": 4.733327150344849,
+        "rmse": 1.1018998014315469
+      },
+      "5": {
+        "actual_mean": 5.0,
+        "count": 2,
+        "mae": 0.3334629535675049,
+        "max_abs_error": 0.5557713508605957,
+        "mean_absolute_percentage_error": 0.06669259071350098,
+        "mean_signed_error": 0.3334629535675049,
+        "predicted_mean": 5.333462953567505,
+        "rmse": 0.4007724602676519
+      },
+      "6": {
+        "actual_mean": 6.0,
+        "count": 1,
+        "mae": 0.6789464950561523,
+        "max_abs_error": 0.6789464950561523,
+        "mean_absolute_percentage_error": 0.11315774917602539,
+        "mean_signed_error": 0.6789464950561523,
+        "predicted_mean": 6.678946495056152,
+        "rmse": 0.6789464950561523
+      },
+      "7": {
+        "actual_mean": 7.0,
+        "count": 1,
+        "mae": 0.5228786468505859,
+        "max_abs_error": 0.5228786468505859,
+        "mean_absolute_percentage_error": 0.0746969495500837,
+        "mean_signed_error": 0.5228786468505859,
+        "predicted_mean": 7.522878646850586,
+        "rmse": 0.5228786468505859
+      },
+      "8": {
+        "actual_mean": 8.0,
+        "count": 1,
+        "mae": 0.38793468475341797,
+        "max_abs_error": 0.38793468475341797,
+        "mean_absolute_percentage_error": 0.048491835594177246,
+        "mean_signed_error": -0.38793468475341797,
+        "predicted_mean": 7.612065315246582,
+        "rmse": 0.38793468475341797
+      },
+      "9": {
+        "actual_mean": 9.0,
+        "count": 1,
+        "mae": 1.3265538215637207,
+        "max_abs_error": 1.3265538215637207,
+        "mean_absolute_percentage_error": 0.14739486906263563,
+        "mean_signed_error": -1.3265538215637207,
+        "predicted_mean": 7.673446178436279,
+        "rmse": 1.3265538215637207
+      }
+    },
+    "body_ii_error_statistics": {
+      "actual_mean": 4.421052631578948,
+      "count": 19,
+      "mae": 0.722589279475965,
+      "max_abs_error": 1.5557713508605957,
+      "mean_absolute_percentage_error": 0.2179302023566556,
+      "mean_signed_error": 0.4897934637571636,
+      "predicted_mean": 4.910846095336111,
+      "rmse": 0.8227014998967722
+    },
+    "body_query_count": 19,
+    "cost_source": "saved v34 actual costs + standalone diagnostic II; diagnostic duration was not scheduled",
+    "predicted_schedule_null_count": 24,
+    "saved_baseline_makespan": 988256,
+    "standalone_parity": {
+      "cpp_export_max_abs_error": 4.76837158203125e-07,
+      "cpp_member_max_abs_error": 4.76837158203125e-07,
+      "feature_width": 148,
+      "fingerprints": [
+        {
+          "blake2b_160": "2deb3a4209dbcee73d6754f538d9c1890625fc9f",
+          "bytes": 130450,
+          "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/python-reference/mapper.pt"
+        },
+        {
+          "blake2b_160": "497f3dec7baa164d6e14254eaaa3cce1e814ec8d",
+          "bytes": 28437,
+          "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/python-reference/cgra_ii_predictor/mapper_model.py"
+        },
+        {
+          "blake2b_160": "cdc0ca4ab42b12cab529e945e122f01d91063413",
+          "bytes": 901,
+          "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/python-reference/cgra_ii_predictor/__init__.py"
+        },
+        {
+          "blake2b_160": "4c17e22cca28e1b4b96b5d0d37ed3620128d2344",
+          "bytes": 16202,
+          "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/python-reference/cgra_ii_predictor/dfg.py"
+        },
+        {
+          "blake2b_160": "405ce6ced6c5757c651c9e8f47c71b1ca830f347",
+          "bytes": 7826,
+          "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/python-reference/cgra_ii_predictor/shape_protocol.py"
+        }
+      ],
+      "geometry_mapper_tiles": [
+        2,
+        2
+      ],
+      "pinned_mlir_binary_cli_parity": false,
+      "python_reference_git_commit": "3ade31806cb4c92e31888109f7c42b8a77e4cbce",
+      "python_wall_seconds": 1.1218650001101196,
+      "query_count": 19,
+      "raw_feature_max_abs_error": 0.0,
+      "scope": "standalone unchanged v34 source runtime and saved native body queries; does not establish integrated scorer/cache/scheduler parity",
+      "selected_feature_width": 61,
+      "source_checkpoint_export_max_abs_error": 0.0,
+      "status": "pass",
+      "tolerance_features": 1e-06,
+      "tolerance_inference": 1e-05,
+      "torch_version": "2.4.1+cu121"
+    },
+    "successful_mapping_and_native_rerun": false,
+    "task_count": 24,
+    "task_duration_diagnostic_by_actual_ii": {
+      "10": {
+        "actual_mean": 76862.0,
+        "count": 1,
+        "mae": 6297.314920425415,
+        "max_abs_error": 6297.314920425415,
+        "mean_absolute_percentage_error": 0.08193014650185286,
+        "mean_signed_error": 6297.314920425415,
+        "predicted_mean": 83159.31492042542,
+        "rmse": 6297.314920425415
+      },
+      "2": {
+        "actual_mean": 15374.4,
+        "count": 5,
+        "mae": 6433.180416584015,
+        "max_abs_error": 8045.161085128784,
+        "mean_absolute_percentage_error": 0.4184339805200844,
+        "mean_signed_error": 6433.180416584015,
+        "predicted_mean": 21807.580416584016,
+        "rmse": 6497.851235995441
+      },
+      "3": {
+        "actual_mean": 23174.2,
+        "count": 10,
+        "mae": 6421.784032845497,
+        "max_abs_error": 7777.993853092194,
+        "mean_absolute_percentage_error": 0.27696309586930973,
+        "mean_signed_error": 5794.757669949531,
+        "predicted_mean": 28968.95766994953,
+        "rmse": 6869.32305954893
+      },
+      "4": {
+        "actual_mean": 31251.0,
+        "count": 2,
+        "mae": 6331.712429285049,
+        "max_abs_error": 11956.102831363678,
+        "mean_absolute_percentage_error": 0.20555834778578186,
+        "mean_signed_error": 5624.3904020786285,
+        "predicted_mean": 36875.39040207863,
+        "rmse": 8469.022947315527
+      },
+      "5": {
+        "actual_mean": 38432.5,
+        "count": 2,
+        "mae": 2562.662798166275,
+        "max_abs_error": 4271.102831363678,
+        "mean_absolute_percentage_error": 0.06667899751768883,
+        "mean_signed_error": 2562.662798166275,
+        "predicted_mean": 40995.162798166275,
+        "rmse": 3079.9363571569047
+      },
+      "6": {
+        "actual_mean": 46119.0,
+        "count": 1,
+        "mae": 5217.703814506531,
+        "max_abs_error": 5217.703814506531,
+        "mean_absolute_percentage_error": 0.1131356667426989,
+        "mean_signed_error": 5217.703814506531,
+        "predicted_mean": 51336.70381450653,
+        "rmse": 5217.703814506531
+      },
+      "7": {
+        "actual_mean": 56450.0,
+        "count": 1,
+        "mae": 4215.970529556274,
+        "max_abs_error": 4215.970529556274,
+        "mean_absolute_percentage_error": 0.07468504038186491,
+        "mean_signed_error": 4215.970529556274,
+        "predicted_mean": 60665.970529556274,
+        "rmse": 4215.970529556274
+      },
+      "8": {
+        "actual_mean": 61490.0,
+        "count": 1,
+        "mae": 2981.278052330017,
+        "max_abs_error": 2981.278052330017,
+        "mean_absolute_percentage_error": 0.04848394946056297,
+        "mean_signed_error": -2981.278052330017,
+        "predicted_mean": 58508.72194766998,
+        "rmse": 2981.278052330017
+      },
+      "9": {
+        "actual_mean": 69175.0,
+        "count": 1,
+        "mae": 10194.566118717194,
+        "max_abs_error": 10194.566118717194,
+        "mean_absolute_percentage_error": 0.14737356152825723,
+        "mean_signed_error": -10194.566118717194,
+        "predicted_mean": 58980.43388128281,
+        "rmse": 10194.566118717194
+      }
+    },
+    "task_duration_diagnostic_error_statistics": {
+      "actual_mean": 31586.541666666668,
+      "count": 24,
+      "mae": 5961.63859590888,
+      "max_abs_error": 11956.102831363678,
+      "mean_absolute_percentage_error": 0.2446618298548208,
+      "mean_signed_error": 4543.447094847758,
+      "predicted_mean": 36129.988761514425,
+      "rmse": 6591.911946550954
+    },
+    "task_geometries": {
+      "tuples": [
+        [
+          "1x1",
+          [
+            "2",
+            "x",
+            "2"
+          ]
+        ]
+      ],
+      "unique_count": 1
+    },
+    "unique_body_cache_entries": 19,
+    "whole_program_replay_claim_supported": false
+  },
+  "publication_probe": {
+    "architecture_sha256": "6f4a9a1815dcc0d97c00fd6ee20424fa9420ace90654da29e70d283cba7a611f",
+    "argv": [
+      "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+      "--verify-each",
+      "--architecture-spec=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+      "--predict-analytical-task-cost-catalog=function=_Z11harris_funciPA128_KiS1_S1_PA128_iS3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_ space-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl ensemble-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/ensemble.json architecture-contract=neura-architecture-v1:amoeba-static-rectangles-2x2-per-cgra-max4 architecture-path=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml source-git-repository=https://github.com/guosran/orbit.git source-git-commit=6a1b6fcf6e155651e96b3b881565ad58fdf0c03e graph-variant-id=identity model-namespace=orbit-per-cgra-2x2-direct-4member-v1 cache=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json feature-output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "-o",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+    ],
+    "binary_hash_matches_parent_expectation": false,
+    "binary_stable_during_probe": true,
+    "candidate_checkpoint_sha256": "bb7196d5b37d54b1e5245a5e47cb6323cebfb10deea6d902e2ac6425f74c155e",
+    "candidate_count_metadata": "4722366482869645213696",
+    "changed_feature_count_per_task": 25,
+    "cost_catalog_entries": 192,
+    "cpu_affinity": [
+      11
+    ],
+    "cpu_affinity_single_core": [
+      11
+    ],
+    "cwd": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit",
+    "elapsed_seconds": 0.22255602199584246,
+    "expected_hash_source": "Parent supplied this SHA256; not recomputed during audit preparation.",
+    "external_mapper_invoked": false,
+    "feature_queries": 192,
+    "feature_vector_parity": false,
+    "full_program_schedule_generated": false,
+    "generated_artifact_sha256": [
+      {
+        "bytes": 129478,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+        "sha256": "8bb673c620c85e212d4ba97fef7ae64fb06bce206335eaae606aa27ddc61079a"
+      },
+      {
+        "bytes": 1129655,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+        "sha256": "d0cdb8959ccc24687895c619f184a6ecc7f3ac8319aa90e604ccb1ac428812be"
+      },
+      {
+        "bytes": 1523052,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+        "sha256": "6165fc408d16c35260c17026104959233c8c4ca6026c578664ca353263416efb"
+      },
+      {
+        "bytes": 445867,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir",
+        "sha256": "4012b597544f56d37626ed84031972782c1b5e73bd0160450d2fa7cae50913f9"
+      },
+      {
+        "bytes": 0,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 10522,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+        "sha256": "440fcd371b97a5a5c5ca32d05bffdb704e103ac54ee420a1cdca488b3638e04e"
+      }
+    ],
+    "hash_mismatch_note": "The current executable at the designated publication path hashes to cdf45a...; parent earlier supplied 697e04... as expected identity. This probe is tied to the actual path/hash shown here.",
+    "insert_data_mov_hidden_mapper_input_bodies_processed": 24,
+    "integrated_vs_saved_standalone_task_prediction_mae_ii": 0.2748728593190511,
+    "integrated_vs_saved_standalone_task_rows": 24,
+    "model_ensemble_sha256": "54dd347aaa9c1ee902f74b5457d74db0fe1d6857b6abde02e2d261151b0f5952",
+    "native_mapper_budget_consumed": 0,
+    "native_mapper_queries": 0,
+    "native_mapper_query_count": 0,
+    "old_pinned_binary": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/tooling/mlir-amoeba-opt-v34",
+    "old_pinned_binary_blake2b_160": "559541f2442df4750a6580be9067c2e6c08c1145",
+    "output_files": [
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json.lock",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+    ],
+    "outputs_confined_to": [
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output"
+    ],
+    "publication_behavior_unverified_until_execution": true,
+    "returncode": 0,
+    "saved_space_file": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl",
+    "saved_space_sha256": "eea0093933d4167417c9dfe13e748828643dd66044145f1e13705a516c7fe181",
+    "scope": "Reads the frozen task/shape space and explicit direct-ensemble file; runs C++ cost-catalog loader/scorer only. Omits shape enumeration and every mapper/scheduler pass. Source scan found no process-spawn call in PredictAnalyticalTaskCostCatalogPass.cpp or AnalyticalMLPInference.cpp; old saved attempt also records 0 scheduler attempts and 0 mapper passes.",
+    "status": "pass",
+    "stderr": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+    "stdout": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+    "target_binary": "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+    "target_binary_sha256_actual": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "target_binary_sha256_after": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "target_binary_sha256_before": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "target_binary_sha256_expected_from_parent": "697e04fa7e65b050185750b6ba696508d3db43344c28deb3fa26e12db0b9b654",
+    "target_binary_sha256_matches_parent_expected": false,
+    "timed_out": false,
+    "timeout_seconds": 60,
+    "wrapper_argv": [
+      "taskset",
+      "-c",
+      "11",
+      "timeout",
+      "--signal=TERM",
+      "60s",
+      "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+      "--verify-each",
+      "--architecture-spec=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+      "--predict-analytical-task-cost-catalog=function=_Z11harris_funciPA128_KiS1_S1_PA128_iS3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_ space-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl ensemble-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/ensemble.json architecture-contract=neura-architecture-v1:amoeba-static-rectangles-2x2-per-cgra-max4 architecture-path=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml source-git-repository=https://github.com/guosran/orbit.git source-git-commit=6a1b6fcf6e155651e96b3b881565ad58fdf0c03e graph-variant-id=identity model-namespace=orbit-per-cgra-2x2-direct-4member-v1 cache=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json feature-output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "-o",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+    ]
+  },
+  "publication_probe_result": {
+    "argv": [
+      "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+      "--verify-each",
+      "--architecture-spec=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+      "--predict-analytical-task-cost-catalog=function=_Z11harris_funciPA128_KiS1_S1_PA128_iS3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_ space-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl ensemble-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/ensemble.json architecture-contract=neura-architecture-v1:amoeba-static-rectangles-2x2-per-cgra-max4 architecture-path=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml source-git-repository=https://github.com/guosran/orbit.git source-git-commit=6a1b6fcf6e155651e96b3b881565ad58fdf0c03e graph-variant-id=identity model-namespace=orbit-per-cgra-2x2-direct-4member-v1 cache=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json feature-output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "-o",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+    ],
+    "cpu_affinity": [
+      11
+    ],
+    "elapsed_seconds": 0.22255602199584246,
+    "output_files": [
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json.lock",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+      "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+    ],
+    "returncode": 0,
+    "status": "pass",
+    "stderr": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+    "stdout": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+    "timed_out": false,
+    "timeout_seconds": 60
+  },
+  "publication_source_status": {
+    "build_cmake_home": "/home/x/shiran/project/orbit",
+    "direct_mode_in_dirty_worktree": true,
+    "direct_mode_in_head": false,
+    "dirty_relevant_files": [
+      "M lib/Backend/Neura/Orchestration/JointScheduling/AnalyticalMLPInference.cpp",
+      " M lib/Backend/Neura/Orchestration/JointScheduling/AnalyticalMLPInference.h",
+      " M lib/Backend/Neura/Orchestration/JointScheduling/PredictAnalyticalTaskCostCatalogPass.cpp"
+    ],
+    "interpretation": "Current worktree direct loader code is uncommitted; HEAD has only formal schema. Publication executable is newer by timestamp than the source edits but semantic inclusion is unverified until probe.",
+    "orbit_head": "6a1b6fcf6e155651e96b3b881565ad58fdf0c03e",
+    "probe_target_bound_to_actual_path_hash": true,
+    "publication_binary": "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+    "publication_binary_bytes": 496776496,
+    "publication_binary_hash_match_parent_expectation": false,
+    "publication_binary_mtime": "2026-10-04 21:07:56 +0800",
+    "publication_binary_sha256_actual": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "publication_binary_sha256_after_probe": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "publication_binary_sha256_before_probe": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+    "publication_binary_sha256_parent_expected": "697e04fa7e65b050185750b6ba696508d3db43344c28deb3fa26e12db0b9b654",
+    "publication_binary_sha_rehashed": false,
+    "publication_binary_stable_during_probe": true
+  },
+  "schema": "orbit-offline-audit-v1",
+  "sha256_files": [
+    {
+      "bytes": 4624,
+      "label": "v34 pilot manifest",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/manifest.json",
+      "sha256": "541caf4485f5931d8b8ba458bf500a5844fc9be866b7d1a3f6a8fc9f43984bb1"
+    },
+    {
+      "bytes": 461111,
+      "label": "frozen Harris source module",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+      "sha256": "9614517f2463338d0e4372daa1fb1ab884b8bdc9efc5f5e6400bee56c0d1dbc7"
+    },
+    {
+      "bytes": 618,
+      "label": "2x2 architecture",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+      "sha256": "6f4a9a1815dcc0d97c00fd6ee20424fa9420ace90654da29e70d283cba7a611f"
+    },
+    {
+      "bytes": 918240,
+      "label": "direct-ensemble runtime bundle",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/ensemble.json",
+      "sha256": "54dd347aaa9c1ee902f74b5457d74db0fe1d6857b6abde02e2d261151b0f5952"
+    },
+    {
+      "bytes": 5792,
+      "label": "frozen package metadata",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/package-model.json",
+      "sha256": "afe8db4ed7b2a386a11f423157eb9b940777d8146a36a934d62b2114d67a9fa7"
+    },
+    {
+      "bytes": 25350,
+      "label": "candidate training report",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/training-report.json",
+      "sha256": "ab2c83c8a391229f2c00f2cab80bcd941226c739fda17fd69c1ef87d3222187b"
+    },
+    {
+      "bytes": 12535,
+      "label": "candidate export adapter",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/export_orbit_2x2_predictor.py",
+      "sha256": "4f4a0171858f2d626138e14e6e551d3848c4878681ea628c6e7d868df1934780"
+    },
+    {
+      "bytes": 5792,
+      "label": "source candidate package metadata",
+      "path": "/home/x/shiran/project/cgra-ii-predictor-2x2-publish/models/candidates/per-cgra-2x2/model.json",
+      "sha256": "afe8db4ed7b2a386a11f423157eb9b940777d8146a36a934d62b2114d67a9fa7"
+    },
+    {
+      "bytes": 130450,
+      "label": "source candidate checkpoint",
+      "path": "/home/x/shiran/project/cgra-ii-predictor-2x2-publish/models/candidates/per-cgra-2x2/mapper.pt",
+      "sha256": "bb7196d5b37d54b1e5245a5e47cb6323cebfb10deea6d902e2ac6425f74c155e"
+    },
+    {
+      "bytes": 2164,
+      "label": "standalone parity",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/parity-result.json",
+      "sha256": "40849d802c351db57556153213ce978cd897f9f35b1933905752a4c4e5ddbf84"
+    },
+    {
+      "bytes": 16750,
+      "label": "body cost comparison",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/body-cost-comparison.json",
+      "sha256": "f03bee8a7246304a3b143360be7c809b027eaa291d42ebf395bd75bf63876ee8"
+    },
+    {
+      "bytes": 20094,
+      "label": "task diagnostic comparison",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/task-cost-comparison.json",
+      "sha256": "cc33d1be7a76d713944a8ed4ea9250e9fc2b6fe3b6fbb40663f558dbabb112f7"
+    },
+    {
+      "bytes": 10214,
+      "label": "saved baseline task costs",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/validation/task-costs.json",
+      "sha256": "ae7c1b3c5deec3949ae9536ab3b739cb376ad43d2dda7e5f33196964136e8000"
+    },
+    {
+      "bytes": 23012,
+      "label": "factored task/shape space",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl",
+      "sha256": "eea0093933d4167417c9dfe13e748828643dd66044145f1e13705a516c7fe181"
+    },
+    {
+      "bytes": 946,
+      "label": "tiling action",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission/tiling-replay/actions.json",
+      "sha256": "f214d57127c25248222c63b296b85e6a35b78d18f1b82faea5644b09e3b71d50"
+    },
+    {
+      "bytes": 504326,
+      "label": "persisted transformed Harris tile candidate",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission/tiling-replay/candidate.mlir",
+      "sha256": "34be852b09be0d45a0cb192ea1d7c271eb4ce69690681f10e08bfb45a3c0b2c9"
+    },
+    {
+      "bytes": 68647,
+      "label": "transform admission summary",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission-summary.json",
+      "sha256": "3b29be6c69c1a6f646ac8282b7147f4936efe72297ae9386a712f15b6aade12a"
+    },
+    {
+      "bytes": 4487,
+      "label": "transform process records",
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission/results.json",
+      "sha256": "7d322451d319859b63a4a5cf8e6b71f1f48fa365a40a7faf02b6ab18fc2c435b"
+    },
+    {
+      "bytes": 52388,
+      "label": "current dirty inference source",
+      "path": "/home/x/shiran/project/orbit/lib/Backend/Neura/Orchestration/JointScheduling/AnalyticalMLPInference.cpp",
+      "sha256": "04303561f7546191b5097bf2b29a197b6b2445d138de328b637f8d0c5dd112b2"
+    },
+    {
+      "bytes": 9019,
+      "label": "current dirty inference header",
+      "path": "/home/x/shiran/project/orbit/lib/Backend/Neura/Orchestration/JointScheduling/AnalyticalMLPInference.h",
+      "sha256": "4e1303b50a086856751f933de902df5a2586ed0e546bd494cc51e664f8b04cbe"
+    },
+    {
+      "bytes": 77972,
+      "label": "current dirty prediction pass",
+      "path": "/home/x/shiran/project/orbit/lib/Backend/Neura/Orchestration/JointScheduling/PredictAnalyticalTaskCostCatalogPass.cpp",
+      "sha256": "163a10d85c17ab89f1b00be13075143b06e71980c7d9e863b2c16ec0c3b4416f"
+    }
+  ],
+  "task_body_source_identity": {
+    "actual_mapper_metadata_crosschecked": true,
+    "all_24_baseline_candidate_signatures_match_saved_mapper_input": true,
+    "all_24_current_canonical_signatures_match_saved_mapper_input": true,
+    "architecture_exact_match": true,
+    "baseline_candidate_module_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/candidate.mlir",
+    "baseline_candidate_module_sha256": "da2f91bc1ea071dbb1b79df024025cd4142ce59ee96e1b0f2d99d96158b33a89",
+    "canonical_input_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+    "canonical_module_sha256": "9614517f2463338d0e4372daa1fb1ab884b8bdc9efc5f5e6400bee56c0d1dbc7",
+    "canonical_taskflow_firing_counts_match_saved_baseline_for_all_24": true,
+    "feature_level_caveat": {
+      "changed_feature_coordinates_per_task": 25,
+      "compared_task_rows": 24,
+      "current_integrated_task_shape_features_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+      "feature_index_44_current_value": 0.6931471805599453,
+      "feature_index_44_name": "log_count_return",
+      "feature_index_44_saved_value": 0,
+      "interpretation": "Source kernel task body identity is verified under the documented normalized signature; the current integrated feature representation differs from saved native mapper-cache inputs. The mismatch is not caused by a changed source kernel snapshot or task-name-only join. Reason for the other 24 feature-coordinate changes is not established here.",
+      "matched_by": "task-body-bindings.json cache_entry, not only task name",
+      "prediction_ii_mae": 0.2748728593190511,
+      "prediction_ii_max_abs_difference": 0.38863658905029297,
+      "saved_standalone_mapper_input_feature_source": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/actual-body-inference.json"
+    },
+    "geometry_exact_match": true,
+    "identity_scope_limit": "Kernel operation/attribute/type signature and effective firing count are verified; whole-module file SHA256s and ignored wrapper/yield/return serialization differ and are not asserted byte-identical.",
+    "mapper_cache_root": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache",
+    "method": "exact operation/attribute/type text after local SSA alpha-renaming anchored to block argument positions; source %inputN references retained; wrapper/yield-return boundary ignored",
+    "method_source": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/match_task_costs.py",
+    "method_source_sha256": "5451e5c7d99cf67fe55de7257457561a3b1b40c97a888dd8a38dd2a4dcb312d2",
+    "schema": "orbit-task-body-identity-audit-v1",
+    "signature_matches": [
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-0",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 8064,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "59f2fa123ba7458c44b70bdb09b380b611f6207f",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 8064,
+        "saved_mapper_input_match": true,
+        "task": "Task_0"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-1",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 8064,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "c2b2927ba5f4323498cfa5de742e2f06937546f4",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 8064,
+        "saved_mapper_input_match": true,
+        "task": "Task_1"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-2",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7938,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "d2025c1ca6f1e296983644de103a0783ee0e5d6f",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7938,
+        "saved_mapper_input_match": true,
+        "task": "Task_2"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-3",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "a9c50a488a17e21e45a561912f07b1d0dfa4b74a",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_3"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-4",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "227d948819ac1b38c115d343d69b0114fab949c1",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_4"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-5",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "990c0e19e0fe46d8b7716d6158cf67d08b06ecd9",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_5"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-6",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "a74ec47d35c68667dc537327acf260fb92547a28",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_6"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-7",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "84140af1584dff60e4d99c553de4237e8569c27c",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_7"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-7",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "84140af1584dff60e4d99c553de4237e8569c27c",
+        "same_run_cache_hit": true,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_8"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-8",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "105b4020de4c10707bb6344edede836f65f7cc4b",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_9"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-9",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "072004e37aecbb391938fa5ffb99853610de48b8",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_10"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-9",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "072004e37aecbb391938fa5ffb99853610de48b8",
+        "same_run_cache_hit": true,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_11"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-9",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "072004e37aecbb391938fa5ffb99853610de48b8",
+        "same_run_cache_hit": true,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_12"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-10",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "30c87a0a3a47034e3a2b1778b68870ebd2fb1e26",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_13"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-10",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "30c87a0a3a47034e3a2b1778b68870ebd2fb1e26",
+        "same_run_cache_hit": true,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_14"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-10",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "30c87a0a3a47034e3a2b1778b68870ebd2fb1e26",
+        "same_run_cache_hit": true,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_15"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-11",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "aba339e690b68b3599c937ee7e5374b076e99d68",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_16"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-12",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "92a1eb56d8075da6f2a8effad93de58ec2767b87",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_17"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-13",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "54e385f406332133894a24ba0bac375178d6128b",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_18"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-14",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "0af093a8781e0006c70e6afd55ee5af00c36f34d",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_19"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-15",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "b97fdc541fe30ea1fac6d9fd58e48c2419de80e6",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_20"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-16",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "20d3c997f55e8979ee1cdfdc8d8eff20547ad3de",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_21"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-17",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "bd7cff0875c6eb75b36d017cc715896811744b9b",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_22"
+      },
+      {
+        "baseline_candidate_match": true,
+        "cache_entry": "task-18",
+        "canonical_input_match": true,
+        "canonical_taskflow_firing_count": 7686,
+        "firing_count_matches": true,
+        "normalized_body_blake2b_160": "0870978d8672d6041a71b649103c5c5d5b4fbd09",
+        "same_run_cache_hit": false,
+        "saved_baseline_effective_firings": 7686,
+        "saved_mapper_input_match": true,
+        "task": "Task_23"
+      }
+    ],
+    "source_file_hashes": [
+      {
+        "bytes": 461111,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+        "sha256": "9614517f2463338d0e4372daa1fb1ab884b8bdc9efc5f5e6400bee56c0d1dbc7"
+      },
+      {
+        "bytes": 468105,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/candidate.mlir",
+        "sha256": "da2f91bc1ea071dbb1b79df024025cd4142ce59ee96e1b0f2d99d96158b33a89"
+      },
+      {
+        "bytes": 5690,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/match_task_costs.py",
+        "sha256": "5451e5c7d99cf67fe55de7257457561a3b1b40c97a888dd8a38dd2a4dcb312d2"
+      },
+      {
+        "bytes": 13750,
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/task-body-bindings.json",
+        "sha256": "a88be1c0b03010c9fea63d79d52afc0bb3e1f183acf644d6878144e10ed053a7"
+      }
+    ],
+    "task_body_bindings_path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/task-body-bindings.json",
+    "task_count": 24,
+    "unique_mapper_body_count": 19,
+    "unique_saved_mapper_input_files": [
+      {
+        "bytes": 4414,
+        "cache_entry": "task-0",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-0/input.txt",
+        "sha256": "1a51ee9cef5e646a7d0a367d5de9991997cb293ef75e776f32ceac3721c0b78e"
+      },
+      {
+        "bytes": 8028,
+        "cache_entry": "task-1",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-1/input.txt",
+        "sha256": "e0ac2bc511930dc6fdb7a1b1f6b49bb88f678755532541ca82e01fb55203b1b2"
+      },
+      {
+        "bytes": 3943,
+        "cache_entry": "task-10",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-10/input.txt",
+        "sha256": "d1d97abbb4519367655c9489d0d37f8879cde555ae318e0c7acba6cc7817f5c8"
+      },
+      {
+        "bytes": 4992,
+        "cache_entry": "task-11",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-11/input.txt",
+        "sha256": "874e80e86c8b0c1c3d03b78be7d461e0898f8a471900621dfb9c543713842130"
+      },
+      {
+        "bytes": 3051,
+        "cache_entry": "task-12",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-12/input.txt",
+        "sha256": "77f61d02eebdc1dd72bcaaf21f5a59243430a5c52230b79b9bb3656f4973bd1f"
+      },
+      {
+        "bytes": 3102,
+        "cache_entry": "task-13",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-13/input.txt",
+        "sha256": "04616dcaedcca956bc7b491e9d5f2700df95c66347d24e81a0d1b01a49480dc9"
+      },
+      {
+        "bytes": 4705,
+        "cache_entry": "task-14",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-14/input.txt",
+        "sha256": "76d96855bf4dc83ad12ce0e3d15eb9d0a85a21e9b720def34c738f96b828ccfd"
+      },
+      {
+        "bytes": 4705,
+        "cache_entry": "task-15",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-15/input.txt",
+        "sha256": "ba43a1756b4b97400eccf43becd978bc4684374277a741d05e0914f38fef26c5"
+      },
+      {
+        "bytes": 6609,
+        "cache_entry": "task-16",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-16/input.txt",
+        "sha256": "ed25a3b992a998984fa08b046b57f0938ee6ddf8dc8c8148857ea0901210e6ff"
+      },
+      {
+        "bytes": 3275,
+        "cache_entry": "task-17",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-17/input.txt",
+        "sha256": "3cdea4f71b8bbe1ef5ca0545a71ec47aaf1b7591779c808b09c930ea8e33dbe5"
+      },
+      {
+        "bytes": 2787,
+        "cache_entry": "task-18",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-18/input.txt",
+        "sha256": "da31435bc96aadcafe734161b97fc8de160bdbccaa619e468ce6f773231d84c3"
+      },
+      {
+        "bytes": 4171,
+        "cache_entry": "task-2",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-2/input.txt",
+        "sha256": "0622d76e4742e81e433f4da68f3e50f5463dde6fab85eae5156eb4f05fc2e873"
+      },
+      {
+        "bytes": 4171,
+        "cache_entry": "task-3",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-3/input.txt",
+        "sha256": "baa92f5f8eaa40f0f9f5d0a10fa4db7ef0f41445f6cba014786d55bdbd427650"
+      },
+      {
+        "bytes": 6762,
+        "cache_entry": "task-4",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-4/input.txt",
+        "sha256": "f3a72596eeede828eb9a15ec4b4a66af70082b95ece797b8996b299ba8b7b93a"
+      },
+      {
+        "bytes": 6762,
+        "cache_entry": "task-5",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-5/input.txt",
+        "sha256": "0b9dc6316c43ce03c196b965fbba7c3f365207a5b7a61c56ede2b84390e3bc86"
+      },
+      {
+        "bytes": 10615,
+        "cache_entry": "task-6",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-6/input.txt",
+        "sha256": "0adb4f537f0d0bbbf5dcb567ce9fc2fe3ab246b2fdd19df4aa398629ba58d0f4"
+      },
+      {
+        "bytes": 2622,
+        "cache_entry": "task-7",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-7/input.txt",
+        "sha256": "411ae7574c7aa3bf38748a2ce19db963401b16043d227009e52fcac34cb5c4e7"
+      },
+      {
+        "bytes": 3047,
+        "cache_entry": "task-8",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-8/input.txt",
+        "sha256": "14fc4f3454b155d609108a1bee3ddf09c7ff2c17d220baf0f98982448f62657d"
+      },
+      {
+        "bytes": 3943,
+        "cache_entry": "task-9",
+        "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/amoeba-2x2-v34/harris-all-unit/mapping-cache/task-9/input.txt",
+        "sha256": "4954ef336f98ae87115b30f4fffeea434c601bd8249d64fbbeb6e6f656fc8ac6"
+      }
+    ]
+  },
+  "transform_admission": {
+    "fission_actions": 0,
+    "fusion_actions": 0,
+    "processes": [
+      {
+        "mapper_passes": 0,
+        "name": "historical-shapes",
+        "returncode": 0,
+        "scheduler_attempts": 0
+      },
+      {
+        "mapper_passes": 0,
+        "name": "replica",
+        "returncode": 0,
+        "scheduler_attempts": 0
+      },
+      {
+        "mapper_passes": 0,
+        "name": "tiling",
+        "returncode": 0,
+        "scheduler_attempts": 0
+      }
+    ],
+    "recipes": [
+      {
+        "complete_task_count": 24,
+        "recipe": "historical-shapes",
+        "status": "source_proof_pass_actual_not_run",
+        "steps": [
+          {
+            "label": "shape:Task_0:3x1",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          },
+          {
+            "label": "shape:Task_1:1x4",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          },
+          {
+            "label": "shape:Task_2:2x1",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          },
+          {
+            "label": "shape:Task_3:3x1",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          },
+          {
+            "label": "shape:Task_20:1x2",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          },
+          {
+            "label": "shape:Task_21:1x4",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 24
+          }
+        ],
+        "task_count": 24
+      },
+      {
+        "complete_task_count": 25,
+        "recipe": "replica",
+        "status": "source_proof_pass_actual_not_run",
+        "steps": [
+          {
+            "label": "replica:Task_1:axis=1:factor=2",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 25
+          }
+        ],
+        "task_count": 25
+      },
+      {
+        "complete_task_count": 25,
+        "recipe": "tiling",
+        "status": "source_proof_pass_actual_not_run",
+        "steps": [
+          {
+            "label": "tile:Task_1:axis=1:factor=2",
+            "source_partition_proof": "verified-and-refreshed",
+            "status": "applied",
+            "task_count": 25
+          }
+        ],
+        "task_count": 25
+      }
+    ],
+    "replica_not_claimed_as_fission": true,
+    "tiling_action_file": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission/tiling-replay/actions.json",
+    "tiling_candidate_file": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/admission/tiling-replay/candidate.mlir",
+    "tiling_candidate_task_names": [
+      "Task_1.tile.1.0",
+      "Task_1.tile.1.1"
+    ],
+    "tiling_line_evidence": [
+      {
+        "excerpt": "    %13 = \"taskflow.task\"(%11, %12, %10, %0, %9, %4, %arg4, %12) <{operandSegmentSizes = array<i32: 1, 1, 4, 1, 1>, resultSegmentSizes = array<i32: 0, 1, 0>, task_name = \"Task_1.tile.1.0\"}> ({",
+        "line": 56
+      },
+      {
+        "excerpt": "    }) {amoeba.neighborhood.partition_lineage.v1 = [{original = array<i64: 0, 63, 1, 0, 128, 1>, root = \"Task_1\", steps = [{after = array<i64: 0, 63, 1, 0, 64, 1>, axis = 1 : i64, before = array<i64: 0, 63, 1, 0, 128, 1>, factor = 2 : i64, family = \"tiling\", part = 0 : i64}]}], amoeba.neura.joint_rewrite = \"post-neura-mn-tiling\", amoeba.neura.tiling.axis = 1 : i64, amoeba.neura.tiling.derived_range = array<i64: 0, 64>, amoeba.neura.tiling.factor = 2 : i64, amoeba.neura.tiling.original_range = array<i64: 0, 128>, am",
+        "line": 147
+      },
+      {
+        "excerpt": "    %14 = \"taskflow.task\"(%11, %12, %10, %0, %9, %4, %arg4, %12) <{operandSegmentSizes = array<i32: 1, 1, 4, 1, 1>, resultSegmentSizes = array<i32: 0, 1, 0>, task_name = \"Task_1.tile.1.1\"}> ({",
+        "line": 148
+      },
+      {
+        "excerpt": "    }) {amoeba.neighborhood.partition_lineage.v1 = [{original = array<i64: 0, 63, 1, 0, 128, 1>, root = \"Task_1\", steps = [{after = array<i64: 0, 63, 1, 64, 128, 1>, axis = 1 : i64, before = array<i64: 0, 63, 1, 0, 128, 1>, factor = 2 : i64, family = \"tiling\", part = 1 : i64}]}], amoeba.neura.joint_rewrite = \"post-neura-mn-tiling\", amoeba.neura.tiling.axis = 1 : i64, amoeba.neura.tiling.derived_range = array<i64: 64, 128>, amoeba.neura.tiling.factor = 2 : i64, amoeba.neura.tiling.original_range = array<i64: 0, 128>",
+        "line": 239
+      }
+    ]
+  }
+}

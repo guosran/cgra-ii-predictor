@@ -1,0 +1,8 @@
+{
+  "censored_count": 69,
+  "outcomes_sha256": "30f016d16c4409b2d9c28d9e846cafc7479ac4e8b4754997fc790ae368449bfe",
+  "query_count": 88,
+  "query_manifest_sha256": "df7a8f74236130f694d12c3cfca193dc8208fe90e5bf854033c9616d904a2b03",
+  "schema": "cgra-ii-per-cgra-2x2-native-collection-v1",
+  "success_count": 19
+}

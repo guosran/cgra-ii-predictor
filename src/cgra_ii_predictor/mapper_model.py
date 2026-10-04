@@ -213,6 +213,7 @@ class MapperModelConfig:
     mapper_ii_ceiling: float = 20.0
     shape_protocol: str = SHAPE_PROTOCOL_ID
     enabled_feature_names: Optional[Tuple[str, ...]] = None
+    output_parameterization: str = "residual_softplus"
 
     def validate(self) -> "MapperModelConfig":
         if len(self.hidden_dimensions) != 2 or any(
@@ -226,6 +227,8 @@ class MapperModelConfig:
         ):
             raise ValueError("mapper_ii_ceiling must be finite and positive")
         get_shape_protocol(self.shape_protocol)
+        if self.output_parameterization not in {"residual_softplus", "direct_softplus"}:
+            raise ValueError("unsupported output_parameterization")
         if self.enabled_feature_names is not None:
             names = tuple(self.enabled_feature_names)
             if not names:
@@ -247,6 +250,9 @@ class MapperModelConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self.validate())
+        # Preserve the serialized contract of all existing checkpoints.
+        if self.output_parameterization == "residual_softplus":
+            result.pop("output_parameterization")
         result["hidden_dimensions"] = list(self.hidden_dimensions)
         if self.enabled_feature_names is not None:
             result["enabled_feature_names"] = list(
@@ -470,7 +476,12 @@ class DirectMapperIIModel(nn.Module):
             nn.Linear(second, 1),
         )
 
-    def forward(self, features: Tensor, lower_bound: Tensor) -> Tensor:
+    def prediction_for_loss(self, features: Tensor, lower_bound: Tensor) -> Tensor:
+        """Direct-II training omits the lower-bound floor to avoid dead gradients.
+
+        Both modes retain the native ceiling. Residual mode is byte-for-byte
+        the original forward calculation; direct mode learns positive II.
+        """
         if features.ndim != 2 or features.shape[1] != len(self.feature_names):
             raise ValueError("mapper feature tensor has the wrong shape")
         if lower_bound.shape != features.shape[:1]:
@@ -482,13 +493,21 @@ class DirectMapperIIModel(nn.Module):
         residual = functional.softplus(
             self.regressor(standardized).squeeze(-1)
         )
-        prediction = lower_bound.to(
-            device=features.device, dtype=torch.float32,
-        ) + residual
+        prediction = residual
+        if self.config.output_parameterization == "residual_softplus":
+            prediction = lower_bound.to(
+                device=features.device, dtype=torch.float32,
+            ) + residual
         return torch.minimum(
             prediction,
             torch.full_like(prediction, self.config.mapper_ii_ceiling),
         )
+
+    def forward(self, features: Tensor, lower_bound: Tensor) -> Tensor:
+        prediction = self.prediction_for_loss(features, lower_bound)
+        if self.config.output_parameterization == "direct_softplus":
+            prediction = torch.maximum(prediction, lower_bound.to(prediction))
+        return prediction
 
 
 class DirectMapperIIEnsemble(nn.Module):

@@ -1,0 +1,10 @@
+{
+  "analysis_deadline_seconds": 120,
+  "mapper_search_deadline_seconds": 120,
+  "deadline_semantics": "Each phase receives its own 120-second cap; analysis failure skips mapping. At most about240seconds plus process-termination overhead per query.",
+  "max_parallel_queries": 8,
+  "new_query_count": 88,
+  "mapped_outcomes_are_labels_only": true,
+  "implementation": "/home/x/shiran/project/cgra-ii-predictor-2x2-publish/adapters/collect_kernelbench_mappings.py",
+  "implementation_sha256": "64c9f78902384d54b32bdc98bffa7b81ae27764059019f51216f14219f702d58"
+}

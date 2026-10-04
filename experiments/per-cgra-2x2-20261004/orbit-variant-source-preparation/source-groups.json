@@ -1,0 +1,36 @@
+{
+  "groups": [
+    {
+      "candidate_ids": [
+        "orbit-final/harris/Task_1.tile.1.0"
+      ],
+      "group_id": "bb5cb2a0572560b712a8398517adf7cdfad31f01f6ae3df240039470ba8518e9",
+      "mapper_input_identities": [
+        "ab577510c5c8da15baa16977186601b7638b4cc45a974c5d0ceb82de4a1618fa"
+      ],
+      "source_program_families": [
+        "orbit-final/harris"
+      ],
+      "split": "test_only"
+    },
+    {
+      "candidate_ids": [
+        "orbit-final/raytracing/Task_13",
+        "orbit-final/raytracing/Task_13.fission.0"
+      ],
+      "group_id": "f5c45036f3fb0e50cc7c6c263a3e88f18df15c0162bc58211fa7d5f9dde86826",
+      "mapper_input_identities": [
+        "9bdcaf320acfd51ac73e99219152a8f13a2dcad7c99898ec37fabc3bc4095b66",
+        "a60667b279f159de9bfe3852d1653ca7f3554a69d48712be02b211c2dfd049ba"
+      ],
+      "source_program_families": [
+        "orbit-final/raytracing"
+      ],
+      "split": "test_only"
+    }
+  ],
+  "manifest_sha256": "eaccf2573669dcbc18eef62358ca2dbec743cb7b075338aec110bdb381b10751",
+  "schema": "cgra-ii-per-cgra-2x2-real-test-source-groups-v1",
+  "source_manifest_sha256": "039a6c67f0cfc70d19e5d09ee2d6077b56587ad27fc925253938752d24cc2c92",
+  "split_policy": "benchmark_variants_test_only_before_native_mapping"
+}

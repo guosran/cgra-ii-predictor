@@ -1,0 +1,76 @@
+{
+  "argv": [
+    "/home/x/shiran/project/orbit-build-publication/tools/mlir-amoeba-opt/mlir-amoeba-opt",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/canonical.mlir",
+    "--verify-each",
+    "--architecture-spec=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml",
+    "--predict-analytical-task-cost-catalog=function=_Z11harris_funciPA128_KiS1_S1_PA128_iS3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_S3_ space-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/model-runtime/space.jsonl ensemble-file=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/model/ensemble.json architecture-contract=neura-architecture-v1:amoeba-static-rectangles-2x2-per-cgra-max4 architecture-path=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/v34-2x2-harris-guidance-pilot/inputs/architecture_4x4_cgra_2x2.yaml source-git-repository=https://github.com/guosran/orbit.git source-git-commit=6a1b6fcf6e155651e96b3b881565ad58fdf0c03e graph-variant-id=identity model-namespace=orbit-per-cgra-2x2-direct-4member-v1 cache=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json feature-output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json output=/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+    "-o",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+  ],
+  "binary_stable_during_probe": true,
+  "candidate_count_metadata": "4722366482869645213696",
+  "changed_feature_count_per_task": 25,
+  "cost_catalog_entries": 192,
+  "cpu_affinity": [
+    11
+  ],
+  "elapsed_seconds": 0.22255602199584246,
+  "feature_queries": 192,
+  "feature_vector_parity": false,
+  "full_program_schedule_generated": false,
+  "generated_artifact_sha256": [
+    {
+      "bytes": 129478,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+      "sha256": "8bb673c620c85e212d4ba97fef7ae64fb06bce206335eaae606aa27ddc61079a"
+    },
+    {
+      "bytes": 1129655,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+      "sha256": "d0cdb8959ccc24687895c619f184a6ecc7f3ac8319aa90e604ccb1ac428812be"
+    },
+    {
+      "bytes": 1523052,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+      "sha256": "6165fc408d16c35260c17026104959233c8c4ca6026c578664ca353263416efb"
+    },
+    {
+      "bytes": 445867,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir",
+      "sha256": "4012b597544f56d37626ed84031972782c1b5e73bd0160450d2fa7cae50913f9"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 10522,
+      "path": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+      "sha256": "440fcd371b97a5a5c5ca32d05bffdb704e103ac54ee420a1cdca488b3638e04e"
+    }
+  ],
+  "insert_data_mov_hidden_mapper_input_bodies_processed": 24,
+  "integrated_vs_saved_standalone_task_prediction_mae_ii": 0.2748728593190511,
+  "integrated_vs_saved_standalone_task_rows": 24,
+  "log_count_return_current": 0.6931471805599453,
+  "log_count_return_saved_mapper_cache": 0,
+  "native_mapper_queries": 0,
+  "output_files": [
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/cache.json.lock",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/costs.json",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/features.json",
+    "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/probe-output/output.mlir"
+  ],
+  "returncode": 0,
+  "status": "pass",
+  "stderr": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stderr.log",
+  "stdout": "/home/x/shiran/project/orbit-artifact/diagnostics/20261004-search-direction/run/orbit-offline-audit/publication-loader-probe.stdout.log",
+  "target_binary_sha256_after": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+  "target_binary_sha256_before": "cdf45a0905d59f36278de00ab48f82fd123dc052ee54d94e476ec7a4c384deec",
+  "target_binary_sha256_matches_parent_expected": false,
+  "timed_out": false,
+  "timeout_seconds": 60
+}

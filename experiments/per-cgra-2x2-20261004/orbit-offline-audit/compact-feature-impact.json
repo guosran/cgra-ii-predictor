@@ -1,0 +1,91 @@
+{
+  "changed_full148_count": 25,
+  "changed_enabled_compact61_count": 21,
+  "enabled_changes": [
+    {
+      "index": 65,
+      "name": "mean_normalized_indegree"
+    },
+    {
+      "index": 66,
+      "name": "mean_normalized_outdegree"
+    },
+    {
+      "index": 67,
+      "name": "mean_normalized_asap"
+    },
+    {
+      "index": 68,
+      "name": "mean_normalized_reverse_depth"
+    },
+    {
+      "index": 69,
+      "name": "mean_normalized_slack"
+    },
+    {
+      "index": 71,
+      "name": "mean_is_source"
+    },
+    {
+      "index": 72,
+      "name": "mean_is_sink"
+    },
+    {
+      "index": 73,
+      "name": "mean_is_memory"
+    },
+    {
+      "index": 75,
+      "name": "mean_is_control"
+    },
+    {
+      "index": 76,
+      "name": "mean_is_materialized"
+    },
+    {
+      "index": 77,
+      "name": "mean_is_data_movement"
+    },
+    {
+      "index": 93,
+      "name": "log_node_count"
+    },
+    {
+      "index": 96,
+      "name": "log_materialized_node_count"
+    },
+    {
+      "index": 101,
+      "name": "normalized_max_forward_width"
+    },
+    {
+      "index": 102,
+      "name": "log_source_count"
+    },
+    {
+      "index": 103,
+      "name": "log_sink_count"
+    },
+    {
+      "index": 106,
+      "name": "raw_edge_density"
+    },
+    {
+      "index": 107,
+      "name": "semantic_edge_density"
+    },
+    {
+      "index": 126,
+      "name": "log_nodes_per_tile"
+    },
+    {
+      "index": 127,
+      "name": "log_materialized_nodes_per_tile"
+    },
+    {
+      "index": 147,
+      "name": "mapper_bucket_quadratic_occupancy"
+    }
+  ],
+  "latency_or_source_change_inferred": false
+}

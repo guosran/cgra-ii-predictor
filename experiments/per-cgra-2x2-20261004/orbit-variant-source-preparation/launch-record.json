@@ -1,0 +1,17 @@
+{
+  "schema": "cgra-ii-2x2-real-collection-launch-v1",
+  "model_selection_frozen_before_mapping": true,
+  "query_count": 24,
+  "total_new_queries": 112,
+  "max_queries": 256,
+  "jobs": 8,
+  "external_timeout_seconds": 120,
+  "sha256": {
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/orbit-variant-source-preparation/admission.json": "f847fd89d7c91677ce354b16d5d0296aad038e681475db6cd165aa34d202461b",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/orbit-variant-source-preparation/source-manifest.json": "039a6c67f0cfc70d19e5d09ee2d6077b56587ad27fc925253938752d24cc2c92",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/orbit-variant-source-preparation/source-groups.json": "35a974240d12357f58c615ba1c1bae7861827dcaec407e250b032004ac139530",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/frozen-selection.json": "990f4decdc84ad584be9b75338aca11f2cd5cd15da5030366ba9d56e4a44d7c9",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/experiment-plan.json": "6104bbf3fe05574a186a59dd9707868261f8764d16269219a3afc90f686a087d",
+    "/home/x/shiran/data/cgra-per-cgra-2x2-improvement-20261004/orbit-variant-source-preparation/fresh-native-collection/query-manifest.json": "363fd5243a5942b47b59bd52a5bdaf3a1d3689e2ffe983ed78102ba2636b3bd2"
+  }
+}

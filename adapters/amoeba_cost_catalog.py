@@ -54,6 +54,7 @@ from cgra_ii_predictor.shape_protocol import (  # noqa: E402
     SHAPE_PROTOCOL,
     SHAPE_PROTOCOL_ID,
     get_shape_protocol,
+    get_shape_protocol_for_per_cgra,
 )
 
 
@@ -293,14 +294,18 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
     per_cols = _positive_integer(
         architecture.get("per_cgra_tile_cols"), "per_cgra_tile_cols",
     )
-    if (per_rows, per_cols) != (4, 4):
-        raise ValueError("model protocol requires 4x4 mapper tiles per physical CGRA")
+    shape_protocol = get_shape_protocol_for_per_cgra(per_rows, per_cols)
     architecture_sha256 = _sha256_string(
         architecture.get("spec_sha256"), "architecture spec_sha256",
     )
     max_cgras_per_task = _positive_integer(
         header.get("max_cgras_per_task"), "max_cgras_per_task",
     )
+    if max_cgras_per_task > shape_protocol.max_physical_cgras:
+        raise ValueError(
+            f"shape protocol {shape_protocol.protocol_id} supports at most "
+            f"{shape_protocol.max_physical_cgras} physical CGRAs per task"
+        )
     shape_alphabet = _static_shape_alphabet(
         grid_rows, grid_cols, max_cgras_per_task,
     )
@@ -387,6 +392,15 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
                 physical_rows * per_rows, physical_cols * per_cols,
             ):
                 raise ValueError("candidate physical-to-mapper conversion is invalid")
+            try:
+                shape_protocol.validate_physical_shape(
+                    physical_rows, physical_cols,
+                )
+            except ValueError as error:
+                raise ValueError(
+                    "candidate physical shape is outside its registered "
+                    f"shape protocol: {physical_rows}x{physical_cols}"
+                ) from error
             actual_shapes.append((physical_rows, physical_cols))
             candidate_queries.add((task, mapper_rows, mapper_cols))
         try:
@@ -417,6 +431,7 @@ def load_candidate_manifest(path: Path) -> Dict[str, Any]:
         "task_body_sha256": task_body_sha256,
         "architecture_sha256": architecture_sha256,
         "manifest_sha256": sha256_file(path),
+        "shape_protocol": shape_protocol.protocol_id,
     }
 
 
@@ -712,6 +727,10 @@ def generate_catalog(
 
     load_started = time.perf_counter()
     model, config, model_metadata = load_mapper_model(model_path, device)
+    if config.shape_protocol != manifest["shape_protocol"]:
+        raise ValueError(
+            "mapper checkpoint shape protocol does not match candidate manifest"
+        )
     architecture_sha256 = analytical_provenance.get("architecture_sha256")
     validate_model_architecture(model_metadata, architecture_sha256)
     model_load_ms = (time.perf_counter() - load_started) * 1000.0

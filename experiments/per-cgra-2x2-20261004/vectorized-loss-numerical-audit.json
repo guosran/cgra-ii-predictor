@@ -1,0 +1,22 @@
+{
+  "17": {
+    "max_parameter_difference_after80": 2.1606683731079102e-07,
+    "validation_regret_difference": 0.0,
+    "validation_mae_difference": -1.1462431670494766e-08
+  },
+  "41": {
+    "max_parameter_difference_after80": 1.2665987014770508e-07,
+    "validation_regret_difference": 0.0,
+    "validation_mae_difference": 3.820810556831589e-09
+  },
+  "113": {
+    "max_parameter_difference_after80": 5.364418029785156e-07,
+    "validation_regret_difference": 0.0,
+    "validation_mae_difference": -4.202891590310287e-09
+  },
+  "239": {
+    "max_parameter_difference_after80": 4.3213367462158203e-07,
+    "validation_regret_difference": 0.0,
+    "validation_mae_difference": -1.9104052784157943e-09
+  }
+}
