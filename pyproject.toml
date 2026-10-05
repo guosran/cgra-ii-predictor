@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cgra-ii-predictor"
-version = "0.1.0"
-description = "CGRA compiled-II prediction and static-shape ranking"
+version = "0.2.0"
+description = "Frozen ORBIT per-CGRA 2x2 compiled-II predictor and training data"
 requires-python = ">=3.8"
-dependencies = ["torch>=2.0", "PyYAML>=6.0"]
+dependencies = ["torch>=2.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

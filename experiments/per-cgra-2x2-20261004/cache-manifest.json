@@ -1,8 +1,0 @@
-{
-  "schema": "cgra-ii-2x2-cache-seal-v1",
-  "files": {
-    "development.pt": "db6aa1384095bbc78a5e9213c564e606d07ffb962ed8b86c29c9df03c64cd5b9",
-    "frozen-test.pt": "ea7ccd86b3d5e620b791e082f4f9f02d198efd2ef67033d81d0e21fb67ab136c",
-    "evaluation-only.pt": "549b9f41e1df2670b8fb385a1fa5cf2341aa697c5fe6773437dd3dada34cd1b9"
-  }
-}
